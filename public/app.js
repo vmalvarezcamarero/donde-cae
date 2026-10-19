@@ -121,7 +121,7 @@ function renderAccount() {
 }
 function renderHome() {
   const d = today.day, list = today.attempts, done = list.filter(a => a.finished);
-  $('dayLabel').textContent = 'Physle #' + d.n + ' · ' + fmtDay.format(new Date(d.date + 'T12:00:00'));
+  $('dayLabel').textContent = 'Gravle #' + d.n + ' · ' + fmtDay.format(new Date(d.date + 'T12:00:00'));
   const lv = $('levelLabel'); lv.hidden = false; lv.textContent = LEVEL[d.level]; lv.className = 'badge l' + d.level;
   const best = done.length ? Math.max(...done.map(a => a.total)) : null;
   $('homeTitle').textContent = !list.length ? 'Today’s challenge' : best != null ? 'Your best today: ' + best : 'You have an attempt in progress';
@@ -186,7 +186,7 @@ $('guestPlay')?.addEventListener('click', () => { store.set('guestOk:' + (today?
 async function startAttempt() {
   let st;
   try { st = await api('/api/attempt', { method: 'POST' }); } catch (e) { toast(e.message); refresh(); return; }
-  $('playLabel').textContent = 'Physle #' + st.day.n + ' · attempt ' + (st.attempt.index || st.attempt.num) + (st.ranked ? ' · counts for the leaderboard' : '');
+  $('playLabel').textContent = 'Gravle #' + st.day.n + ' · attempt ' + (st.attempt.index || st.attempt.num) + (st.ranked ? ' · counts for the leaderboard' : '');
   show('play');
   window.PhysleGame.play(st, {
     // Si falla la red se reintenta una vez sola: el servidor no puntúa dos veces la misma ronda.
@@ -202,7 +202,7 @@ async function startAttempt() {
 async function showEnd(r) {
   show('end');
   const played = store.get('played', {}); played[r.day.date] = Math.max(played[r.day.date] || 0, r.total); store.set('played', played);
-  $('endLabel').textContent = 'Physle #' + r.day.n + ' · attempt ' + (r.attempt.index || r.attempt.num);
+  $('endLabel').textContent = 'Gravle #' + r.day.n + ' · attempt ' + (r.attempt.index || r.attempt.num);
   $('total').firstChild.textContent = r.total;
   $('endNote').textContent = r.total >= 420 ? 'You think like a physicist.' : r.total >= 300 ? 'Good eye. Can you beat it?' : 'Physics shows no mercy. Time for a rematch.';
   const rows = $('rows'); rows.innerHTML = '';
@@ -221,7 +221,7 @@ async function showEnd(r) {
   $('again').hidden = left <= 0;
   $('again').textContent = left > 0 ? 'Second attempt' : '';
   const streak = streakText();
-  $('share').textContent = 'Physle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' (attempt ' + (r.attempt.index || r.attempt.num) + ')' : '') + '  ' + r.total + '/500\n' + squares(r.scores) + (streak ? '\n' + streak : '') + '\n' + location.host;
+  $('share').textContent = 'Gravle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' (attempt ' + (r.attempt.index || r.attempt.num) + ')' : '') + '  ' + r.total + '/500\n' + squares(r.scores) + (streak ? '\n' + streak : '') + '\n' + location.host;
 }
 $('copy').addEventListener('click', () => {
   const txt = $('share').textContent, btn = $('copy');
@@ -400,7 +400,7 @@ $('deleteYes').addEventListener('click', async () => {
     await api('/api/me', { method: 'DELETE' });
     if (!user.test) {
       try { await A.deleteUser(fbAuth.currentUser); }
-      catch (e) { await A.signOut(fbAuth); toast('Your Physle data is deleted. To remove your sign-in too, sign in again and repeat this.'); }
+      catch (e) { await A.signOut(fbAuth); toast('Your Gravle data is deleted. To remove your sign-in too, sign in again and repeat this.'); }
     }
     user = null; $('accountDlg').close(); await refresh();
     toast('Account deleted.');

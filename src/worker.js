@@ -304,7 +304,7 @@ async function leaderboard(req, env, url) {
 }
 
 /* ---------------- cuenta ---------------- */
-const BANNED = ['fuck', 'shit', 'cunt', 'bitch', 'nigg', 'fag', 'rape', 'nazi', 'hitler', 'puta', 'puto', 'polla', 'coño', 'mierda', 'maric', 'admin', 'physle'];
+const BANNED = ['fuck', 'shit', 'cunt', 'bitch', 'nigg', 'fag', 'rape', 'nazi', 'hitler', 'puta', 'puto', 'polla', 'coño', 'mierda', 'maric', 'admin', 'physle', 'gravle'];
 function checkNickname(n) {
   if (typeof n !== 'string' || !/^[A-Za-z0-9_.\-ÁÉÍÓÚÜÑáéíóúüñ]{3,16}$/.test(n)) throw new HttpError(400, 'Names need 3 to 16 letters, numbers, dots, hyphens or underscores.');
   const low = n.toLowerCase();
