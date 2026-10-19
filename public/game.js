@@ -180,16 +180,19 @@
   }
   async function release() {
     if (phase !== 'aim' || sending) return;
-    sending = true; $('go').disabled = true; $('go').textContent = '…';
+    sending = true; $('go').disabled = true; $('go').classList.add('busy'); $('go').textContent = 'Checking';
     let res;
     try { res = await hooks.submit(roundIdx, predictionOf(round())); }
-    catch (e) { sending = false; $('go').textContent = 'Release'; ready(); hooks.error(e.message); return; }
-    sending = false;
+    catch (e) { sending = false; $('go').classList.remove('busy'); $('go').textContent = 'Release'; ready(); hooks.error(e.message); return; }
+    sending = false; $('go').classList.remove('busy'); $('go').textContent = 'Watch…';
     day.rounds[roundIdx] = res.round; serverPts = res.pts; lastCoins = res.coins;   // ahora sí: la ronda completa con su resultado
     const r = round(); phase = 'playing';
     const speed = r.type === 'race' ? 0.5 : 1;
-    $('slowmo').hidden = r.type !== 'race';
-    const dur = duration(r), t0 = performance.now();
+    // Torre que aguanta: no se mueve nada, así que se avisa y se acorta la espera.
+    const stands = r.type === 'tower' && r.answer < 0;
+    $('slowmo').textContent = stands ? 'Still standing…' : 'Slow motion ×0.5';
+    $('slowmo').hidden = !(r.type === 'race' || stands);
+    const dur = stands ? Math.min(duration(r), 1.6) : duration(r), t0 = performance.now();
     anim = { t: 0, raf: 0 };
     const step = (now) => {
       anim.t = reduce ? dur : Math.min(dur, (now - t0) / 1000 * speed);
@@ -247,6 +250,10 @@
     $('go').disabled = false; $('go').textContent = roundIdx < 4 ? 'Next round' : 'See result';
     renderPips(); draw();
     $('go').focus({ preventScroll: true });
+    // En pantallas bajas el resultado y el botón pueden quedar fuera: se baja hasta ellos.
+    const gb = $('go').getBoundingClientRect();
+    if (gb.bottom > innerHeight - 8 || $('result').getBoundingClientRect().top < 0)
+      $('go').scrollIntoView({ block: 'end', behavior: reduce ? 'auto' : 'smooth' });
   }
   function next() {
     if (roundIdx < 4) { roundIdx++; startRound(); return; }

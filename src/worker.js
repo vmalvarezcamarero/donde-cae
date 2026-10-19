@@ -220,12 +220,23 @@ async function startAttempt(req, env) {
 async function playRound(req, env, id) {
   const who = await identify(req, env);
   const body = await req.json().catch(() => ({}));
-  await claimDevice(env, who, today(env));
-  const a = await env.DB.prepare('SELECT * FROM attempts WHERE id = ?').bind(id).first();
+  let a = await env.DB.prepare('SELECT * FROM attempts WHERE id = ?').bind(id).first();
   if (!a || (a.player !== who.player && a.device !== who.device)) throw new HttpError(404, 'Attempt not found.');
+  const day = await loadDay(env, a.date);
+  // Si esta ronda ya se jugó (se perdió la respuesta, doble toque u otra pestaña),
+  // se devuelve el resultado guardado en vez de un error: la web lo muestra como si nada.
+  const replay = async (att) => {
+    const scores = JSON.parse(att.scores);
+    let coins = null;
+    if (att.finished && att.uid) {
+      const u = await env.DB.prepare('SELECT coins FROM users WHERE uid = ?').bind(att.uid).first();
+      if (u) coins = { earned: att.coins, balance: u.coins };
+    }
+    return json({ pts: scores[body.round], round: day.sets[att.set_id][body.round], total: att.total, finished: !!att.finished, coins, replay: true });
+  };
+  if (Number.isInteger(body.round) && body.round >= 0 && body.round < a.round) return replay(a);
   if (a.finished) throw new HttpError(409, 'This attempt is already finished.');
   if (body.round !== a.round) throw new HttpError(409, 'That round was already played. Please reload the page.');
-  const day = await loadDay(env, a.date);
   const r = day.sets[a.set_id][a.round];
   if (!validPrediction(r, body.prediction, day.W)) throw new HttpError(400, 'Invalid prediction.');
   const pts = scorePoints(r, body.prediction);
@@ -235,7 +246,12 @@ async function playRound(req, env, id) {
     `UPDATE attempts SET round = round + 1, scores = ?, predictions = ?, total = ?, finished = ?, finished_at = ?
      WHERE id = ? AND round = ?`
   ).bind(JSON.stringify(scores), JSON.stringify(preds), total, finished, finished ? Date.now() : null, id, a.round).run();
-  if (!upd.meta.changes) throw new HttpError(409, 'That round was already played. Please reload the page.');
+  if (!upd.meta.changes) {
+    // Otra petición ganó la carrera: devolvemos lo que quedó guardado.
+    a = await env.DB.prepare('SELECT * FROM attempts WHERE id = ?').bind(id).first();
+    if (a && body.round < a.round) return replay(a);
+    throw new HttpError(409, 'That round was already played. Please reload the page.');
+  }
   // Al terminar, las cuentas con perfil ganan monedas.
   let coins = null;
   if (finished && a.uid) {

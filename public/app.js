@@ -62,14 +62,29 @@ const AUTH_ERRORS = {
 const authMsg = (e) => AUTH_ERRORS[e.code] || 'That didn’t work. Please try again.';
 
 /* ---------- API ---------- */
-async function api(path, { method = 'GET', body } = {}) {
-  const headers = { 'x-device': device };
-  if (body) headers['content-type'] = 'application/json';
-  if (user) headers.authorization = 'Bearer ' + await user.getIdToken();
-  const res = await fetch(path, { method, headers, body: body && JSON.stringify(body) });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Couldn’t reach Physle. Check your connection.');
-  return data;
+// Ninguna petición espera para siempre: a los `timeout` ms se corta y se avisa.
+// Los fallos de red llevan `retry = true` para poder reintentar sin riesgo.
+const NET_MSG = 'Connection problem. Tap again to retry.';
+async function api(path, { method = 'GET', body, timeout = 10000 } = {}) {
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const headers = { 'x-device': device };
+    if (body) headers['content-type'] = 'application/json';
+    if (user) headers.authorization = 'Bearer ' + await Promise.race([
+      user.getIdToken(),
+      new Promise((_, rej) => ctrl.signal.addEventListener('abort', () => rej(new Error('timeout')))),
+    ]);
+    let res;
+    try { res = await fetch(path, { method, headers, body: body && JSON.stringify(body), signal: ctrl.signal }); }
+    catch (e) { const err = new Error(NET_MSG); err.retry = true; throw err; }
+    const data = await res.json().catch(() => null);
+    if (!data) { const err = new Error(NET_MSG); err.retry = true; throw err; }
+    if (!res.ok) { const err = new Error(data.error || NET_MSG); err.retry = res.status >= 500; throw err; }
+    return data;
+  } catch (e) {
+    if (e.message === 'timeout' || e.name === 'AbortError') { const err = new Error(NET_MSG); err.retry = true; throw err; }
+    throw e;
+  } finally { clearTimeout(timer); }
 }
 
 /* ---------- portada ---------- */
@@ -174,7 +189,12 @@ async function startAttempt() {
   $('playLabel').textContent = 'Physle #' + st.day.n + ' · attempt ' + (st.attempt.index || st.attempt.num) + (st.ranked ? ' · counts for the leaderboard' : '');
   show('play');
   window.PhysleGame.play(st, {
-    submit: (round, prediction) => api('/api/attempt/' + st.attempt.id + '/round', { method: 'POST', body: { round, prediction } }),
+    // Si falla la red se reintenta una vez sola: el servidor no puntúa dos veces la misma ronda.
+    submit: async (round, prediction) => {
+      const send = () => api('/api/attempt/' + st.attempt.id + '/round', { method: 'POST', body: { round, prediction } });
+      try { return await send(); }
+      catch (e) { if (!e.retry) throw e; await new Promise(r => setTimeout(r, 800)); return send(); }
+    },
     error: (msg) => toast(msg),
     done: showEnd,
   });
