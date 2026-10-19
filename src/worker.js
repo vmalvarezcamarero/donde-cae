@@ -161,16 +161,28 @@ async function startAttempt(req, env) {
   if (!a) {
     if (list.some(x => !x.finished)) throw new HttpError(409, 'You have an attempt in progress on another device. Finish it there or wait until tomorrow.');
     if (list.length >= MAX_ATTEMPTS) throw new HttpError(403, 'You’ve used your ' + MAX_ATTEMPTS + ' attempts for today. New challenge tomorrow!');
-    const num = list.length + 1, set = SETS[num - 1];
-    const res = await env.DB.prepare(
-      'INSERT INTO attempts (player, uid, device, date, num, set_id, started_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id'
-    ).bind(who.player, who.uid, who.device, date, num, set, Date.now()).first();
-    a = { id: res.id, num, set_id: set, round: 0, scores: [], total: 0 };
+    // Toca el reto que aún no has jugado hoy: primero el común (A), después el B.
+    const used = new Set(list.map(x => x.set_id));
+    const set = !used.has('A') ? 'A' : !used.has('B') ? 'B' : SETS[Math.min(list.length, SETS.length - 1)];
+    // El número interno solo tiene que ser único para este jugador y día; no se calcula
+    // contando, porque la lista puede incluir partidas de otro dispositivo o sin cuenta.
+    const insert = async () => {
+      const m = await env.DB.prepare('SELECT COALESCE(MAX(num), 0) AS m FROM attempts WHERE player = ? AND date = ?').bind(who.player, date).first();
+      const num = m.m + 1;
+      const res = await env.DB.prepare(
+        'INSERT INTO attempts (player, uid, device, date, num, set_id, started_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id'
+      ).bind(who.player, who.uid, who.device, date, num, set, Date.now()).first();
+      return { id: res.id, num };
+    };
+    let row;
+    try { row = await insert(); } catch (e) { row = await insert(); }   // si dos pestañas pulsan a la vez
+    a = { id: row.id, num: row.num, set_id: set, round: 0, scores: [], total: 0 };
+    list.push(a);
   }
   const rounds = day.sets[a.set_id];
   return json({
     day: dayMeta(day),
-    attempt: { id: a.id, num: a.num, set: a.set_id, round: a.round, scores: a.scores, total: a.total },
+    attempt: { id: a.id, num: a.num, index: list.indexOf(list.find(x => x.id === a.id)) + 1 || list.length, set: a.set_id, round: a.round, scores: a.scores, total: a.total },
     rounds: rounds.map(publicRound),
     ranked: !!(who.uid && await profileOf(env, who.uid)),
   });

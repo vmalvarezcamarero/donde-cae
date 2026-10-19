@@ -107,10 +107,13 @@ function renderHome() {
   const best = done.length ? Math.max(...done.map(a => a.total)) : null;
   $('homeTitle').textContent = !list.length ? 'Today’s challenge' : best != null ? 'Your best today: ' + best : 'You have an attempt in progress';
   const tries = $('tries'); tries.innerHTML = '';
-  for (let i = 1; i <= today.max; i++) {
-    const a = list.find(x => x.num === i), row = document.createElement('div');
+  // Los intentos se muestran en el orden en que se jugaron; el reto A es el común.
+  const usedA = list.some(x => x.set === 'A');
+  for (let i = 1; i <= Math.max(today.max, list.length); i++) {
+    const a = list[i - 1], row = document.createElement('div');
     row.className = 'try' + (a && a.finished && a.total === best ? ' best' : '');
-    const label = i === 1 ? 'Attempt 1 · shared challenge' : 'Attempt ' + i + ' · new challenge';
+    const shared = a ? a.set === 'A' : (!usedA && i === list.length + 1);
+    const label = 'Attempt ' + i + ' · ' + (shared ? 'shared challenge' : 'new challenge');
     const state = !a ? 'Available' : a.finished ? squares(a.scores) : 'In progress (' + a.round + '/5)';
     row.innerHTML = '<span class="k"></span><span></span><b></b>';
     row.children[0].textContent = label; row.children[1].textContent = state; row.children[2].textContent = a && a.finished ? a.total : '—';
@@ -118,7 +121,7 @@ function renderHome() {
   }
   const open = list.find(a => !a.finished), btn = $('playBtn');
   btn.disabled = false;
-  if (open) btn.textContent = 'Continue attempt ' + open.num;
+  if (open) btn.textContent = 'Continue attempt ' + (list.indexOf(open) + 1);
   else if (list.length >= today.max) { btn.textContent = 'No attempts left until tomorrow'; btn.disabled = true; }
   else btn.textContent = list.length ? 'Play your second attempt' : 'Play';
   const note = $('homeNote');
@@ -156,7 +159,7 @@ $('again').addEventListener('click', startAttempt);
 async function startAttempt() {
   let st;
   try { st = await api('/api/attempt', { method: 'POST' }); } catch (e) { toast(e.message); refresh(); return; }
-  $('playLabel').textContent = 'Physle #' + st.day.n + ' · attempt ' + st.attempt.num + (st.ranked ? ' · counts for the leaderboard' : '');
+  $('playLabel').textContent = 'Physle #' + st.day.n + ' · attempt ' + (st.attempt.index || st.attempt.num) + (st.ranked ? ' · counts for the leaderboard' : '');
   show('play');
   window.PhysleGame.play(st, {
     submit: (round, prediction) => api('/api/attempt/' + st.attempt.id + '/round', { method: 'POST', body: { round, prediction } }),
@@ -167,7 +170,7 @@ async function startAttempt() {
 async function showEnd(r) {
   show('end');
   const played = store.get('played', {}); played[r.day.date] = Math.max(played[r.day.date] || 0, r.total); store.set('played', played);
-  $('endLabel').textContent = 'Physle #' + r.day.n + ' · attempt ' + r.attempt.num;
+  $('endLabel').textContent = 'Physle #' + r.day.n + ' · attempt ' + (r.attempt.index || r.attempt.num);
   $('total').firstChild.textContent = r.total;
   $('endNote').textContent = r.total >= 420 ? 'You think like a physicist.' : r.total >= 300 ? 'Good eye. Can you beat it?' : 'Physics shows no mercy. Time for a rematch.';
   const rows = $('rows'); rows.innerHTML = '';
@@ -186,7 +189,7 @@ async function showEnd(r) {
   $('again').hidden = left <= 0;
   $('again').textContent = left > 0 ? 'Second attempt' : '';
   const streak = streakText();
-  $('share').textContent = 'Physle #' + r.day.n + (r.attempt.num > 1 ? ' (attempt ' + r.attempt.num + ')' : '') + '  ' + r.total + '/500\n' + squares(r.scores) + (streak ? '\n' + streak : '') + '\n' + location.host;
+  $('share').textContent = 'Physle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' (attempt ' + (r.attempt.index || r.attempt.num) + ')' : '') + '  ' + r.total + '/500\n' + squares(r.scores) + (streak ? '\n' + streak : '') + '\n' + location.host;
 }
 $('copy').addEventListener('click', () => {
   const txt = $('share').textContent, btn = $('copy');
