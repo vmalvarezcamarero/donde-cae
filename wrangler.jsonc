@@ -14,13 +14,13 @@
     {
       "binding": "DB",
       "database_name": "physle",
-      "database_id": "PEGA-AQUI-EL-ID-DE-TU-BASE-DE-DATOS"
+      "database_id": "aab4a57b-ee0d-46f3-ac35-2ec68b622dd1"
     }
   ],
   // Limpieza diaria de partidas antiguas sin cuenta (04:00 UTC).
   "triggers": { "crons": ["0 4 * * *"] },
   "vars": {
     "TIMEZONE": "Europe/Madrid",
-    "FIREBASE_PROJECT_ID": "PEGA-AQUI-EL-ID-DE-TU-PROYECTO-FIREBASE"
+    "FIREBASE_PROJECT_ID": "physle"
   }
 }
