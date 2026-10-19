@@ -1,4 +1,5 @@
 // Genera los retos diarios en public/days/AAAA-MM-DD.json
+// (el servidor impide que se descarguen directamente: llevan las respuestas)
 //
 // Uso:
 //   node scripts/generate.mjs                 → desde hoy, 30 días
@@ -34,19 +35,25 @@ const dayNumber = (iso) => Math.round((Date.parse(iso + 'T12:00:00Z') - Date.par
 const LEVEL_BY_WEEKDAY = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 2, 6: 3, 0: 3 };
 const RACE_FORMATS = ['curvas', 'objetos', 'terrenos'];
 
+// Cada día tiene dos retos de la misma dificultad: A (el del primer intento,
+// igual para todos) y B (el del segundo intento). Así el segundo intento no
+// consiste en repetir respuestas ya vistas.
+function buildSet(date, setId, n, lvl) {
+  const seed = hashStr('physle:' + date + ':' + setId);
+  const fmt = RACE_FORMATS[(((n + (setId === 'B' ? 1 : 0)) % 3) + 3) % 3];
+  return [
+    genBalance(seed + 1, lvl),
+    genDrop(seed + 2, lvl),
+    genRace(seed + 3, lvl === 3 ? 4 : 3, fmt),
+    genPool(seed + 4, lvl === 1 ? 1 : 2),
+    genTower(seed + 5, lvl),
+  ];
+}
 export function buildDay(date) {
   const n = dayNumber(date);
   const weekday = new Date(date + 'T12:00:00Z').getUTCDay();
   const lvl = LEVEL_BY_WEEKDAY[weekday];
-  const seed = hashStr('dondecae:' + date);
-  const rounds = [
-    genBalance(seed + 1, lvl),
-    genDrop(seed + 2, lvl),
-    genRace(seed + 3, lvl === 3 ? 4 : 3, RACE_FORMATS[((n % 3) + 3) % 3]),
-    genPool(seed + 4, lvl === 1 ? 1 : 2),
-    genTower(seed + 5, lvl),
-  ];
-  return { n, date, level: lvl, W, H, FLOOR, R, rounds };
+  return { n, date, level: lvl, W, H, FLOOR, R, sets: { A: buildSet(date, 'A', n, lvl), B: buildSet(date, 'B', n, lvl) } };
 }
 
 let made = 0, kept = 0;
@@ -59,7 +66,7 @@ for (let i = 0; i < days; i++) {
   const day = buildDay(date);
   writeFileSync(file, JSON.stringify(day));
   made++;
-  console.log(`#${day.n} ${date} (nivel ${day.level}) · ${day.rounds[2].format} · ${Date.now() - t0} ms`);
+  console.log(`#${day.n} ${date} (nivel ${day.level}) · carreras ${day.sets.A[2].format}/${day.sets.B[2].format} · ${Date.now() - t0} ms`);
 }
 
 // Índice con las fechas disponibles (lo usa la web para saber si hay reto).

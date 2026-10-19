@@ -1,16 +1,22 @@
 {
-  "name": "donde-cae",
+  "name": "physle",
   "private": true,
   "type": "module",
-  "description": "Juego diario de física: cinco experimentos al día.",
+  "description": "Physle: cinco experimentos de física al día.",
   "scripts": {
     "generate": "node scripts/generate.mjs",
     "validate": "node scripts/validate.mjs",
-    "dev": "node scripts/serve.mjs",
-    "build": "node scripts/generate.mjs && node scripts/validate.mjs"
+    "dev": "wrangler dev",
+    "db:local": "wrangler d1 execute physle --local --file migrations/0001_init.sql",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "matter-js": "0.19.0"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "wrangler": "4.146.0"
+  }
 }

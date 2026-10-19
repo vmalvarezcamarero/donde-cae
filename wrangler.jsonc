@@ -1,8 +1,26 @@
 {
+  // Configuración de Cloudflare para Physle.
   "name": "donde-cae",
+  "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
   "assets": {
-    "directory": "./public"
+    "directory": "./public",
+    "binding": "ASSETS",
+    // Estas rutas pasan por el servidor: la API y los retos (que se bloquean).
+    "run_worker_first": ["/api/*", "/days/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "physle",
+      "database_id": "PEGA-AQUI-EL-ID-DE-TU-BASE-DE-DATOS"
+    }
+  ],
+  // Limpieza diaria de partidas antiguas sin cuenta (04:00 UTC).
+  "triggers": { "crons": ["0 4 * * *"] },
+  "vars": {
+    "TIMEZONE": "Europe/Madrid",
+    "FIREBASE_PROJECT_ID": "PEGA-AQUI-EL-ID-DE-TU-PROYECTO-FIREBASE"
   }
 }

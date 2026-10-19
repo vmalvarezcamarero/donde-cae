@@ -18,8 +18,10 @@ for (const f of files) {
   try { d = JSON.parse(readFileSync(join(dir, f), 'utf8')); } catch (e) { errors.push(`${f}: JSON inválido`); continue; }
   const bad = (msg) => errors.push(`${date}: ${msg}`);
   if (d.date !== date) bad('la fecha interna no coincide con el nombre del archivo');
-  if (!Array.isArray(d.rounds) || d.rounds.length !== 5) { bad('no tiene 5 rondas'); continue; }
-  d.rounds.forEach((r, i) => {
+  for (const setId of ['A', 'B']) {
+  const rounds = d.sets?.[setId];
+  if (!Array.isArray(rounds) || rounds.length !== 5) { bad(`el reto ${setId} no tiene 5 rondas`); continue; }
+  rounds.forEach((r, i) => {
     if (r.type !== ORDER[i]) bad(`ronda ${i + 1} es "${r.type}", se esperaba "${ORDER[i]}"`);
     if (r.type === 'balance' && !(isNum(r.answer) && Math.abs(r.answer) <= 10.5 && r.weights?.length >= 2)) bad('equilibrio sin solución válida');
     if (r.type === 'drop' && !(r.frames?.length > 30 && isNum(r.impactX) && r.impactX > 0 && r.impactX < d.W)) bad('caída sin trayectoria o impacto fuera del suelo');
@@ -34,6 +36,7 @@ for (const f of files) {
       if (r.answer >= 0 && !(r.answer >= 1 && r.answer < r.blocks.length)) bad('respuesta de torre fuera de rango');
     }
   });
+  }
 }
 
 // Días disponibles por delante de hoy

@@ -1,15 +1,19 @@
+// Motor del juego de Physle: dibuja las escenas, recoge la predicción y
+// reproduce el resultado que devuelve el servidor. La app (app.js) lo arranca
+// con PhysleGame.play(intento, hooks).
 (() => {
   // Medidas del mundo; las fija el archivo del día al cargarlo.
   let W = 400, H = 600, FLOOR = 556, R = 10;
   const $ = (id) => document.getElementById(id);
   const cv = $('cv'), ctx = cv.getContext('2d');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const COLOR_NAME = { coral: 'Coral', azul: 'Azul', mostaza: 'Mostaza', violeta: 'Violeta' };
-  const KIND_NAME = { recta: 'recta', cicloide: 'curva', caida: 'caída y llano', joroba: 'suave y luego cae', valle: 'valle', olas: 'olas' };
-  const OBJ_NAME = { canica: 'Canica', rueda: 'Rueda maciza', aro: 'Aro', hielo: 'Cubito de hielo' };
-  const TYPE_NAME = { balance: 'Equilibrio', drop: '¿Dónde cae?', race: '¿Cuál llega antes?', pool: 'Carambola', tower: '¿Aguanta?' };
-  const num = (x, d = 1) => x.toFixed(d).replace('.', ',');
-  const side = (u) => Math.abs(u) < 0.05 ? 'en el centro' : num(Math.abs(u)) + (u < 0 ? ' izq.' : ' der.');
+  const COLOR_NAME = { coral: 'Coral', azul: 'Blue', mostaza: 'Mustard', violeta: 'Violet' };
+  const KIND_NAME = { recta: 'straight', cicloide: 'curve', caida: 'drop and flat', joroba: 'gentle, then steep', valle: 'valley', olas: 'waves' };
+  const ORD = (k) => ['1st', '2nd', '3rd', '4th'][k];
+  const OBJ_NAME = { canica: 'Marble', rueda: 'Solid wheel', aro: 'Hoop', hielo: 'Ice cube' };
+  const TYPE_NAME = { balance: 'Balance', drop: 'Where will it land?', race: 'Which finishes first?', pool: 'Bank shot', tower: 'Will it stand?' };
+  const num = (x, d = 1) => x.toFixed(d);
+  const side = (u) => Math.abs(u) < 0.05 ? 'center' : num(Math.abs(u)) + (u < 0 ? ' left' : ' right');
 
   /* ---------- colores desde los tokens ---------- */
   let C = {};
@@ -22,52 +26,45 @@
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); draw(); });
   new MutationObserver(() => { readColors(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-  /* ---------- almacenamiento ---------- */
-  const KEY = 'dondecae:v3';
-  function load() { try { return JSON.parse(localStorage.getItem(KEY)) || { days: {} }; } catch (e) { return { days: {} }; } }
-  function save(st) { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }
-
-  /* ---------- día ---------- */
-  const fmt = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
-  function localISO(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   /* ---------- estado ---------- */
   // mark: drop → x mundo; balance → posición en unidades; pool → [x,y]; tower → índice de bloque o -1 (aguanta); race → usa order
   let day, roundIdx, phase, scores, details, mark, order, anim;
-  let practice = false;
-  function startDay(data, isPractice) {
-    day = data; practice = !!isPractice;
+  let hooks = null, attempt = null, serverPts = 0, sending = false;
+  const DKEY = (id) => 'physle:detalles:' + id;
+  function play(payload, h) {
+    hooks = h; attempt = payload.attempt;
+    day = { ...payload.day, rounds: payload.rounds };
     ({ W, H, FLOOR, R } = day);
-    roundIdx = 0; scores = []; details = [];
-    $('dayLabel').textContent = '#' + day.n + ' · ' + fmt.format(new Date(day.date + 'T12:00:00'));
-    $('practice').hidden = !practice;
-    const saved = load().days[day.date];
-    if (saved && saved.scores && !practice) { scores = saved.scores; details = saved.details; showEnd(true); updateStreak(); return; }
-    $('end').hidden = true; $('play').hidden = false;
-    startRound(); updateStreak();
+    roundIdx = attempt.round; scores = attempt.scores.slice();
+    try { details = JSON.parse(sessionStorage.getItem(DKEY(attempt.id))) || []; } catch (e) { details = []; }
+    while (details.length < scores.length) details.push('—');
+    $('play').hidden = false;
+    startRound(); fit();
   }
+  const predictionOf = (r) => r.type === 'race' ? order.slice() : mark;
   const round = () => day.rounds[roundIdx];
   const PROMPTS = {
-    balance: (r) => 'Coloca la pesa azul de ' + r.M + ' kg para que la barra quede nivelada.<small>Arrastra sobre la barra. La barra no pesa: solo cuentan las pesas.</small>',
+    balance: (r) => 'Place the blue ' + r.M + ' kg weight so the beam balances.<small>Drag along the beam. The beam itself weighs nothing: only the weights count.</small>',
     drop: (r) => {
       const k = new Set(r.planks.map(p => p.kind));
-      const legend = [k.has('muelle') ? '<b style="color:var(--violeta)">Muelle</b>: rebota con fuerza.' : '', k.has('esponja') ? '<b style="color:var(--mostaza)">Esponja</b>: absorbe el golpe, no rebota.' : ''].filter(Boolean).join(' ');
-      return 'Toca el suelo donde crees que caerá la canica.<small>' + (legend || 'Puedes arrastrar para ajustar. Con teclado: flechas y Enter.') + '</small>';
+      const legend = [k.has('muelle') ? '<b style="color:var(--violeta)">Spring</b>: bounces hard.' : '', k.has('esponja') ? '<b style="color:var(--mostaza)">Sponge</b>: soaks up the hit, no bounce.' : ''].filter(Boolean).join(' ');
+      return 'Tap the floor where you think the marble will land.<small>' + (legend || 'Drag to fine-tune. Keyboard: arrow keys and Enter.') + '</small>';
     },
     race: (r) => r.format === 'objetos'
-      ? 'Cada carril lleva un objeto distinto. ¿En qué orden cruzan la meta?<small>Canica, rueda y aro ruedan; el cubito de hielo desliza sin rozar. Toca los carriles en orden.</small>'
+      ? 'Each lane carries a different object. In what order do they cross the line?<small>Marble, wheel and hoop roll; the ice cube slides with no friction. Tap the lanes in order.</small>'
       : r.format === 'terrenos'
-        ? 'Ojo con la arena: frena a las canicas. ¿En qué orden llegan a la meta?<small>Toca las pistas en orden: primero la que crees que gana.</small>'
-        : 'Todas salen a la vez y sin rozamiento. ¿En qué orden llegan a la meta?<small>Toca las pistas en orden: primero la que crees que gana.</small>',
-    pool: () => 'La bola sale como marca la flecha, rebota en las bandas y el tapete la frena. ¿Dónde se para?<small>Toca la mesa donde crees que se detendrá.</small>',
-    tower: () => 'Si la torre se cae, ¿qué bloque toca el suelo primero?<small>Toca ese bloque, o pulsa «Aguanta» si crees que no se cae. Los bloques oscuros pesan el triple.</small>',
+        ? 'Watch out for the sand: it slows the marbles down. In what order do they finish?<small>Tap the tracks in order, starting with the one you think wins.</small>'
+        : 'They all start together, with no friction. In what order do they finish?<small>Tap the tracks in order, starting with the one you think wins.</small>',
+    pool: () => 'The ball leaves along the arrow, bounces off the cushions and the cloth slows it down. Where does it stop?<small>Tap the table where you think it will come to rest.</small>',
+    tower: () => 'If the tower falls, which block hits the ground first?<small>Tap that block, or choose “It stands” if you think it won’t fall. Dark blocks weigh three times as much.</small>',
   };
   function startRound() {
     cancelAnimationFrame(anim && anim.raf);
     anim = null; phase = 'aim'; mark = null; order = [];
     const r = round();
-    $('tag').textContent = 'Ronda ' + (roundIdx + 1) + ' · ' + TYPE_NAME[r.type];
+    $('tag').textContent = 'Round ' + (roundIdx + 1) + ' · ' + TYPE_NAME[r.type];
     $('slowmo').hidden = true; $('result').hidden = true; $('prompt').hidden = false;
-    $('go').textContent = 'Soltar'; $('go').disabled = true;
+    $('go').textContent = 'Release'; $('go').disabled = true;
     $('prompt').innerHTML = PROMPTS[r.type](r);
     $('chips').hidden = true;
     if (r.type === 'race') buildRaceChips();
@@ -99,7 +96,7 @@
       b.addEventListener('click', () => pickTrack(i));
       box.appendChild(b);
     });
-    const clr = document.createElement('button'); clr.type = 'button'; clr.className = 'linkbtn'; clr.textContent = 'Borrar orden';
+    const clr = document.createElement('button'); clr.type = 'button'; clr.className = 'linkbtn'; clr.textContent = 'Clear order';
     clr.addEventListener('click', () => { if (phase !== 'aim') return; order = []; refreshRaceChips(); draw(); });
     box.appendChild(clr);
   }
@@ -121,7 +118,7 @@
     const box = $('chips'); box.hidden = false; box.innerHTML = '';
     const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.id = 'chipHold';
     b.setAttribute('aria-pressed', 'false');
-    b.innerHTML = '<span class="dot" style="background:var(--good)">✓</span>Aguanta, no se cae';
+    b.innerHTML = '<span class="dot" style="background:var(--good)">✓</span>It stands, no fall';
     b.addEventListener('click', () => { if (phase !== 'aim') return; mark = -1; refreshTower(); });
     box.appendChild(b);
   }
@@ -152,7 +149,7 @@
     ready(); draw();
   }
   cv.addEventListener('pointerdown', (ev) => {
-    if (phase !== 'aim') return;
+    if (phase !== 'aim' || sending) return;
     const [x, y] = toWorld(ev); const t = round().type;
     if (t === 'drop' || t === 'balance' || t === 'pool') { dragging = true; cv.setPointerCapture(ev.pointerId); }
     aimAt(x, y, true);
@@ -181,9 +178,15 @@
     if (r.type === 'balance') return 2.4;
     if (r.type === 'tower') return r.frames ? r.frames.length / 60 : 1.2;
   }
-  function release() {
-    if (phase !== 'aim') return;
-    const r = round(); phase = 'playing'; $('go').disabled = true; $('go').textContent = '…';
+  async function release() {
+    if (phase !== 'aim' || sending) return;
+    sending = true; $('go').disabled = true; $('go').textContent = '…';
+    let res;
+    try { res = await hooks.submit(roundIdx, predictionOf(round())); }
+    catch (e) { sending = false; $('go').textContent = 'Release'; ready(); hooks.error(e.message); return; }
+    sending = false;
+    day.rounds[roundIdx] = res.round; serverPts = res.pts;   // ahora sí: la ronda completa con su resultado
+    const r = round(); phase = 'playing';
     const speed = r.type === 'race' ? 0.5 : 1;
     $('slowmo').hidden = r.type !== 'race';
     const dur = duration(r), t0 = performance.now();
@@ -200,8 +203,8 @@
   function scoreRound(r) {
     if (r.type === 'drop') {
       const uM = mark / 4, uR = r.impactX / 4, err = Math.abs(uM - uR);
-      return { pts: err <= 2 ? 100 : Math.round(100 * Math.exp(-(err - 2) / 20)), l1: err <= 2 ? '¡Clavada!' : err <= 7 ? 'Muy cerca' : err <= 18 ? 'Cerca' : 'Lejos',
-        l2: 'Cayó en ' + uR.toFixed(0) + ' · tu marca ' + uM.toFixed(0) + ' · error ' + err.toFixed(0), d: 'Cayó en ' + uR.toFixed(0) + ', marcaste ' + uM.toFixed(0) };
+      return { pts: err <= 2 ? 100 : Math.round(100 * Math.exp(-(err - 2) / 20)), l1: err <= 2 ? 'Spot on!' : err <= 7 ? 'Very close' : err <= 18 ? 'Close' : 'Way off',
+        l2: 'Landed at ' + uR.toFixed(0) + ' · your mark ' + uM.toFixed(0) + ' · off by ' + err.toFixed(0), d: 'Landed at ' + uR.toFixed(0) + ', you said ' + uM.toFixed(0) };
     }
     if (r.type === 'race') {
       const n = r.tracks.length, win = order[0] === r.order[0];
@@ -209,83 +212,47 @@
       let pts = Math.round((win ? 70 : 0) + 30 * rest / (n - 1)); if (!win) pts = Math.min(pts, 30);
       const w = r.tracks[r.order[0]];
       const wn = w.obj ? OBJ_NAME[w.obj].toLowerCase() : COLOR_NAME[w.color].toLowerCase();
-      return { pts, l1: win ? (pts === 100 ? 'Orden perfecto' : 'Acertaste la ganadora') : 'Ganó ' + (w.obj ? (w.obj === 'aro' || w.obj === 'hielo' ? 'el ' : 'la ') : 'la ') + wn,
-        l2: r.order.map((i, k) => (k + 1) + 'º ' + (r.tracks[i].obj ? OBJ_NAME[r.tracks[i].obj] : COLOR_NAME[r.tracks[i].color]) + ' ' + num(r.tracks[i].times.at(-1), 2) + ' s').join(' · '),
-        d: 'Ganó ' + (w.obj ? OBJ_NAME[w.obj].toLowerCase() : COLOR_NAME[w.color] + ' (' + KIND_NAME[w.kind] + ')') };
+      return { pts, l1: win ? (pts === 100 ? 'Perfect order' : 'You picked the winner') : (w.obj ? 'The ' + wn : 'The ' + wn + ' track') + ' won',
+        l2: r.order.map((i, k) => ORD(k) + ' ' + (r.tracks[i].obj ? OBJ_NAME[r.tracks[i].obj] : COLOR_NAME[r.tracks[i].color]) + ' ' + num(r.tracks[i].times.at(-1), 2) + ' s').join(' · '),
+        d: (w.obj ? OBJ_NAME[w.obj] : COLOR_NAME[w.color] + ' (' + KIND_NAME[w.kind] + ')') + ' won' };
     }
     if (r.type === 'balance') {
       const err = Math.abs(mark - r.answer);
       const pts = err <= 0.3 ? 100 : Math.round(100 * Math.exp(-(err - 0.3) / 3.2));
-      return { pts, l1: err <= 0.3 ? 'Nivelada' : err <= 1 ? 'Casi nivelada' : err <= 2.5 ? 'Se inclina un poco' : 'Desequilibrada',
-        l2: 'Equilibrio ' + side(r.answer) + ' · tu pesa ' + side(mark), d: 'Equilibrio ' + side(r.answer) + ', pusiste ' + side(mark) };
+      return { pts, l1: err <= 0.3 ? 'Perfectly level' : err <= 1 ? 'Almost level' : err <= 2.5 ? 'Tilts a little' : 'Off balance',
+        l2: 'Balance point ' + side(r.answer) + ' · yours ' + side(mark), d: 'Balance ' + side(r.answer) + ', you put ' + side(mark) };
     }
     if (r.type === 'pool') {
       const dcm = Math.hypot(mark[0] - r.stop[0], mark[1] - r.stop[1]) / 2;
       const pts = dcm <= 5 ? 100 : Math.round(100 * Math.exp(-(dcm - 5) / 35));
-      return { pts, l1: dcm <= 5 ? '¡Clavada!' : dcm <= 15 ? 'Muy cerca' : dcm <= 35 ? 'Cerca' : 'Lejos',
-        l2: r.hits + (r.hits === 1 ? ' banda' : ' bandas') + ' · te quedaste a ' + Math.round(dcm) + ' cm', d: r.hits + ' bandas, a ' + Math.round(dcm) + ' cm' };
+      return { pts, l1: dcm <= 5 ? 'Spot on!' : dcm <= 15 ? 'Very close' : dcm <= 35 ? 'Close' : 'Way off',
+        l2: r.hits + (r.hits === 1 ? ' cushion' : ' cushions') + ' · you were ' + Math.round(dcm) + ' cm away', d: r.hits + (r.hits === 1 ? ' cushion' : ' cushions') + ', ' + Math.round(dcm) + ' cm away' };
     }
     if (r.type === 'tower') {
       const ans = r.answer, pick = mark;
       const pts = pick === ans ? 100 : (ans >= 1 && pick >= 1) ? 25 : 0;
-      const name = (k) => k < 0 ? 'aguanta' : 'bloque ' + (k + 1);
-      return { pts, l1: pts === 100 ? (ans < 0 ? '¡Aguanta, bien visto!' : 'Bien visto') : ans < 0 ? 'Aguantaba' : pick < 0 ? 'Se cae' : 'Se cae, pero toca antes otro',
-        l2: (ans < 0 ? 'No se cae' : 'Primero en tocar el suelo: bloque ' + (ans + 1)) + ' · tú: ' + name(pick), d: ans < 0 ? 'Aguantaba' : 'Tocó primero el bloque ' + (ans + 1) };
+      const name = (k) => k < 0 ? 'it stands' : 'block ' + (k + 1);
+      return { pts, l1: pts === 100 ? (ans < 0 ? 'It stands. Well spotted!' : 'Well spotted') : ans < 0 ? 'It stood' : pick < 0 ? 'It falls' : 'It falls, but another block lands first',
+        l2: (ans < 0 ? 'No fall' : 'First to hit the ground: block ' + (ans + 1)) + ' · you: ' + name(pick), d: ans < 0 ? 'It stood' : 'Block ' + (ans + 1) + ' landed first' };
     }
   }
   function finishRound() {
     const r = round(); phase = 'result';
-    const s = scoreRound(r);
+    const s = scoreRound(r); s.pts = serverPts;              // los puntos que valen son los del servidor
     scores.push(s.pts); details.push(s.d);
+    try { sessionStorage.setItem(DKEY(attempt.id), JSON.stringify(details)); } catch (e) {}
     $('rPts').textContent = '+' + s.pts; $('rPts').className = 'pts ' + band(s.pts);
     $('rL1').textContent = s.l1; $('rL2').textContent = s.l2;
     $('result').hidden = false; $('prompt').hidden = true; $('chips').hidden = true;
-    $('go').disabled = false; $('go').textContent = roundIdx < 4 ? 'Siguiente ronda' : 'Ver resultado';
+    $('go').disabled = false; $('go').textContent = roundIdx < 4 ? 'Next round' : 'See result';
     renderPips(); draw();
     $('go').focus({ preventScroll: true });
   }
-  function next() { if (roundIdx < 4) { roundIdx++; startRound(); } else showEnd(); }
-
-  /* ---------- final ---------- */
-  const squares = () => scores.map(s => s >= 80 ? '🟩' : s >= 40 ? '🟨' : '🟥').join('');
-  function showEnd(fromSave) {
-    const total = scores.reduce((a, b) => a + b, 0);
-    if (!practice && !fromSave) { const st = load(); st.days[day.date] = { total, sq: squares(), scores, details }; save(st); }
-    renderPips();
-    const streak = updateStreak();
-    $('play').hidden = true; $('end').hidden = false;
-    $('total').firstChild.textContent = total;
-    $('endNote').textContent = practice ? 'Partida de práctica: no cambia tu resultado de hoy.' : total >= 420 ? 'Tienes intuición de físico.' : total >= 300 ? 'Buen ojo. Mañana, más.' : 'La física no perdona. Mañana hay revancha.';
-    const rows = $('rows'); rows.innerHTML = '';
-    scores.forEach((s, i) => {
-      const d = document.createElement('div'); d.className = 'row';
-      d.innerHTML = '<span class="sq" style="background:var(--' + ({ g: 'good', y: 'warn', r: 'bad' })[band(s)] + ')"></span><span></span><b>' + s + '</b>';
-      d.children[1].textContent = (i + 1) + '. ' + TYPE_NAME[day.rounds[i].type] + ' · ' + details[i];
-      rows.appendChild(d);
-    });
-    $('share').textContent = '¿Dónde cae? #' + day.n + '  ' + total + '/500\n' + squares() + (streak > 0 ? '\n🔥 racha ' + streak : '');
+  function next() {
+    if (roundIdx < 4) { roundIdx++; startRound(); return; }
+    $('play').hidden = true;
+    hooks.done({ attempt, day, scores, details, total: scores.reduce((a, b) => a + b, 0), types: day.rounds.map(r => r.type) });
   }
-  function updateStreak() {
-    const st = load(); let n = 0, t = Date.parse(day.date + 'T00:00:00Z');
-    while (st.days[new Date(t).toISOString().slice(0, 10)]) { n++; t -= 864e5; }
-    $('streak').textContent = 'racha ' + n;
-    return n;
-  }
-  $('copy').addEventListener('click', () => {
-    const txt = $('share').textContent, btn = $('copy');
-    const done = () => { btn.textContent = 'Copiado'; setTimeout(() => { btn.textContent = 'Copiar resultado'; }, 1600); };
-    const fallback = () => { const sel = getSelection(), rg = document.createRange(); rg.selectNodeContents($('share')); sel.removeAllRanges(); sel.addRange(rg); btn.textContent = 'Texto seleccionado: cópialo'; };
-    try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
-  });
-  $('again').addEventListener('click', () => startDay(day, true));
-
-  /* ---------- cuenta atrás al próximo reto (medianoche local) ---------- */
-  function tick() {
-    const now = new Date(), next = new Date(now); next.setHours(24, 0, 0, 0);
-    const m = Math.ceil((next - now) / 60000), h = Math.floor(m / 60);
-    $('next').textContent = 'Nuevo reto en ' + (h ? h + ' h ' : '') + (m % 60) + ' min';
-  }
-  tick(); setInterval(tick, 30000);
 
   /* ---------- dibujo: utilidades ---------- */
   function fit() {
@@ -366,7 +333,7 @@
       ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = C.azul; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(mark, 70); ctx.lineTo(mark, FLOOR); ctx.stroke(); ctx.restore();
       ctx.fillStyle = C.azul; ctx.beginPath(); ctx.moveTo(mark, FLOOR - 1); ctx.lineTo(mark - 7, FLOOR - 13); ctx.lineTo(mark + 7, FLOOR - 13); ctx.closePath(); ctx.fill();
-      label(mark, FLOOR - 22, 'tú ' + (mark / 4).toFixed(0), C.azul);
+      label(mark, FLOOR - 22, 'you ' + (mark / 4).toFixed(0), C.azul);
     }
     let fi = anim ? Math.min(r.frames.length - 1, Math.floor(anim.t * 60)) : 0;
     if (phase === 'result') fi = r.frames.length - 1;
@@ -376,7 +343,7 @@
       ctx.strokeStyle = C.coral; ctx.lineWidth = 2;
       for (const rr of [16, 26]) { ctx.globalAlpha = rr === 16 ? 0.6 : 0.3; ctx.beginPath(); ctx.ellipse(x, FLOOR, rr, rr * 0.3, 0, Math.PI, 0); ctx.stroke(); }
       ctx.globalAlpha = 1;
-      label(x, FLOOR + 40, 'cayó ' + (x / 4).toFixed(0), C.coral);
+      label(x, FLOOR + 40, 'landed ' + (x / 4).toFixed(0), C.coral);
     }
     marble(r.frames[fi][0], r.frames[fi][1], R, C.coral, r.frames[fi][2]);
   }
@@ -411,7 +378,8 @@
 
   /* ---------- ¿Cuál llega antes? ---------- */
   function posAt(t, time) {
-    const T = t.times; if (time >= T.at(-1)) return [...t.pts.at(-1), t.pts.length - 2];
+    const T = t.times; if (!T) return [...t.pts[0], 0];       // antes de jugar no hay tiempos
+    if (time >= T.at(-1)) return [...t.pts.at(-1), t.pts.length - 2];
     let lo = 0, hi = T.length - 1;
     while (hi - lo > 1) { const m = (lo + hi) >> 1; if (T[m] <= time) lo = m; else hi = m; }
     const f = (time - T[lo]) / (T[hi] - T[lo] || 1);
@@ -446,16 +414,16 @@
       ctx.save(); ctx.setLineDash([6, 5]); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(fx, 88); ctx.lineTo(fx, 520); ctx.stroke(); ctx.restore();
       for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j) % 2 ? C.ink : C.plate; ctx.fillRect(fx + 2 + j * 8, 88 + i * 8, 8, 8); }
       ctx.strokeStyle = C.ink; ctx.lineWidth = 1; ctx.strokeRect(fx + 2, 88, 16, 32);
-      ctx.fillStyle = C['ink-2']; ctx.textAlign = 'right'; ctx.fillText('META', fx - 4, 100);
+      ctx.fillStyle = C['ink-2']; ctx.textAlign = 'right'; ctx.fillText('FINISH', fx - 4, 100);
       r.tracks.forEach(t => { ctx.fillStyle = C.ink; ctx.fillRect(t.pts[0][0] - 30, t.pts[0][1] - 2, 32, 5); });
     } else {
       const [ax, ay] = r.A, [bx, by] = r.B;
       ctx.fillStyle = C.ink; ctx.fillRect(bx + 10, by - 70, 3, 90);
       for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j) % 2 ? C.ink : C.plate; ctx.fillRect(bx + 13 + j * 8, by - 70 + i * 8, 8, 8); }
       ctx.strokeStyle = C.ink; ctx.lineWidth = 1; ctx.strokeRect(bx + 13, by - 70, 16, 32);
-      ctx.fillStyle = C['ink-2']; ctx.textAlign = 'right'; ctx.fillText('META', bx + 29, by + 34);
+      ctx.fillStyle = C['ink-2']; ctx.textAlign = 'right'; ctx.fillText('FINISH', bx + 29, by + 34);
       ctx.fillStyle = C.ink; ctx.fillRect(ax - 30, ay - 3, 34, 6);
-      ctx.textAlign = 'left'; ctx.fillText('SALIDA', ax - 30, ay - 22);
+      ctx.textAlign = 'left'; ctx.fillText('START', ax - 30, ay - 22);
     }
     // arena
     let sandLabel = false;
@@ -465,7 +433,7 @@
       ctx.fillStyle = C.ink; ctx.globalAlpha = 0.35;
       for (let j = i0; j <= i1; j += 2) { const [x, y] = t.pts[j]; ctx.fillRect(x + ((j * 7) % 9) - 4, y + ((j * 5) % 9) - 4, 1.6, 1.6); }
       ctx.globalAlpha = 1;
-      if (!sandLabel) { sandLabel = true; const [x, y] = t.pts[Math.round((i0 + i1) / 2)]; label(x, y + 24, 'arena', C['ink-2']); }
+      if (!sandLabel) { sandLabel = true; const [x, y] = t.pts[Math.round((i0 + i1) / 2)]; label(x, y + 24, 'sand', C['ink-2']); }
     }));
     r.tracks.forEach((t, i) => {
       ctx.strokeStyle = C[t.color]; ctx.lineWidth = 5; ctx.globalAlpha = phase === 'aim' && order.length && !order.includes(i) ? 0.55 : 1;
@@ -489,11 +457,11 @@
       if (!t.cum) { t.cum = [0]; for (let j = 1; j < t.pts.length; j++) t.cum.push(t.cum[j - 1] + Math.hypot(t.pts[j][0] - t.pts[j - 1][0], t.pts[j][1] - t.pts[j - 1][1])); }
       const sd = t.cum[k] + Math.hypot(x - t.pts[k][0], y - t.pts[k][1]);
       drawObject(t, x, y, nx, ny, sd / (OBJ_R[t.obj || 'canica']), Math.atan2(b[1] - a[1], b[0] - a[0]));
-      if (time >= t.times.at(-1)) arrived.push(i);
+      if (t.times && time >= t.times.at(-1)) arrived.push(i);
     });
     if (anim || phase === 'result') {
       r.order.filter(i => arrived.includes(i)).forEach((i, k) => {
-        const t = r.tracks[i], txt = (k + 1) + 'º ' + (t.obj ? OBJ_NAME[t.obj] : COLOR_NAME[t.color]) + ' ' + num(t.times.at(-1), 2) + ' s';
+        const t = r.tracks[i], txt = ORD(k) + ' ' + (t.obj ? OBJ_NAME[t.obj] : COLOR_NAME[t.color]) + ' ' + num(t.times.at(-1), 2) + ' s';
         if (r.format === 'objetos') label(110, 30 + k * 22, txt, C[t.color]);
         else label(r.B[0] - 40, r.B[1] + 60 + k * 22, txt, C[t.color]);
       });
@@ -534,12 +502,12 @@
       // la pesa espera en la bandeja
       const s = boxSize(r.M);
       ctx.save(); ctx.translate(cx, 150); weightBox(0, r.M, C.azul, '#fff'); ctx.restore();
-      ctx.font = mono(11); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center'; ctx.fillText('arrástrala a la barra', cx, 150 + 18);
+      ctx.font = mono(11); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center'; ctx.fillText('drag it onto the beam', cx, 150 + 18);
       void s;
     }
     if (phase === 'result') {
-      label(cx + r.answer * unit, y - 70, 'equilibrio ' + side(r.answer), C.coral);
-      if (mark != null) label(cx + mark * unit, y + 60, 'tú ' + side(mark), C.azul);
+      label(cx + r.answer * unit, y - 70, 'balance ' + side(r.answer), C.coral);
+      if (mark != null) label(cx + mark * unit, y + 60, 'you ' + side(mark), C.azul);
     }
   }
   function weightBox(x, m, fill, text) {
@@ -560,10 +528,10 @@
     ctx.fillStyle = C.plate;
     for (const [dx, dy] of [[0.25, 0], [0.5, 0], [0.75, 0], [0.25, 1], [0.5, 1], [0.75, 1]]) { ctx.beginPath(); ctx.arc(t.x0 + (t.x1 - t.x0) * dx, dy ? t.y1 + b / 2 : t.y0 - b / 2, 2, 0, Math.PI * 2); ctx.fill(); }
     ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center';
-    ctx.fillText('mesa de 160 × 210 cm · el tapete frena', W / 2, t.y1 + b + 22);
+    ctx.fillText('160 × 210 cm table · the cloth slows the ball', W / 2, t.y1 + b + 22);
     // fuerza
     const v = Math.hypot(r.v[0], r.v[1]), f = Math.min(1, v / 700);
-    ctx.textAlign = 'left'; ctx.fillText('FUERZA', t.x0 - b, 46);
+    ctx.textAlign = 'left'; ctx.fillText('POWER', t.x0 - b, 46);
     ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.strokeRect(t.x0 + 50, 37, 200, 12);
     ctx.fillStyle = C.coral; ctx.fillRect(t.x0 + 51.5, 38.5, 197 * f, 9);
     const [sx, sy] = r.start;
@@ -582,7 +550,7 @@
     }
     if (phase === 'result') {
       if (mark) { ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(mark[0], mark[1]); ctx.lineTo(r.stop[0], r.stop[1]); ctx.stroke(); ctx.restore(); }
-      label(r.stop[0], r.stop[1] - 22, 'se paró aquí', C.coral);
+      label(r.stop[0], r.stop[1] - 22, 'stopped here', C.coral);
     }
     let dist = 0; for (let k = 1; k <= fi; k++) dist += Math.hypot(r.frames[k][0] - r.frames[k - 1][0], r.frames[k][1] - r.frames[k - 1][1]);
     marble(r.frames[fi][0], r.frames[fi][1], r.br, C.coral, dist / r.br);
@@ -616,28 +584,11 @@
     });
     ctx.restore();
     if (phase === 'result') {
-      if (r.answer >= 0) { const [cx, cy] = fr ? fr[r.answer] : [0, 0]; label(cx, Math.min(cy - 34, floorY - 50), 'toca primero: ' + (r.answer + 1), C.coral); }
-      else label(200, r.blocks.at(-1).y - 22, '¡aguanta!', C.good);
+      if (r.answer >= 0) { const [cx, cy] = fr ? fr[r.answer] : [0, 0]; label(cx, Math.min(cy - 34, floorY - 50), 'lands first: ' + (r.answer + 1), C.coral); }
+      else label(200, r.blocks.at(-1).y - 22, 'it stands!', C.good);
     }
   }
 
-  /* ---------- arranque: cargar el reto de hoy ---------- */
-  // Para probar otro día: ?d=2026-10-25
-  async function boot() {
-    const wanted = new URLSearchParams(location.search).get('d') || localISO(new Date());
-    try {
-      // El índice dice qué días existen; si hoy aún no hay reto, se usa el último publicado.
-      const idx = await (await fetch('days/index.json', { cache: 'no-cache' })).json();
-      const date = idx.dates.includes(wanted) ? wanted : idx.dates.filter(d => d <= wanted).at(-1);
-      if (!date) throw new Error('sin retos');
-      const res = await fetch('days/' + date + '.json');
-      if (!res.ok) throw new Error('no se pudo cargar ' + date);
-      startDay(await res.json());
-      fit();
-      if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
-    } catch (e) {
-      $('prompt').innerHTML = 'No hemos podido cargar el reto de hoy.<small>Revisa la conexión y recarga la página.</small>';
-    }
-  }
-  boot();
+  window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
 })();

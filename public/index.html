@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>¿Dónde cae? · Cinco experimentos de física al día</title>
-<meta name="description" content="Cada día, cinco experimentos de física: predice dónde cae la canica, quién gana la carrera o si la torre aguanta.">
-<meta property="og:title" content="¿Dónde cae?">
-<meta property="og:description" content="Cinco experimentos de física al día. Predice y suelta.">
+<title>Physle · Five physics experiments a day</title>
+<meta name="description" content="Five physics experiments every day: predict where the marble lands, who wins the race or whether the tower stands. Compete on the global leaderboard.">
+<meta property="og:title" content="Physle">
+<meta property="og:description" content="Five physics experiments a day. Predict, release, compete.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#e9efeb" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101b1f" media="(prefers-color-scheme: dark)">
@@ -17,24 +17,42 @@
 </head>
 <body>
 <div class="app" id="app">
-  <header>
-    <div class="brand">
-      <h1><span class="q">¿</span>Dónde cae<span class="q">?</span></h1>
-      <p>Cinco experimentos de física al día. Predice y suelta.</p>
-    </div>
-    <div class="meta">
-      <span id="dayLabel">Cargando…</span>
-      <div class="pips" id="pips" aria-label="Progreso de las rondas"></div>
-    </div>
+  <header class="top">
+    <a class="logo" href="/" aria-label="Physle, home">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 31 L33 22" stroke="var(--ink)" stroke-width="4.5" stroke-linecap="round"/><circle cx="25" cy="14" r="8.5" fill="var(--coral)" stroke="var(--ink)" stroke-width="1.6"/><path d="M20.5 11.5 a5 5 0 0 1 4-2.5" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none" opacity=".7"/></svg>
+      <span>Phys<em>le</em></span>
+    </a>
+    <button class="acct" id="acctBtn" type="button"><span class="av" id="acctAv">?</span><span class="nm" id="acctName">Sign in</span></button>
   </header>
+  <p class="tagline">Five physics experiments a day. Predict, release, compete.</p>
 
-  <section id="play" class="end" style="gap:12px">
+  <!-- Daily home -->
+  <section id="home" class="panel" aria-live="polite">
+    <div class="dayhead"><span id="dayLabel">Loading today’s challenge…</span><span id="levelLabel" class="badge" hidden></span></div>
+    <h2 id="homeTitle">Today’s challenge</h2>
+    <ul class="exps" aria-label="The five experiments">
+      <li><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M6 24 H34" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/><path d="M20 25 L14 34 H26 Z" fill="var(--ink)"/><rect x="8" y="15" width="8" height="8" rx="1.5" fill="var(--ink)"/><rect x="25" y="13" width="10" height="10" rx="1.5" fill="var(--azul)"/></svg>Balance</li>
+      <li><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 18 L26 23" stroke="var(--ink)" stroke-width="3.5" stroke-linecap="round"/><path d="M5 35 H35" stroke="var(--ink)" stroke-width="2"/><path d="M14 8 Q30 10 30 31" stroke="var(--coral)" stroke-width="1.5" stroke-dasharray="2 3" fill="none"/><circle cx="14" cy="9" r="4.5" fill="var(--coral)"/></svg>Landing</li>
+      <li><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 8 Q8 30 34 31" stroke="var(--azul)" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M5 8 L34 31" stroke="var(--coral)" stroke-width="3" stroke-linecap="round"/><path d="M34 22 V35" stroke="var(--ink)" stroke-width="2"/></svg>Race</li>
+      <li><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="7" width="30" height="27" rx="3" fill="var(--felt)" stroke="var(--ink)" stroke-width="3"/><path d="M12 28 L28 13 L32 20" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="2 2.5" fill="none"/><circle cx="12" cy="28" r="3.5" fill="var(--coral)"/></svg>Bank shot</li>
+      <li><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="12" y="27" width="16" height="7" rx="1.5" fill="var(--wood)" stroke="var(--ink)" stroke-width="1.6"/><rect x="15" y="20" width="18" height="7" rx="1.5" fill="var(--wood)" stroke="var(--ink)" stroke-width="1.6"/><rect x="20" y="10" width="16" height="7" rx="1.5" fill="var(--ink-2)" stroke="var(--ink)" stroke-width="1.6" transform="rotate(14 28 13)"/><path d="M4 35 H36" stroke="var(--ink)" stroke-width="2"/></svg>Tower</li>
+    </ul>
+    <div class="tries" id="tries"></div>
+    <button class="btn" id="playBtn" type="button" disabled>Play</button>
+    <p class="note" id="homeNote"></p>
+    <div class="bar"><button class="btn ghost" id="rankBtn" type="button" style="flex:1">Leaderboard</button></div>
+    <p class="metaline"><span id="next"></span><span id="streak"></span></p>
+  </section>
+
+  <!-- Game -->
+  <section id="play" class="end" style="gap:12px" hidden>
+    <div class="dayhead"><span id="playLabel"></span><div class="pips" id="pips" aria-label="Round progress"></div></div>
     <div class="stagehead">
-      <span class="tag" id="tag">Ronda 1 · ¿Dónde cae?</span>
-      <span class="tag slowmo" id="slowmo" hidden>Cámara lenta ×0,5</span>
+      <span class="tag" id="tag">Round 1</span>
+      <span class="tag slowmo" id="slowmo" hidden>Slow motion ×0.5</span>
     </div>
     <div class="stage">
-      <canvas id="cv" tabindex="0" aria-label="Escena de física"></canvas>
+      <canvas id="cv" tabindex="0" aria-label="Physics scene"></canvas>
     </div>
     <p class="prompt" id="prompt"></p>
     <div class="chips" id="chips" hidden></div>
@@ -44,29 +62,106 @@
       <div class="l2" id="rL2"></div>
     </div>
     <div class="bar">
-      <button class="btn" id="go" type="button" disabled>Soltar</button>
+      <button class="btn" id="go" type="button" disabled>Release</button>
     </div>
   </section>
 
-  <section id="end" class="end" hidden>
+  <!-- Attempt result -->
+  <section id="end" class="end panel" hidden>
     <div>
+      <div class="dayhead"><span id="endLabel"></span></div>
       <div class="total" id="total">0<span> / 500</span></div>
-      <p style="margin:6px 0 0;color:var(--ink-2)" id="endNote"></p>
+      <p class="note" id="endNote" style="margin-top:6px"></p>
     </div>
     <div class="rows" id="rows"></div>
     <pre class="share" id="share"></pre>
     <div class="bar">
-      <button class="btn" id="copy" type="button">Copiar resultado</button>
-      <button class="btn ghost" id="again" type="button">Repetir</button>
+      <button class="btn" id="copy" type="button">Copy result</button>
     </div>
+    <div class="bar">
+      <button class="btn ghost" id="again" type="button" style="flex:1">Second attempt</button>
+      <button class="btn ghost" id="endRank" type="button" style="flex:1">Leaderboard</button>
+    </div>
+    <button class="link" id="endHome" type="button">Back to home</button>
+  </section>
+
+  <!-- Leaderboard -->
+  <section id="rank" class="panel" hidden>
+    <div class="dayhead"><span>Leaderboard</span><button class="link" id="rankBack" type="button">Back</button></div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tabDay" aria-selected="true">Today</button>
+      <button type="button" role="tab" id="tabWeek" aria-selected="false">Week</button>
+      <button type="button" role="tab" id="tabCountries" aria-selected="false">Countries</button>
+    </div>
+    <div class="rankbar">
+      <span id="rankSub"></span>
+      <label for="rankFilter" id="rankFilterWrap"><select id="rankFilter"></select></label>
+    </div>
+    <ol class="ranklist" id="rankList"></ol>
+    <ol class="ranklist" id="rankMe" hidden></ol>
   </section>
 
   <div class="foot">
-    <span><span class="streak" id="streak">racha 0</span> · <span id="next"></span></span>
-    <span id="practice" hidden>Modo práctica</span>
+    <span>Physle · a new challenge every day</span>
+    <a href="privacy.html">Privacy</a>
   </div>
 </div>
 
-<script src="game.js" defer></script>
+<!-- Sign in / sign up -->
+<dialog id="authDlg" aria-labelledby="authTitle">
+  <h3 id="authTitle">Sign in to compete</h3>
+  <p>With an account you appear on the leaderboard and can play from any device.</p>
+  <button class="gbtn" id="googleBtn" type="button"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
+  <div class="or">or with your email</div>
+  <form class="form" id="emailForm" novalidate>
+    <label for="email">Email<input type="email" id="email" autocomplete="email" required></label>
+    <label for="password">Password<input type="password" id="password" autocomplete="current-password" minlength="6" required></label>
+    <p class="err" id="authErr" role="alert"></p>
+    <button class="btn" type="submit" id="emailSubmit">Sign in</button>
+  </form>
+  <div class="dlgfoot">
+    <button class="link" id="authMode" type="button">No account? Create one</button>
+    <button class="link" id="forgot" type="button">Forgot your password?</button>
+  </div>
+  <div class="dlgfoot"><button class="link" type="button" data-close>Keep playing without an account</button></div>
+</dialog>
+
+<!-- Profile -->
+<dialog id="profileDlg" aria-labelledby="profileTitle">
+  <h3 id="profileTitle">Your player profile</h3>
+  <p>This is how other players will see you on the leaderboard.</p>
+  <form class="form" id="profileForm" novalidate>
+    <label for="nick">Leaderboard name<input type="text" id="nick" maxlength="16" autocomplete="nickname" required placeholder="3 to 16 characters"></label>
+    <label for="country">Country<select id="country" required></select></label>
+    <div id="consent">
+      <label class="check" for="over14"><input type="checkbox" id="over14"><span>I am 16 or older.</span></label>
+      <label class="check" for="accept"><input type="checkbox" id="accept"><span>I accept the <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.</span></label>
+    </div>
+    <p class="err" id="profileErr" role="alert"></p>
+    <button class="btn" type="submit">Save</button>
+  </form>
+  <div class="dlgfoot"><button class="link" type="button" data-close id="profileLater">Not now</button></div>
+</dialog>
+
+<!-- Account -->
+<dialog id="accountDlg" aria-labelledby="accountTitle">
+  <h3 id="accountTitle">Your account</h3>
+  <p id="accountInfo"></p>
+  <div class="form">
+    <button class="btn ghost" type="button" id="editProfile">Edit name and country</button>
+    <button class="btn ghost" type="button" id="logout">Sign out</button>
+    <button class="btn ghost danger" type="button" id="deleteAsk">Delete my account</button>
+    <div id="deleteBox" hidden>
+      <p>Your profile, scores and sign-in will be deleted. This can’t be undone.</p>
+      <button class="btn danger" type="button" id="deleteYes" style="background:transparent">Yes, delete everything</button>
+    </div>
+  </div>
+  <div class="dlgfoot"><button class="link" type="button" data-close>Close</button></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="game.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
