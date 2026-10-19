@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>¿Dónde cae? · Cinco experimentos de física al día</title>
+<meta name="description" content="Cada día, cinco experimentos de física: predice dónde cae la canica, quién gana la carrera o si la torre aguanta.">
+<meta property="og:title" content="¿Dónde cae?">
+<meta property="og:description" content="Cinco experimentos de física al día. Predice y suelta.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#e9efeb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101b1f" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="brand">
+      <h1><span class="q">¿</span>Dónde cae<span class="q">?</span></h1>
+      <p>Cinco experimentos de física al día. Predice y suelta.</p>
+    </div>
+    <div class="meta">
+      <span id="dayLabel">Cargando…</span>
+      <div class="pips" id="pips" aria-label="Progreso de las rondas"></div>
+    </div>
+  </header>
+
+  <section id="play" class="end" style="gap:12px">
+    <div class="stagehead">
+      <span class="tag" id="tag">Ronda 1 · ¿Dónde cae?</span>
+      <span class="tag slowmo" id="slowmo" hidden>Cámara lenta ×0,5</span>
+    </div>
+    <div class="stage">
+      <canvas id="cv" tabindex="0" aria-label="Escena de física"></canvas>
+    </div>
+    <p class="prompt" id="prompt"></p>
+    <div class="chips" id="chips" hidden></div>
+    <div class="result" id="result" hidden aria-live="polite">
+      <div class="pts" id="rPts">0</div>
+      <div class="l1" id="rL1"></div>
+      <div class="l2" id="rL2"></div>
+    </div>
+    <div class="bar">
+      <button class="btn" id="go" type="button" disabled>Soltar</button>
+    </div>
+  </section>
+
+  <section id="end" class="end" hidden>
+    <div>
+      <div class="total" id="total">0<span> / 500</span></div>
+      <p style="margin:6px 0 0;color:var(--ink-2)" id="endNote"></p>
+    </div>
+    <div class="rows" id="rows"></div>
+    <pre class="share" id="share"></pre>
+    <div class="bar">
+      <button class="btn" id="copy" type="button">Copiar resultado</button>
+      <button class="btn ghost" id="again" type="button">Repetir</button>
+    </div>
+  </section>
+
+  <div class="foot">
+    <span><span class="streak" id="streak">racha 0</span> · <span id="next"></span></span>
+    <span id="practice" hidden>Modo práctica</span>
+  </div>
+</div>
+
+<script src="game.js" defer></script>
+</body>
+</html>
