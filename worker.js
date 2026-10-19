@@ -131,7 +131,8 @@ async function attemptsToday(env, who, date) {
   // practicar sin cuenta y luego jugar con ventaja ya conectado.
   const { results } = await env.DB.prepare(
     `SELECT id, num, set_id, round, scores, total, finished, player, device FROM attempts
-     WHERE date = ?1 AND (player = ?2 OR device = ?3 ${who.uid ? 'OR uid = ?4' : ''}) ORDER BY started_at`
+     WHERE date = ?1 AND (player = ?2 OR device = ?3 ${who.uid ? 'OR uid = ?4' : ''}
+       OR uid IN (SELECT uid FROM attempts WHERE date = ?1 AND device = ?3 AND uid IS NOT NULL)) ORDER BY started_at`
   ).bind(date, who.player, who.device, ...(who.uid ? [who.uid] : [])).all();
   return results.map(a => ({ ...a, scores: JSON.parse(a.scores) }));
 }
@@ -142,9 +143,15 @@ async function claimDevice(env, who, date) {
   if (!who.uid) return;
   const has = await env.DB.prepare('SELECT 1 FROM users WHERE uid = ?').bind(who.uid).first();
   if (!has) return;
+  // Nunca más de MAX_ATTEMPTS por cuenta y día: si la cuenta ya jugó sus intentos en
+  // otro dispositivo, las partidas de invitado se quedan fuera del ranking.
+  const used = await env.DB.prepare('SELECT COUNT(*) AS n FROM attempts WHERE uid = ? AND date = ?').bind(who.uid, date).first();
+  const room = MAX_ATTEMPTS - used.n;
+  if (room <= 0) return;
   const { results } = await env.DB.prepare(
-    'UPDATE attempts SET uid = ?1 WHERE device = ?2 AND date = ?3 AND uid IS NULL RETURNING id, scores, finished'
-  ).bind(who.uid, who.device, date).all();
+    `UPDATE attempts SET uid = ?1 WHERE id IN (SELECT id FROM attempts WHERE device = ?2 AND date = ?3 AND uid IS NULL ORDER BY started_at LIMIT ?4)
+     RETURNING id, scores, finished`
+  ).bind(who.uid, who.device, date, room).all();
   for (const a of results || []) {
     if (!a.finished) continue;
     const earned = coinsFor(JSON.parse(a.scores));
