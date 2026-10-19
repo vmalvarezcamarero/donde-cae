@@ -101,8 +101,8 @@ function renderAccount() {
   $('acctName').textContent = p ? p.nickname : user ? 'Finish your profile' : accountsOn ? 'Sign up' : 'Sign in';
   const guest = accountsOn && !user;
   $('acctBtn').classList.toggle('cta', guest);
-  $('joinCard').hidden = !guest;
-  if (!guest) $('endJoin').hidden = true;
+  if ($('joinCard')) $('joinCard').hidden = !guest;
+  if (!guest && $('endJoin')) $('endJoin').hidden = true;
 }
 function renderHome() {
   const d = today.day, list = today.attempts, done = list.filter(a => a.finished);
@@ -164,10 +164,10 @@ $('again').addEventListener('click', maybeGate);
 function maybeGate() {
   const open = today?.attempts?.some(a => !a.finished);
   const key = 'guestOk:' + (today?.day?.date || '');
-  if (accountsOn && !user && !open && !store.get(key)) { $('guestDlg').showModal(); return; }
+  if (accountsOn && !user && !open && !store.get(key) && $('guestDlg')) { $('guestDlg').showModal(); return; }
   startAttempt();
 }
-$('guestPlay').addEventListener('click', () => { store.set('guestOk:' + (today?.day?.date || ''), 1); $('guestDlg').close(); startAttempt(); });
+$('guestPlay')?.addEventListener('click', () => { store.set('guestOk:' + (today?.day?.date || ''), 1); $('guestDlg').close(); startAttempt(); });
 async function startAttempt() {
   let st;
   try { st = await api('/api/attempt', { method: 'POST' }); } catch (e) { toast(e.message); refresh(); return; }
@@ -195,7 +195,7 @@ async function showEnd(r) {
   const earned = $('earned');
   if (r.coins) { earned.hidden = false; earned.innerHTML = '<span class="coin" aria-hidden="true"></span><span></span>'; earned.lastChild.textContent = '+' + r.coins.earned + ' coins · you now have ' + r.coins.balance; }
   else earned.hidden = true;
-  $('endJoin').hidden = !(accountsOn && !user);
+  if ($('endJoin')) $('endJoin').hidden = !(accountsOn && !user);
   await refresh();
   const left = today.max - today.attempts.length;
   $('again').hidden = left <= 0;
@@ -317,15 +317,15 @@ async function googleSignIn() {
     const provider = new A.GoogleAuthProvider();
     try { await A.signInWithPopup(fbAuth, provider); }
     catch (e) { if (e.code === 'auth/popup-blocked') await A.signInWithRedirect(fbAuth, provider); else throw e; }
-    for (const d of ['authDlg', 'guestDlg']) if ($(d).open) $(d).close();
+    for (const d of ['authDlg', 'guestDlg']) if ($(d)?.open) $(d).close();
     await refresh();
-  } catch (e) { if ($('authDlg').open) $('authErr').textContent = authMsg(e); else toast(authMsg(e)); }
+  } catch (e) { console.warn('Google sign-in:', e.code, e.message); if ($('authDlg').open) $('authErr').textContent = authMsg(e); else toast(authMsg(e)); }
 }
 $('googleBtn').addEventListener('click', googleSignIn);
 // Botones de registro repartidos por la web (portada, final del intento, aviso antes de jugar).
 const G_ICON = $('googleBtn').querySelector('svg').outerHTML;
 document.querySelectorAll('[data-google]').forEach(b => { b.insertAdjacentHTML('afterbegin', G_ICON); b.addEventListener('click', googleSignIn); });
-const fromGate = (fn) => () => { if ($('guestDlg').open) $('guestDlg').close(); fn(); };
+const fromGate = (fn) => () => { if ($('guestDlg')?.open) $('guestDlg').close(); fn(); };
 document.querySelectorAll('[data-signup]').forEach(b => b.addEventListener('click', fromGate(() => openAuth(true))));
 document.querySelectorAll('[data-signin]').forEach(b => b.addEventListener('click', fromGate(() => openAuth(false))));
 $('emailForm').addEventListener('submit', async (ev) => {
