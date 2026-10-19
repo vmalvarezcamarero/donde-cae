@@ -145,7 +145,18 @@ select { font: 500 13px var(--font-body); color: var(--ink); background: var(--p
 .badge.l1 { color: var(--good); } .badge.l2 { color: var(--warn); } .badge.l3 { color: var(--bad); }
 .panel h2 { margin: 0; font: 800 30px/1 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
 .exps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 0; padding: 0; list-style: none; }
-.exps li { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-2); text-align: center; line-height: 1.2; }
+.exps li { display: flex; }
+.exp { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; font: 500 11px/1.2 var(--font-body); color: var(--ink-2); text-align: center;
+  background: transparent; border: 1.5px dashed transparent; border-radius: 6px; cursor: pointer; }
+.exp:hover { border-color: var(--line); color: var(--ink); }
+.exp:focus-visible { outline: 3px solid var(--azul); outline-offset: 1px; }
+.exps::after { content: none; }
+.howhead { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.howhead svg { width: 48px; height: 48px; flex: none; }
+.howsteps { margin: 0 0 10px; padding-left: 22px; display: grid; gap: 8px; font-size: 15px; line-height: 1.45; }
+.howsteps li::marker { font: 700 14px var(--font-mono); color: var(--coral); }
+.howpts { margin: 0; padding: 8px 10px; border-radius: 6px; background: var(--paper); font-size: 13px; color: var(--ink-2); }
+.howpts b { color: var(--ink); }
 .exps svg { width: 40px; height: 40px; }
 .tries { display: grid; gap: 8px; }
 .try { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 6px; font-size: 14px; }
@@ -168,7 +179,11 @@ select { font: 500 13px var(--font-body); color: var(--ink); background: var(--p
 .ranklist li:nth-child(odd) { background: color-mix(in srgb, var(--paper) 60%, transparent); }
 .ranklist li.me { outline: 2px solid var(--azul); background: color-mix(in srgb, var(--azul) 10%, transparent); }
 .ranklist .pos { font: 700 14px var(--font-mono); color: var(--ink-2); text-align: right; }
-.ranklist li:nth-child(-n+3) .pos { color: var(--coral); }
+.ranklist .pos.medal { font-size: 22px; line-height: 1; text-align: center; }
+.ranklist li.gold { background: color-mix(in srgb, #e3b341 22%, transparent); }
+.ranklist li.silver { background: color-mix(in srgb, #a7b1bc 24%, transparent); }
+.ranklist li.bronze { background: color-mix(in srgb, #c47f45 20%, transparent); }
+.ranklist li.gold .sc, .ranklist li.silver .sc, .ranklist li.bronze .sc { font-size: 17px; }
 .ranklist .fl { font-size: 18px; line-height: 1; }
 .ranklist .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .ranklist .nm small { font-weight: 400; color: var(--ink-2); margin-left: 4px; }
@@ -196,3 +211,27 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .danger { color: var(--bad) !important; border-color: var(--bad) !important; }
 .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--plate); padding: 10px 16px; border-radius: 6px; font-size: 14px; max-width: calc(100vw - 32px); box-shadow: 3px 3px 0 var(--coral); z-index: 50; pointer-events: none; }
 .foot a { color: inherit; }
+
+/* ---------- monedas y tienda ---------- */
+.topright { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.coins { display: inline-flex; align-items: center; gap: 6px; background: var(--plate); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 6px 10px 6px 7px; font: 700 14px var(--font-mono); font-variant-numeric: tabular-nums; cursor: pointer; }
+.coin { width: 18px; height: 18px; border-radius: 50%; flex: none; background: radial-gradient(circle at 35% 35%, #fff3b0 0 18%, #e3b341 45%, #a97c08 100%); border: 1.5px solid #8a6400; box-shadow: inset 0 0 0 2px rgba(255,255,255,.25); }
+.coin.big { width: 34px; height: 34px; }
+.wallet { display: flex; align-items: center; gap: 12px; font-size: 15px; }
+.wallet b { font: 800 28px/1 var(--font-display); }
+.wallet small { display: block; color: var(--ink-2); font-size: 12px; margin-top: 2px; }
+.tabs.two { grid-template-columns: repeat(2, 1fr); }
+.items { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px 10px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); text-align: center; }
+.item.on { border-color: var(--ink); box-shadow: 3px 3px 0 var(--coral); }
+.item canvas { width: 64px; height: 64px; }
+.item .sw { min-height: 64px; display: grid; place-items: center; font: 800 20px var(--font-display); }
+.item .in { font-weight: 700; font-size: 14px; }
+.item .pr { display: inline-flex; align-items: center; gap: 5px; font: 600 12px var(--font-mono); color: var(--ink-2); }
+.item .pr .coin { width: 13px; height: 13px; border-width: 1px; }
+.item button { width: 100%; padding: 7px; border-radius: 6px; font: 700 13px var(--font-body); cursor: pointer; border: 1.5px solid var(--ink); background: var(--ink); color: var(--plate); }
+.item button.sec { background: transparent; color: var(--ink); }
+.item button:disabled { background: transparent; color: var(--ink-2); border-color: var(--line); cursor: default; }
+.rainbow { background: linear-gradient(90deg, #e2583a, #e3b341, #22a37a, #2c7be5, #8b5cd6); -webkit-background-clip: text; background-clip: text; color: transparent !important; }
+.earned { margin: 0; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.earned .coin { width: 20px; height: 20px; }

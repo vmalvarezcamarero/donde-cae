@@ -38,7 +38,7 @@ public/                    la web: index.html, app.js (cuentas y pantallas),
 
 1. En el panel de Cloudflare: **Storage & databases → D1 SQL database → Create**. Nómbrala `physle`.
 2. Copia el **Database ID** en `wrangler.jsonc`, en `database_id`.
-3. Abre la base de datos → pestaña **Console**. Pega el contenido de `migrations/0001_init.sql` y pulsa **Execute**.
+3. Abre la base de datos → pestaña **Console**. Pega el contenido de `migrations/0001_init.sql` y pulsa **Execute**. Después haz lo mismo con `migrations/0002_shop.sql` (monedas y tienda).
 
 ### 3. Subir a GitHub
 
@@ -74,6 +74,8 @@ npm run validate                                       # comprobar los retos
 
 - **Cambiar la fecha del reto #1:** `launch` en `config.json`. Después regenera los días futuros con `--force`.
 - **Puntuación:** `public/scoring.js`. La usan el servidor y la web.
+- **Monedas y tienda:** `public/shop.js` (cuántas monedas se ganan, precios, skins y colores). Las monedas solo las da y las cobra el servidor.
+- **Página de error:** `public/404.html`.
 - **Número de intentos:** `MAX_ATTEMPTS` en `src/worker.js`. Ya está preparado para un tercer intento a cambio de ver un vídeo.
 - **Nombres prohibidos:** lista `BANNED` en `src/worker.js`.
 - **Dominio propio** (por ejemplo `physle.com`): cómpralo, y luego en Cloudflare entra en el proyecto → **Domains → Add Domain**. Añádelo también a los dominios autorizados de Firebase.

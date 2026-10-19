@@ -5,6 +5,7 @@
 // - Limita los intentos por día, guarda cuentas y calcula los rankings.
 import { publicRound, validPrediction, scorePoints } from '../public/scoring.js';
 import { COUNTRIES } from '../public/countries.js';
+import { WELCOME_COINS, coinsFor, findItem } from '../public/shop.js';
 
 const MAX_ATTEMPTS = 2;          // en el futuro: +1 viendo un vídeo
 const SETS = ['A', 'B', 'B'];    // reto que toca en cada intento
@@ -18,7 +19,10 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
-    if (url.pathname.startsWith('/days/')) return new Response('No encontrado', { status: 404 });
+    if (url.pathname.startsWith('/days/')) {     // los retos no se descargan: se ve la página 404
+      const page = await env.ASSETS.fetch(new Request(new URL('/404.html', url)));
+      return new Response(page.body, { status: 404, headers: { 'content-type': 'text/html; charset=utf-8' } });
+    }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(req);
     try {
       return await route(req, env, url);
@@ -112,6 +116,8 @@ async function route(req, env, url) {
   let m = path.match(/^\/api\/attempt\/(\d+)\/round$/);
   if (m && method === 'POST') return playRound(req, env, Number(m[1]));
   if (path === '/api/leaderboard' && method === 'GET') return leaderboard(req, env, url);
+  if (path === '/api/shop/buy' && method === 'POST') return shopBuy(req, env);
+  if (path === '/api/shop/equip' && method === 'POST') return shopEquip(req, env);
   if (path === '/api/me') {
     if (method === 'GET') return getMe(req, env);
     if (method === 'PUT') return putMe(req, env);
@@ -129,7 +135,11 @@ async function attemptsToday(env, who, date) {
   ).bind(date, who.player, who.device, ...(who.uid ? [who.uid] : [])).all();
   return results.map(a => ({ ...a, scores: JSON.parse(a.scores) }));
 }
-const profileOf = async (env, uid) => uid ? env.DB.prepare('SELECT nickname, country FROM users WHERE uid = ?').bind(uid).first() : null;
+const profileOf = async (env, uid) => {
+  if (!uid) return null;
+  const p = await env.DB.prepare('SELECT nickname, country, coins, skin, name_color, owned FROM users WHERE uid = ?').bind(uid).first();
+  return p && { ...p, owned: JSON.parse(p.owned) };
+};
 
 async function getToday(req, env) {
   const who = await identify(req, env);
@@ -184,7 +194,17 @@ async function playRound(req, env, id) {
      WHERE id = ? AND round = ?`
   ).bind(JSON.stringify(scores), JSON.stringify(preds), total, finished, finished ? Date.now() : null, id, a.round).run();
   if (!upd.meta.changes) throw new HttpError(409, 'That round was already played. Please reload the page.');
-  return json({ pts, round: r, total, finished: !!finished });
+  // Al terminar, las cuentas con perfil ganan monedas.
+  let coins = null;
+  if (finished && a.uid) {
+    const earned = coinsFor(scores);
+    const res = await env.DB.prepare('UPDATE users SET coins = coins + ? WHERE uid = ? RETURNING coins').bind(earned, a.uid).first();
+    if (res) {
+      await env.DB.prepare('UPDATE attempts SET coins = ? WHERE id = ?').bind(earned, id).run();
+      coins = { earned, balance: res.coins };
+    }
+  }
+  return json({ pts, round: r, total, finished: !!finished, coins });
 }
 
 /* ---------------- rankings ---------------- */
@@ -213,7 +233,7 @@ async function leaderboard(req, env, url) {
   }
   if (country && !COUNTRY_SET.has(country)) throw new HttpError(400, 'Invalid country.');
   const filter = country ? 'WHERE u.country = ?3' : '';
-  const ranked = `SELECT u.uid, u.nickname, u.country, x.score, x.days,
+  const ranked = `SELECT u.uid, u.nickname, u.country, u.name_color, x.score, x.days,
                   RANK() OVER (ORDER BY x.score DESC) AS pos, x.t
                   FROM (${totals}) x JOIN users u ON u.uid = x.uid ${filter}`;
   const args = country ? [f, t, country] : [f, t];
@@ -221,7 +241,7 @@ async function leaderboard(req, env, url) {
   let me = null;
   if (who.uid) me = await env.DB.prepare(`SELECT * FROM (${ranked}) WHERE uid = ?${args.length + 1}`).bind(...args, who.uid).first();
   const count = await env.DB.prepare(`SELECT COUNT(*) AS n FROM (${ranked})`).bind(...args).first();
-  const strip = (r) => r && ({ pos: r.pos, nickname: r.nickname, country: r.country, score: r.score, days: r.days, me: r.uid === who.uid });
+  const strip = (r) => r && ({ pos: r.pos, nickname: r.nickname, country: r.country, color: r.name_color, score: r.score, days: r.days, me: r.uid === who.uid });
   return json({ scope, from: f, to: t, country: country || null, players: count.n, rows: results.map(strip), me: strip(me) });
 }
 
@@ -246,11 +266,11 @@ async function putMe(req, env) {
   const taken = await env.DB.prepare('SELECT uid FROM users WHERE nickname = ? COLLATE NOCASE AND uid <> ?').bind(b.nickname, who.uid).first();
   if (taken) throw new HttpError(409, 'That name is taken. Try another one.');
   await env.DB.prepare(
-    `INSERT INTO users (uid, nickname, country, created_at) VALUES (?1, ?2, ?3, ?4)
+    `INSERT INTO users (uid, nickname, country, created_at, coins) VALUES (?1, ?2, ?3, ?4, ?5)
      ON CONFLICT(uid) DO UPDATE SET nickname = ?2, country = ?3`
-  ).bind(who.uid, b.nickname, b.country, Date.now()).run();
+  ).bind(who.uid, b.nickname, b.country, Date.now(), WELCOME_COINS).run();
   // Los intentos de hoy hechos con esta cuenta antes de tener perfil pasan a contar.
-  return json({ uid: who.uid, profile: { nickname: b.nickname, country: b.country } });
+  return json({ uid: who.uid, profile: await profileOf(env, who.uid), welcome: exists ? 0 : WELCOME_COINS });
 }
 async function deleteMe(req, env) {
   const who = await identify(req, env, { requireUser: true });
@@ -259,4 +279,32 @@ async function deleteMe(req, env) {
     env.DB.prepare('DELETE FROM users WHERE uid = ?').bind(who.uid),
   ]);
   return json({ deleted: true });
+}
+
+/* ---------------- tienda ---------------- */
+async function shopUser(req, env) {
+  const who = await identify(req, env, { requireUser: true });
+  const p = await profileOf(env, who.uid);
+  if (!p) throw new HttpError(403, 'Create your player profile first.');
+  const b = await req.json().catch(() => ({}));
+  const item = findItem(b.kind, b.id);
+  if (!item) throw new HttpError(400, 'That item doesn’t exist.');
+  return { who, p, item, key: b.kind + ':' + b.id, kind: b.kind };
+}
+async function shopBuy(req, env) {
+  const { who, p, item, key } = await shopUser(req, env);
+  if (item.price === 0 || p.owned.includes(key)) throw new HttpError(409, 'You already own this.');
+  if (p.coins < item.price) throw new HttpError(402, 'Not enough coins yet. Keep playing!');
+  const owned = JSON.stringify([...p.owned, key]);
+  // Solo se cobra si el saldo y lo comprado siguen como los leímos (evita compras dobles).
+  const res = await env.DB.prepare('UPDATE users SET coins = coins - ?1, owned = ?2 WHERE uid = ?3 AND coins >= ?1 AND owned = ?4')
+    .bind(item.price, owned, who.uid, JSON.stringify(p.owned)).run();
+  if (!res.meta.changes) throw new HttpError(409, 'Something changed in the meantime. Please try again.');
+  return json({ profile: await profileOf(env, who.uid) });
+}
+async function shopEquip(req, env) {
+  const { who, p, item, key, kind } = await shopUser(req, env);
+  if (item.price > 0 && !p.owned.includes(key)) throw new HttpError(403, 'Buy it first.');
+  await env.DB.prepare(`UPDATE users SET ${kind === 'skin' ? 'skin' : 'name_color'} = ? WHERE uid = ?`).bind(item.id, who.uid).run();
+  return json({ profile: await profileOf(env, who.uid) });
 }

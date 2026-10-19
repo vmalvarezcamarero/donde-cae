@@ -29,7 +29,7 @@
   /* ---------- estado ---------- */
   // mark: drop → x mundo; balance → posición en unidades; pool → [x,y]; tower → índice de bloque o -1 (aguanta); race → usa order
   let day, roundIdx, phase, scores, details, mark, order, anim;
-  let hooks = null, attempt = null, serverPts = 0, sending = false;
+  let hooks = null, attempt = null, serverPts = 0, sending = false, lastCoins = null;
   const DKEY = (id) => 'physle:detalles:' + id;
   function play(payload, h) {
     hooks = h; attempt = payload.attempt;
@@ -185,7 +185,7 @@
     try { res = await hooks.submit(roundIdx, predictionOf(round())); }
     catch (e) { sending = false; $('go').textContent = 'Release'; ready(); hooks.error(e.message); return; }
     sending = false;
-    day.rounds[roundIdx] = res.round; serverPts = res.pts;   // ahora sí: la ronda completa con su resultado
+    day.rounds[roundIdx] = res.round; serverPts = res.pts; lastCoins = res.coins;   // ahora sí: la ronda completa con su resultado
     const r = round(); phase = 'playing';
     const speed = r.type === 'race' ? 0.5 : 1;
     $('slowmo').hidden = r.type !== 'race';
@@ -251,7 +251,7 @@
   function next() {
     if (roundIdx < 4) { roundIdx++; startRound(); return; }
     $('play').hidden = true;
-    hooks.done({ attempt, day, scores, details, total: scores.reduce((a, b) => a + b, 0), types: day.rounds.map(r => r.type) });
+    hooks.done({ attempt, day, scores, details, total: scores.reduce((a, b) => a + b, 0), types: day.rounds.map(r => r.type), coins: lastCoins });
   }
 
   /* ---------- dibujo: utilidades ---------- */
@@ -276,6 +276,53 @@
     ctx.lineWidth = 1 / (cv.width / W);
     for (let x = 0; x <= W; x += 10) { ctx.strokeStyle = x % 50 === 0 ? C['grid-major'] : C.grid; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
     for (let y = 0; y <= H; y += 10) { ctx.strokeStyle = y % 50 === 0 ? C['grid-major'] : C.grid; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  }
+  /* ---------- skins de la canica (las compra el jugador en la tienda) ---------- */
+  let skin = { kind: 'solid', base: 'var:coral' };
+  const col = (v) => (v || '').startsWith('var:') ? C[v.slice(4)] : v;
+  function drawSkin(g, x, y, rad, look, ang) {
+    const base = col(look.base), alt = col(look.alt);
+    g.save(); g.translate(x, y);
+    g.beginPath(); g.arc(0, 0, rad, 0, Math.PI * 2); g.closePath();
+    if (look.kind === 'metal') {
+      const gr = g.createRadialGradient(-rad * 0.35, -rad * 0.4, rad * 0.1, 0, 0, rad);
+      gr.addColorStop(0, alt); gr.addColorStop(0.55, base); gr.addColorStop(1, look.dark);
+      g.fillStyle = gr;
+    } else if (look.kind === 'galaxy') {
+      const gr = g.createRadialGradient(rad * 0.2, rad * 0.1, 0, 0, 0, rad);
+      gr.addColorStop(0, alt); gr.addColorStop(1, base); g.fillStyle = gr;
+    } else g.fillStyle = base;
+    g.fill();
+    g.save(); g.clip(); g.rotate(ang || 0);
+    if (look.kind === 'solid') {
+      g.strokeStyle = C.plate; g.globalAlpha = 0.7; g.lineWidth = rad * 0.22; g.lineCap = 'round';
+      g.beginPath(); g.arc(0, 0, rad * 0.58, -0.5, 1.1); g.stroke();
+      g.beginPath(); g.arc(0, 0, rad * 0.58, Math.PI - 0.5, Math.PI + 1.1); g.stroke();
+    } else if (look.kind === 'swirl') {
+      g.strokeStyle = alt; g.lineWidth = rad * 0.32; g.lineCap = 'round';
+      g.beginPath(); g.arc(-rad * 0.35, 0, rad * 0.45, -Math.PI, 0); g.arc(rad * 0.35, 0, rad * 0.45, Math.PI, 0, true); g.stroke();
+    } else if (look.kind === 'stripe') {
+      g.fillStyle = alt; g.fillRect(-rad, -rad * 0.3, rad * 2, rad * 0.6);
+    } else if (look.kind === 'eight') {
+      g.fillStyle = alt; g.beginPath(); g.arc(rad * 0.15, -rad * 0.1, rad * 0.48, 0, Math.PI * 2); g.fill();
+      g.fillStyle = base; g.font = '800 ' + (rad * 0.62) + 'px "Bricolage Grotesque", system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('8', rad * 0.15, -rad * 0.06);
+    } else if (look.kind === 'melon') {
+      g.strokeStyle = alt; g.lineWidth = rad * 0.16;
+      for (const k of [-0.66, -0.22, 0.22, 0.66]) { g.beginPath(); g.ellipse(k * rad * 1.4, 0, rad * 0.25, rad * 1.1, 0, 0, Math.PI * 2); g.stroke(); }
+    } else if (look.kind === 'metal') {
+      g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = rad * 0.14; g.beginPath(); g.arc(0, 0, rad * 0.7, -0.3, 0.5); g.stroke();
+    } else if (look.kind === 'galaxy') {
+      g.fillStyle = '#fff';
+      for (const [sx, sy, sr] of [[-0.5, -0.3, 0.08], [0.3, -0.55, 0.06], [0.55, 0.2, 0.09], [-0.2, 0.5, 0.06], [0.05, 0.05, 0.05], [-0.62, 0.25, 0.05]]) { g.beginPath(); g.arc(sx * rad, sy * rad, sr * rad, 0, Math.PI * 2); g.fill(); }
+    } else if (look.kind === 'disco') {
+      const t = rad / 2.6;
+      for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { g.fillStyle = (i + j) % 2 ? alt : base; g.fillRect(i * t - t / 2 + 0.4, j * t - t / 2 + 0.4, t - 0.8, t - 0.8); }
+    }
+    g.restore();
+    g.globalAlpha = 0.45; g.fillStyle = '#fff'; g.beginPath(); g.arc(-rad * 0.35, -rad * 0.35, rad * 0.3, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = 1; g.strokeStyle = C.ink; g.lineWidth = Math.max(1.2, rad * 0.11); g.beginPath(); g.arc(0, 0, rad, 0, Math.PI * 2); g.stroke();
+    g.restore();
   }
   function marble(x, y, rad, col, ang) {
     ctx.save();
@@ -345,7 +392,7 @@
       ctx.globalAlpha = 1;
       label(x, FLOOR + 40, 'landed ' + (x / 4).toFixed(0), C.coral);
     }
-    marble(r.frames[fi][0], r.frames[fi][1], R, C.coral, r.frames[fi][2]);
+    drawSkin(ctx, r.frames[fi][0], r.frames[fi][1], R, skin, r.frames[fi][2]);
   }
   function plank(p) {
     const dx = p.x2 - p.x1, dy = p.y2 - p.y1, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
@@ -553,7 +600,7 @@
       label(r.stop[0], r.stop[1] - 22, 'stopped here', C.coral);
     }
     let dist = 0; for (let k = 1; k <= fi; k++) dist += Math.hypot(r.frames[k][0] - r.frames[k - 1][0], r.frames[k][1] - r.frames[k - 1][1]);
-    marble(r.frames[fi][0], r.frames[fi][1], r.br, C.coral, dist / r.br);
+    drawSkin(ctx, r.frames[fi][0], r.frames[fi][1], r.br, skin, dist / r.br);
   }
 
   /* ---------- ¿Aguanta? ---------- */
@@ -589,6 +636,6 @@
     }
   }
 
-  window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME };
+  window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME, setSkin: (look) => { skin = look || skin; draw(); }, drawMarble: (g, x, y, r, look, ang) => { readColors(); drawSkin(g, x, y, r, look, ang); } };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
 })();

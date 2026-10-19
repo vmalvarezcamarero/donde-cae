@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Page not found · Physle</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Figtree:wght@400;600&family=IBM+Plex+Mono:wght@600&display=swap">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .lost { display: flex; flex-direction: column; gap: 14px; }
+  .lost .scene { position: relative; background: var(--plate); border: 1.5px solid var(--ink); border-radius: 6px; box-shadow: 4px 4px 0 var(--line); overflow: hidden; }
+  .lost canvas { display: block; width: 100%; aspect-ratio: 4 / 3; cursor: pointer; touch-action: manipulation; }
+  .lost .hint { position: absolute; right: 10px; bottom: 8px; font: 600 11px var(--font-mono); color: var(--ink-2); letter-spacing: 0.04em; text-transform: uppercase; pointer-events: none; }
+  .lost h1 { margin: 0; font: 800 34px/1.02 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
+  .lost p { margin: 0; color: var(--ink-2); max-width: 45ch; }
+  .lost a.btn { text-align: center; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="app lost">
+  <header class="top">
+    <a class="logo" href="/" aria-label="Physle, home">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 31 L33 22" stroke="var(--ink)" stroke-width="4.5" stroke-linecap="round"/><circle cx="25" cy="14" r="8.5" fill="var(--coral)" stroke="var(--ink)" stroke-width="1.6"/><path d="M20.5 11.5 a5 5 0 0 1 4-2.5" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none" opacity=".7"/></svg>
+      <span>Phys<em>le</em></span>
+    </a>
+  </header>
+  <div class="scene">
+    <canvas id="cv" aria-label="Marbles bouncing off a giant 404. Tap to drop more."></canvas>
+    <span class="hint">Tap to drop a marble</span>
+  </div>
+  <h1>This page fell through the floor.</h1>
+  <p>The link might be broken, or the page rolled away. Today’s experiments are still exactly where you left them.</p>
+  <a class="btn" href="/">Back to today’s challenge</a>
+</div>
+<script>
+(() => {
+  // Una escena de física pequeña: canicas que rebotan contra un "404" hecho de tablones.
+  const W = 400, H = 300, R = 9, G = 900;
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const css = (k) => getComputedStyle(document.documentElement).getPropertyValue('--' + k).trim();
+  const segs = [];
+  const four = (x) => { segs.push([x + 52, 58, x + 8, 160], [x + 8, 160, x + 78, 160], [x + 52, 96, x + 52, 222]); };
+  four(30); four(275);
+  for (let i = 0; i < 16; i++) {            // el "0", hecho de tramos rectos
+    const a0 = i / 16 * Math.PI * 2, a1 = (i + 1) / 16 * Math.PI * 2;
+    segs.push([200 + Math.cos(a0) * 40, 140 + Math.sin(a0) * 82, 200 + Math.cos(a1) * 40, 140 + Math.sin(a1) * 82]);
+  }
+  const colors = ['coral', 'azul', 'mostaza', 'violeta'];
+  let balls = [], last = 0, spawnT = 0;
+  function spawn(x) {
+    if (balls.length > 40) balls.shift();
+    balls.push({ x: x ?? 30 + Math.random() * 340, y: -R, vx: (Math.random() - 0.5) * 60, vy: 0, c: colors[Math.floor(Math.random() * 4)], a: 0 });
+  }
+  function step(dt) {
+    for (const b of balls) {
+      b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.a += b.vx * dt / R;
+      if (b.x < R) { b.x = R; b.vx = Math.abs(b.vx) * 0.6; }
+      if (b.x > W - R) { b.x = W - R; b.vx = -Math.abs(b.vx) * 0.6; }
+      for (const [x1, y1, x2, y2] of segs) {
+        const ex = x2 - x1, ey = y2 - y1, L2 = ex * ex + ey * ey;
+        let u = ((b.x - x1) * ex + (b.y - y1) * ey) / L2; u = Math.max(0, Math.min(1, u));
+        const qx = x1 + u * ex, qy = y1 + u * ey, dx = b.x - qx, dy = b.y - qy, d = Math.hypot(dx, dy), rr = R + 5;
+        if (d < rr && d > 1e-6) {
+          const nx = dx / d, ny = dy / d; b.x = qx + nx * rr; b.y = qy + ny * rr;
+          const vn = b.vx * nx + b.vy * ny;
+          if (vn < 0) { const e = -vn > 60 ? 1.55 : 1; b.vx -= e * vn * nx; b.vy -= e * vn * ny; }
+        }
+      }
+    }
+    balls = balls.filter(b => b.y < H + 40);
+  }
+  function draw() {
+    const s = cv.width / W; ctx.setTransform(s, 0, 0, s, 0, 0);
+    ctx.fillStyle = css('plate'); ctx.fillRect(0, 0, W, H);
+    ctx.lineWidth = 1 / s;
+    for (let x = 0; x <= W; x += 10) { ctx.strokeStyle = x % 50 ? css('grid') : css('grid-major'); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y <= H; y += 10) { ctx.strokeStyle = y % 50 ? css('grid') : css('grid-major'); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    ctx.strokeStyle = css('ink'); ctx.lineWidth = 10; ctx.lineCap = 'round';
+    for (const [x1, y1, x2, y2] of segs) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+    for (const b of balls) {
+      ctx.fillStyle = css(b.c); ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.a); ctx.strokeStyle = css('plate'); ctx.globalAlpha = 0.7; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, R * 0.58, -0.5, 1.1); ctx.stroke(); ctx.restore();
+      ctx.strokeStyle = css('ink'); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(b.x, b.y, R, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  function frame(t) {
+    const dt = Math.min(0.033, (t - (last || t)) / 1000); last = t;
+    spawnT += dt; if (spawnT > 0.9) { spawnT = 0; spawn(); }
+    for (let i = 0; i < 6; i++) step(dt / 6);
+    draw(); requestAnimationFrame(frame);
+  }
+  function fit() { const dpr = Math.min(devicePixelRatio || 1, 3); cv.width = Math.round(cv.clientWidth * dpr); cv.height = Math.round(cv.clientWidth * 0.75 * dpr); draw(); }
+  new ResizeObserver(fit).observe(cv);
+  cv.addEventListener('pointerdown', (e) => { const r = cv.getBoundingClientRect(); spawn((e.clientX - r.left) / r.width * W); });
+  if (reduce) {                                // sin animación: una foto fija con canicas apoyadas
+    balls = [{ x: 64, y: 47, c: 'coral', a: 0 }, { x: 210, y: 46, c: 'azul', a: 0 }, { x: 330, y: 150, c: 'mostaza', a: 0 }];
+    fit();
+  } else requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

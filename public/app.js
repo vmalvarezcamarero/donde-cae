@@ -2,6 +2,7 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
+import { SKINS, NAME_COLORS, WELCOME_COINS } from './shop.js';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -25,7 +26,7 @@ function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3800);
 }
-function show(id) { for (const s of ['home', 'play', 'end', 'rank']) $(s).hidden = s !== id; window.scrollTo({ top: 0 }); }
+function show(id) { for (const s of ['home', 'play', 'end', 'rank', 'shop']) $(s).hidden = s !== id; window.scrollTo({ top: 0 }); }
 document.querySelectorAll('dialog [data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 
 /* ---------- cuentas (Firebase Auth) ---------- */
@@ -55,6 +56,7 @@ const AUTH_ERRORS = {
   'auth/wrong-password': 'Wrong password.',
   'auth/too-many-requests': 'Too many attempts. Wait a moment and try again.',
   'auth/popup-closed-by-user': 'The Google window was closed before you finished.',
+  'auth/unauthorized-domain': 'Sign-in isn’t enabled for this web address yet. Add it to Firebase’s authorized domains.',
   'auth/network-request-failed': 'No connection. Check your internet and try again.',
 };
 const authMsg = (e) => AUTH_ERRORS[e.code] || 'That didn’t work. Please try again.';
@@ -84,8 +86,17 @@ async function refresh() {
   renderAccount(); renderHome(); tick();
   if (user && today.user && !today.user.profile && !$('profileDlg').open && !store.get('skipProfile:' + user.uid)) openProfile(true);
 }
+const skinOf = (id) => (SKINS.find(x => x.id === id) || SKINS[0]).look;
+const colorOf = (id) => NAME_COLORS.find(x => x.id === id) || NAME_COLORS[0];
+function paintName(el, colorId) {
+  const c = colorOf(colorId);
+  el.classList.toggle('rainbow', c.css === 'rainbow');
+  el.style.cssText = c.css && c.css !== 'rainbow' ? c.css : '';
+}
 function renderAccount() {
   const p = today?.user?.profile;
+  $('coinsBtn').hidden = !p; if (p) $('coinsN').textContent = p.coins;
+  window.PhysleGame.setSkin(skinOf(p?.skin));
   $('acctAv').textContent = p ? flag(p.country) || p.nickname[0] : user ? (user.email || '?')[0].toUpperCase() : '?';
   $('acctName').textContent = p ? p.nickname : user ? 'Finish your profile' : accountsOn ? 'Sign in' : 'Sign in';
 }
@@ -166,6 +177,10 @@ async function showEnd(r) {
     d.children[1].textContent = (i + 1) + '. ' + window.PhysleGame.TYPE_NAME[r.types[i]] + (r.details[i] ? ' · ' + r.details[i] : '');
     rows.appendChild(d);
   });
+  const earned = $('earned');
+  if (r.coins) { earned.hidden = false; earned.innerHTML = '<span class="coin" aria-hidden="true"></span><span></span>'; earned.lastChild.textContent = '+' + r.coins.earned + ' coins · you now have ' + r.coins.balance; }
+  else if (accountsOn) { earned.hidden = false; earned.innerHTML = '<span class="coin" aria-hidden="true"></span><span>With an account this attempt would have earned you coins for the shop.</span>'; }
+  else earned.hidden = true;
   await refresh();
   const left = today.max - today.attempts.length;
   $('again').hidden = left <= 0;
@@ -221,8 +236,8 @@ async function openRank(scope) {
     data.rows.forEach((r, i) => list.appendChild(rankRow(i + 1, r.country, countryName(r.country), r.players + (r.players === 1 ? ' player' : ' players'), r.score)));
   } else {
     $('rankSub').textContent = range + ' · ' + data.players + (data.players === 1 ? ' player' : ' players');
-    data.rows.forEach(r => list.appendChild(rankRow(r.pos, r.country, r.nickname, scope === 'week' ? r.days + (r.days === 1 ? ' day' : ' days') : '', r.score, r.me)));
-    if (data.me && !data.rows.some(r => r.me)) { me.innerHTML = ''; me.appendChild(rankRow(data.me.pos, data.me.country, data.me.nickname, '', data.me.score, true)); me.hidden = false; }
+    data.rows.forEach(r => list.appendChild(rankRow(r.pos, r.country, r.nickname, scope === 'week' ? r.days + (r.days === 1 ? ' day' : ' days') : '', r.score, r.me, r.color)));
+    if (data.me && !data.rows.some(r => r.me)) { me.innerHTML = ''; me.appendChild(rankRow(data.me.pos, data.me.country, data.me.nickname, '', data.me.score, true, data.me.color)); me.hidden = false; }
   }
   if (!data.rows.length) {
     const li = document.createElement('li'); li.className = 'empty';
@@ -230,15 +245,38 @@ async function openRank(scope) {
     list.appendChild(li);
   }
 }
-function rankRow(pos, cc, name, sub, score, isMe) {
-  const li = document.createElement('li'); if (isMe) li.className = 'me';
+const MEDALS = { 1: ['🥇', 'gold', '1st place'], 2: ['🥈', 'silver', '2nd place'], 3: ['🥉', 'bronze', '3rd place'] };
+function rankRow(pos, cc, name, sub, score, isMe, color) {
+  const li = document.createElement('li'), medal = MEDALS[pos];
+  li.className = [isMe ? 'me' : '', medal ? medal[1] : ''].join(' ').trim();
   li.innerHTML = '<span class="pos"></span><span class="fl"></span><span class="nm"></span><span class="sc"></span>';
-  li.children[0].textContent = pos + '.'; li.children[1].textContent = flag(cc); li.children[1].title = countryName(cc);
-  li.children[2].textContent = name;
+  if (medal) { li.children[0].textContent = medal[0]; li.children[0].classList.add('medal'); li.children[0].setAttribute('aria-label', medal[2]); }
+  else li.children[0].textContent = pos + '.';
+  li.children[1].textContent = flag(cc); li.children[1].title = countryName(cc);
+  const nm = document.createElement('span'); nm.textContent = name; if (color) paintName(nm, color);
+  li.children[2].appendChild(nm);
   if (sub) { const s = document.createElement('small'); s.textContent = sub; li.children[2].appendChild(s); }
   li.children[3].textContent = score;
   return li;
 }
+
+/* ---------- cómo se juega cada experimento ---------- */
+const HOW = {
+  balance: { title: 'Balance', steps: ['Drag the blue weight onto the beam.', 'Weights pull harder the further they are from the middle: weight × distance must match on both sides.', 'Tap Release and watch the beam.'], pts: 'The closer to perfectly level, the more points.' },
+  drop: { title: 'Where will it land?', steps: ['Look at the ramps and pegs. Purple springs bounce hard, yellow sponges don’t bounce.', 'Tap the floor where you think the marble will land.', 'Tap Release and watch it fall.'], pts: 'The closer your mark, the more points.' },
+  race: { title: 'Which finishes first?', steps: ['Tap the tracks (or objects) in the order you think they’ll finish.', 'Tip: dropping early builds speed, sand slows marbles down, and ice slides with no friction.', 'Tap Release and watch the race in slow motion.'], pts: 'Picking the winner is worth the most; the full order gets you 100.' },
+  pool: { title: 'Bank shot', steps: ['The arrow shows the direction and the bar shows the power.', 'The ball bounces off the cushions and the cloth slows it down.', 'Tap where you think it stops, then tap Release.'], pts: 'The closer to where it stops, the more points.' },
+  tower: { title: 'Will it stand?', steps: ['Check how each block rests on the one below. Dark blocks weigh 3×.', 'Tap the block that will hit the ground first, or choose “It stands”.', 'Tap Release and watch.'], pts: 'Right answer: 100 points. Right that it falls but wrong block: 25.' },
+};
+document.querySelectorAll('[data-how]').forEach(btn => btn.addEventListener('click', () => {
+  const h = HOW[btn.dataset.how];
+  $('howTitle').textContent = h.title;
+  $('howIcon').innerHTML = btn.querySelector('svg').outerHTML;
+  const ol = $('howSteps'); ol.innerHTML = '';
+  for (const t of h.steps) { const li = document.createElement('li'); li.textContent = t; ol.appendChild(li); }
+  $('howPts').innerHTML = '<b>Points:</b> '; $('howPts').append(h.pts);
+  $('howDlg').showModal();
+}));
 
 /* ---------- ventanas de cuenta ---------- */
 $('acctBtn').addEventListener('click', () => {
@@ -297,8 +335,8 @@ $('profileLater').addEventListener('click', () => { if (user && !today?.user?.pr
 $('profileForm').addEventListener('submit', async (ev) => {
   ev.preventDefault(); $('profileErr').textContent = '';
   try {
-    await api('/api/me', { method: 'PUT', body: { nickname: $('nick').value.trim(), country: $('country').value, over14: $('over14').checked, acceptTerms: $('accept').checked } });
-    $('profileDlg').close(); toast('Profile saved. You’re on the leaderboard!'); await refresh();
+    const saved = await api('/api/me', { method: 'PUT', body: { nickname: $('nick').value.trim(), country: $('country').value, over14: $('over14').checked, acceptTerms: $('accept').checked } });
+    $('profileDlg').close(); toast(saved.welcome ? 'Profile saved. Here are ' + saved.welcome + ' coins to get you started!' : 'Profile saved.'); await refresh();
   } catch (e) { $('profileErr').textContent = e.message; }
 });
 function openAccount() {
@@ -324,6 +362,63 @@ $('deleteYes').addEventListener('click', async () => {
     toast('Account deleted.');
   } catch (e) { toast(e.message); }
 });
+
+/* ---------- tienda ---------- */
+let shopTab = 'skin';
+$('shopBtn').addEventListener('click', () => openShop('skin'));
+$('coinsBtn').addEventListener('click', () => openShop('skin'));
+$('shopBack').addEventListener('click', () => { show('home'); refresh(); });
+$('tabSkins').addEventListener('click', () => openShop('skin'));
+$('tabColors').addEventListener('click', () => openShop('color'));
+function openShop(tab) {
+  shopTab = tab; show('shop');
+  $('tabSkins').setAttribute('aria-selected', String(tab === 'skin')); $('tabColors').setAttribute('aria-selected', String(tab === 'color'));
+  renderShop();
+}
+function renderShop() {
+  const p = today?.user?.profile, note = $('shopNote');
+  $('walletN').textContent = p ? p.coins : 0;
+  if (!accountsOn) note.textContent = 'The shop opens together with accounts, very soon.';
+  else if (!user) note.innerHTML = 'Coins are saved to your account. <button class="link" type="button" id="shopLogin">Sign in or sign up</button> to start earning ' + WELCOME_COINS + ' as a welcome gift.';
+  else if (!p) note.innerHTML = 'Finish your profile to unlock the shop. <button class="link" type="button" id="shopProfile">Do it now</button>';
+  else note.textContent = shopTab === 'skin' ? 'Your marble in “Where will it land?” and “Bank shot”.' : 'How your name looks on the leaderboards.';
+  $('shopLogin')?.addEventListener('click', openAuth);
+  $('shopProfile')?.addEventListener('click', () => openProfile(true));
+  const box = $('items'); box.innerHTML = '';
+  const list = shopTab === 'skin' ? SKINS : NAME_COLORS;
+  const equipped = shopTab === 'skin' ? (p?.skin || 'classic') : (p?.name_color || 'default');
+  for (const it of list) {
+    const key = shopTab + ':' + it.id, owned = it.price === 0 || p?.owned.includes(key), on = equipped === it.id;
+    const card = document.createElement('div'); card.className = 'item' + (on ? ' on' : '');
+    if (shopTab === 'skin') {
+      const c = document.createElement('canvas'), dpr = Math.min(devicePixelRatio || 1, 3);
+      c.width = c.height = 64 * dpr; card.appendChild(c);
+      const g = c.getContext('2d'); g.scale(dpr, dpr); window.PhysleGame.drawMarble(g, 32, 32, 26, it.look, 0.5);
+    } else {
+      const sw = document.createElement('div'); sw.className = 'sw';
+      const nm = document.createElement('span'); nm.textContent = p?.nickname || 'Your name'; paintName(nm, it.id); sw.appendChild(nm); card.appendChild(sw);
+    }
+    const name = document.createElement('div'); name.className = 'in'; name.textContent = it.name; card.appendChild(name);
+    const pr = document.createElement('div'); pr.className = 'pr';
+    pr.innerHTML = it.price ? '<span class="coin" aria-hidden="true"></span>' + it.price : 'Free'; card.appendChild(pr);
+    const b = document.createElement('button'); b.type = 'button';
+    if (on) { b.textContent = 'Equipped'; b.disabled = true; }
+    else if (owned) { b.textContent = 'Equip'; b.className = 'sec'; b.disabled = !p; b.addEventListener('click', () => shopAction('equip', it)); }
+    else { b.textContent = p && p.coins < it.price ? 'Need ' + (it.price - p.coins) + ' more' : 'Buy'; b.disabled = !p || p.coins < it.price; b.addEventListener('click', () => shopAction('buy', it)); }
+    card.appendChild(b); box.appendChild(card);
+  }
+}
+async function shopAction(action, it) {
+  try {
+    const res = await api('/api/shop/' + action, { method: 'POST', body: { kind: shopTab, id: it.id } });
+    today.user.profile = res.profile;
+    if (action === 'buy') {   // al comprar, se equipa directamente
+      const eq = await api('/api/shop/equip', { method: 'POST', body: { kind: shopTab, id: it.id } });
+      today.user.profile = eq.profile; toast('Unlocked: ' + it.name + '!');
+    } else toast(it.name + ' equipped.');
+    renderAccount(); renderShop();
+  } catch (e) { toast(e.message); }
+}
 
 /* ---------- arranque ---------- */
 (async () => {
