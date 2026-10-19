@@ -131,9 +131,36 @@ async function attemptsToday(env, who, date) {
   // practicar sin cuenta y luego jugar con ventaja ya conectado.
   const { results } = await env.DB.prepare(
     `SELECT id, num, set_id, round, scores, total, finished, player, device FROM attempts
-     WHERE date = ?1 AND (player = ?2 OR device = ?3 ${who.uid ? 'OR uid = ?4' : ''}) ORDER BY started_at`
+     WHERE date = ?1 AND (player = ?2 OR device = ?3 ${who.uid ? 'OR uid = ?4' : ''}
+       OR uid IN (SELECT uid FROM attempts WHERE date = ?1 AND device = ?3 AND uid IS NOT NULL)) ORDER BY started_at`
   ).bind(date, who.player, who.device, ...(who.uid ? [who.uid] : [])).all();
   return results.map(a => ({ ...a, scores: JSON.parse(a.scores) }));
+}
+// Las partidas jugadas hoy en este dispositivo sin haber iniciado sesión pasan a la
+// cuenta en cuanto la persona entra con un perfil creado: así cuentan para el ranking
+// y dan monedas. Solo las de hoy, para no adoptar partidas antiguas de otra persona.
+async function claimDevice(env, who, date) {
+  if (!who.uid) return;
+  const has = await env.DB.prepare('SELECT 1 FROM users WHERE uid = ?').bind(who.uid).first();
+  if (!has) return;
+  // Nunca más de MAX_ATTEMPTS por cuenta y día: si la cuenta ya jugó sus intentos en
+  // otro dispositivo, las partidas de invitado se quedan fuera del ranking.
+  const used = await env.DB.prepare('SELECT COUNT(*) AS n FROM attempts WHERE uid = ? AND date = ?').bind(who.uid, date).first();
+  const room = MAX_ATTEMPTS - used.n;
+  if (room <= 0) return;
+  const { results } = await env.DB.prepare(
+    `UPDATE attempts SET uid = ?1 WHERE id IN (SELECT id FROM attempts WHERE device = ?2 AND date = ?3 AND uid IS NULL ORDER BY started_at LIMIT ?4)
+     RETURNING id, scores, finished`
+  ).bind(who.uid, who.device, date, room).all();
+  for (const a of results || []) {
+    if (!a.finished) continue;
+    const earned = coinsFor(JSON.parse(a.scores));
+    if (!earned) continue;
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET coins = coins + ? WHERE uid = ?').bind(earned, who.uid),
+      env.DB.prepare('UPDATE attempts SET coins = ? WHERE id = ?').bind(earned, a.id),
+    ]);
+  }
 }
 const profileOf = async (env, uid) => {
   if (!uid) return null;
@@ -144,6 +171,7 @@ const profileOf = async (env, uid) => {
 async function getToday(req, env) {
   const who = await identify(req, env);
   const date = today(env), day = await loadDay(env, date);
+  await claimDevice(env, who, date);
   const list = await attemptsToday(env, who, date);
   return json({
     day: dayMeta(day), max: MAX_ATTEMPTS, resetIn: secondsToReset(env),
@@ -155,6 +183,7 @@ async function getToday(req, env) {
 async function startAttempt(req, env) {
   const who = await identify(req, env);
   const date = today(env), day = await loadDay(env, date);
+  await claimDevice(env, who, date);
   const list = await attemptsToday(env, who, date);
   // Se retoma el intento a medias de esta cuenta o de este mismo dispositivo.
   let a = list.find(x => !x.finished && (x.player === who.player || x.device === who.device));
@@ -191,6 +220,7 @@ async function startAttempt(req, env) {
 async function playRound(req, env, id) {
   const who = await identify(req, env);
   const body = await req.json().catch(() => ({}));
+  await claimDevice(env, who, today(env));
   const a = await env.DB.prepare('SELECT * FROM attempts WHERE id = ?').bind(id).first();
   if (!a || (a.player !== who.player && a.device !== who.device)) throw new HttpError(404, 'Attempt not found.');
   if (a.finished) throw new HttpError(409, 'This attempt is already finished.');
@@ -282,6 +312,7 @@ async function putMe(req, env) {
      ON CONFLICT(uid) DO UPDATE SET nickname = ?2, country = ?3`
   ).bind(who.uid, b.nickname, b.country, Date.now(), WELCOME_COINS).run();
   // Los intentos de hoy hechos con esta cuenta antes de tener perfil pasan a contar.
+  await claimDevice(env, who, today(env));
   return json({ uid: who.uid, profile: await profileOf(env, who.uid), welcome: exists ? 0 : WELCOME_COINS });
 }
 async function deleteMe(req, env) {

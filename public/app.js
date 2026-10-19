@@ -98,7 +98,11 @@ function renderAccount() {
   $('coinsBtn').hidden = !p; if (p) $('coinsN').textContent = p.coins;
   window.PhysleGame.setSkin(skinOf(p?.skin));
   $('acctAv').textContent = p ? flag(p.country) || p.nickname[0] : user ? (user.email || '?')[0].toUpperCase() : '?';
-  $('acctName').textContent = p ? p.nickname : user ? 'Finish your profile' : accountsOn ? 'Sign in' : 'Sign in';
+  $('acctName').textContent = p ? p.nickname : user ? 'Finish your profile' : accountsOn ? 'Sign up' : 'Sign in';
+  const guest = accountsOn && !user;
+  $('acctBtn').classList.toggle('cta', guest);
+  if ($('joinCard')) $('joinCard').hidden = !guest;
+  if (!guest && $('endJoin')) $('endJoin').hidden = true;
 }
 function renderHome() {
   const d = today.day, list = today.attempts, done = list.filter(a => a.finished);
@@ -127,7 +131,7 @@ function renderHome() {
   const note = $('homeNote');
   const p = today.user?.profile;
   if (!accountsOn) note.textContent = 'Leaderboards are coming very soon.';
-  else if (!user) note.innerHTML = 'You’re playing without an account, so your scores don’t count on the leaderboard. <button class="link" type="button" id="noteLogin">Sign in or sign up</button>';
+  else if (!user) note.textContent = 'Without an account you can play, but your scores won’t count on the leaderboard.';
   else if (!p) note.innerHTML = 'Finish your profile to appear on the leaderboard. <button class="link" type="button" id="noteProfile">Do it now</button>';
   else note.innerHTML = 'Playing as <b></b> ' + flag(p.country) + '. Your best attempt of the day counts.';
   if (p && note.querySelector('b')) note.querySelector('b').textContent = p.nickname;
@@ -154,8 +158,16 @@ function streakText() {
 }
 
 /* ---------- jugar ---------- */
-$('playBtn').addEventListener('click', startAttempt);
-$('again').addEventListener('click', startAttempt);
+$('playBtn').addEventListener('click', maybeGate);
+$('again').addEventListener('click', maybeGate);
+// Antes de empezar un intento sin cuenta se ofrece registrarse (una vez al día).
+function maybeGate() {
+  const open = today?.attempts?.some(a => !a.finished);
+  const key = 'guestOk:' + (today?.day?.date || '');
+  if (accountsOn && !user && !open && !store.get(key) && $('guestDlg')) { $('guestDlg').showModal(); return; }
+  startAttempt();
+}
+$('guestPlay')?.addEventListener('click', () => { store.set('guestOk:' + (today?.day?.date || ''), 1); $('guestDlg').close(); startAttempt(); });
 async function startAttempt() {
   let st;
   try { st = await api('/api/attempt', { method: 'POST' }); } catch (e) { toast(e.message); refresh(); return; }
@@ -182,8 +194,8 @@ async function showEnd(r) {
   });
   const earned = $('earned');
   if (r.coins) { earned.hidden = false; earned.innerHTML = '<span class="coin" aria-hidden="true"></span><span></span>'; earned.lastChild.textContent = '+' + r.coins.earned + ' coins · you now have ' + r.coins.balance; }
-  else if (accountsOn) { earned.hidden = false; earned.innerHTML = '<span class="coin" aria-hidden="true"></span><span>With an account this attempt would have earned you coins for the shop.</span>'; }
   else earned.hidden = true;
+  if ($('endJoin')) $('endJoin').hidden = !(accountsOn && !user);
   await refresh();
   const left = today.max - today.attempts.length;
   $('again').hidden = left <= 0;
@@ -284,12 +296,12 @@ document.querySelectorAll('[data-how]').forEach(btn => btn.addEventListener('cli
 /* ---------- ventanas de cuenta ---------- */
 $('acctBtn').addEventListener('click', () => {
   if (!accountsOn) { toast('Accounts are coming very soon.'); return; }
-  if (!user) openAuth(); else if (!today?.user?.profile) openProfile(true); else openAccount();
+  if (!user) openAuth(true); else if (!today?.user?.profile) openProfile(true); else openAccount();
 });
 let signUp = false;
-function openAuth() {
+function openAuth(mode = false) {
   if (!accountsOn) { toast('Accounts are coming very soon.'); return; }
-  signUp = false; syncAuthMode(); $('authErr').textContent = ''; $('authDlg').showModal();
+  signUp = mode === true; syncAuthMode(); $('authErr').textContent = ''; $('authDlg').showModal();
 }
 function syncAuthMode() {
   $('authTitle').textContent = signUp ? 'Create your account' : 'Sign in to compete';
@@ -298,15 +310,24 @@ function syncAuthMode() {
   $('password').autocomplete = signUp ? 'new-password' : 'current-password';
 }
 $('authMode').addEventListener('click', () => { signUp = !signUp; syncAuthMode(); });
-$('googleBtn').addEventListener('click', async () => {
+async function googleSignIn() {
+  if (!accountsOn) { toast('Accounts are coming very soon.'); return; }
   $('authErr').textContent = '';
   try {
     const provider = new A.GoogleAuthProvider();
     try { await A.signInWithPopup(fbAuth, provider); }
     catch (e) { if (e.code === 'auth/popup-blocked') await A.signInWithRedirect(fbAuth, provider); else throw e; }
-    $('authDlg').close(); await refresh();
-  } catch (e) { $('authErr').textContent = authMsg(e); }
-});
+    for (const d of ['authDlg', 'guestDlg']) if ($(d)?.open) $(d).close();
+    await refresh();
+  } catch (e) { console.warn('Google sign-in:', e.code, e.message); if ($('authDlg').open) $('authErr').textContent = authMsg(e); else toast(authMsg(e)); }
+}
+$('googleBtn').addEventListener('click', googleSignIn);
+// Botones de registro repartidos por la web (portada, final del intento, aviso antes de jugar).
+const G_ICON = $('googleBtn').querySelector('svg').outerHTML;
+document.querySelectorAll('[data-google]').forEach(b => { b.insertAdjacentHTML('afterbegin', G_ICON); b.addEventListener('click', googleSignIn); });
+const fromGate = (fn) => () => { if ($('guestDlg')?.open) $('guestDlg').close(); fn(); };
+document.querySelectorAll('[data-signup]').forEach(b => b.addEventListener('click', fromGate(() => openAuth(true))));
+document.querySelectorAll('[data-signin]').forEach(b => b.addEventListener('click', fromGate(() => openAuth(false))));
 $('emailForm').addEventListener('submit', async (ev) => {
   ev.preventDefault(); $('authErr').textContent = '';
   const email = $('email').value.trim(), pass = $('password').value;

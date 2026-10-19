@@ -235,3 +235,20 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .rainbow { background: linear-gradient(90deg, #e2583a, #e3b341, #22a37a, #2c7be5, #8b5cd6); -webkit-background-clip: text; background-clip: text; color: transparent !important; }
 .earned { margin: 0; display: flex; align-items: center; gap: 8px; font-weight: 700; }
 .earned .coin { width: 20px; height: 20px; }
+
+/* Invitación a registrarse */
+.join { display: grid; gap: 10px; padding: 14px; border: 2px solid var(--ink); border-radius: 10px; background: var(--plate); box-shadow: 4px 4px 0 var(--coral); }
+.joinhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.joinhead b { font: 700 17px var(--font-display, var(--font-body)); line-height: 1.2; }
+.gift { display: inline-flex; align-items: center; gap: 5px; flex: none; font: 700 14px var(--font-mono); padding: 3px 9px 3px 4px; border-radius: 999px; background: color-mix(in srgb, #e3b341 22%, transparent); border: 1.5px solid #a97c08; }
+.perks { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14px; }
+.perks li { position: relative; padding-left: 22px; }
+.perks li::before { content: "✓"; position: absolute; left: 2px; font-weight: 700; color: var(--good, #22a37a); }
+.gbtn.main { background: var(--ink); color: var(--plate); border-color: var(--ink); padding: 13px; font-size: 16px; box-shadow: 3px 3px 0 var(--coral); }
+.gbtn.main svg { background: #fff; border-radius: 50%; padding: 3px; width: 24px; height: 24px; box-sizing: border-box; }
+.gbtn.main:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--coral); }
+.joinalt { margin: 0 0 4px; display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.acct.cta { max-width: none; flex: none; background: var(--coral); color: #fff; border-color: var(--ink); box-shadow: 2px 2px 0 var(--ink); animation: nudge 2.4s ease-in-out 1s 3; }
+.acct.cta .av { background: #fff; color: var(--coral); }
+@keyframes nudge { 0%, 100% { transform: none; } 8% { transform: rotate(-4deg); } 16% { transform: rotate(4deg); } 24% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .acct.cta { animation: none; } }
