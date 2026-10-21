@@ -3,6 +3,7 @@
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
 import { SKINS, NAME_COLORS, WELCOME_COINS } from './shop.js';
+import { publicRound, validPrediction, scorePoints } from './scoring.js';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -26,7 +27,7 @@ function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3800);
 }
-function show(id) { for (const s of ['home', 'play', 'end', 'rank', 'shop']) $(s).hidden = s !== id; window.scrollTo({ top: 0 }); }
+function show(id) { for (const s of ['home', 'demoHome', 'play', 'end', 'rank', 'shop']) $(s).hidden = s !== id; window.scrollTo({ top: 0 }); }
 document.querySelectorAll('dialog [data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 
 /* ---------- cuentas (Firebase Auth) ---------- */
@@ -176,7 +177,9 @@ function streakText() {
 $('playBtn').addEventListener('click', maybeGate);
 $('again').addEventListener('click', maybeGate);
 // Antes de empezar un intento sin cuenta se ofrece registrarse (una vez al día).
+let lastEndDemo = false;
 function maybeGate() {
+  if (lastEndDemo && !$('end').hidden) { startDemo(); return; }
   const open = today?.attempts?.some(a => !a.finished);
   const key = 'guestOk:' + (today?.day?.date || '');
   if (accountsOn && !user && !open && !store.get(key) && $('guestDlg')) { $('guestDlg').showModal(); return; }
@@ -201,7 +204,8 @@ async function startAttempt() {
 }
 async function showEnd(r) {
   show('end');
-  const played = store.get('played', {}); played[r.day.date] = Math.max(played[r.day.date] || 0, r.total); store.set('played', played);
+  const isDemo = !!r.attempt.demo;
+  if (!isDemo) { const played = store.get('played', {}); played[r.day.date] = Math.max(played[r.day.date] || 0, r.total); store.set('played', played); }
   $('endLabel').textContent = 'Gravle #' + r.day.n + ' · attempt ' + (r.attempt.index || r.attempt.num);
   $('total').firstChild.textContent = r.total;
   $('endNote').textContent = r.total >= 420 ? 'You think like a physicist.' : r.total >= 300 ? 'Good eye. Can you beat it?' : 'Physics shows no mercy. Time for a rematch.';
@@ -216,6 +220,14 @@ async function showEnd(r) {
   if (r.coins) { earned.hidden = false; earned.innerHTML = '<span class="coin" aria-hidden="true"></span><span></span>'; earned.lastChild.textContent = '+' + r.coins.earned + ' coins · you now have ' + r.coins.balance; }
   else earned.hidden = true;
   if ($('endJoin')) $('endJoin').hidden = !(accountsOn && !user);
+  lastEndDemo = isDemo;
+  if (isDemo) {
+    $('endLabel').textContent = 'Demo · ' + LEVEL[r.day.level] + ' · new experiments';
+    if ($('endJoin')) $('endJoin').hidden = true;
+    $('again').hidden = false; $('again').textContent = 'Play again (new maps)';
+    $('share').textContent = 'Gravle · new experiments demo  ' + r.total + '/500\n' + squares(r.scores) + '\n' + location.host + '/?demo';
+    return;
+  }
   await refresh();
   const left = today.max - today.attempts.length;
   $('again').hidden = left <= 0;
@@ -229,7 +241,7 @@ $('copy').addEventListener('click', () => {
   const fallback = () => { const sel = getSelection(), rg = document.createRange(); rg.selectNodeContents($('share')); sel.removeAllRanges(); sel.addRange(rg); btn.textContent = 'Text selected: copy it'; };
   try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
 });
-$('endHome').addEventListener('click', () => { show('home'); refresh(); });
+$('endHome').addEventListener('click', () => { if (lastEndDemo) { show('demoHome'); return; } show('home'); refresh(); });
 
 /* ---------- ranking ---------- */
 let rankScope = 'day';
@@ -301,6 +313,11 @@ const HOW = {
   drop: { title: 'Where will it land?', steps: ['Look at the ramps and pegs. Purple springs bounce hard, yellow sponges don’t bounce.', 'Tap the floor where you think the marble will land.', 'Tap Release and watch it fall.'], pts: 'The closer your mark, the more points.' },
   race: { title: 'Which finishes first?', steps: ['Tap the tracks (or objects) in the order you think they’ll finish.', 'Tip: dropping early builds speed, sand slows marbles down, and ice slides with no friction.', 'Tap Release and watch the race in slow motion.'], pts: 'Picking the winner is worth the most; the full order gets you 100.' },
   pool: { title: 'Bank shot', steps: ['The arrow shows the direction and the bar shows the power.', 'The ball bounces off the cushions and the cloth slows it down.', 'Tap where you think it stops, then tap Release.'], pts: 'The closer to where it stops, the more points.' },
+  loop: { title: 'Loop the loop', steps: ['Drag the marble up or down the ramp to choose its starting height.', 'It must keep enough speed to stay on the track upside down at the top of the loop. Carpet slows it down.', 'Find the lowest height that still makes it, then tap Release.'], pts: 'The closer to the minimum height, the more points. Too low and it falls; too high wastes points too.' },
+  laser: { title: 'Laser', steps: ['The laser fires along the dotted line.', 'Every mirror reflects it like a pool ball off a cushion: the angle in equals the angle out. Dark blocks absorb it.', 'Tap the wall where you think the beam ends, then tap Release.'], pts: 'The closer to where it hits the wall, the more points.' },
+  domino: { title: 'Dominoes', steps: ['The first domino gets a push.', 'A falling domino only knocks the next one if it can reach it, and a light domino struggles to topple a heavy one (dark = 3× heavier).', 'Tap the last domino you think will fall, then tap Release.'], pts: 'Exactly right: 100. One off: 45. Two off: 15.' },
+  float: { title: 'Float or sink?', steps: ['Look at each object and the water: fresh or very salty.', 'Things lighter than water for their size float; denser ones sink. Salty water is denser, so it holds more up.', 'Tap the ones that float, then tap Release to drop them all in.'], pts: 'Points for every object you get right; all of them gets 100.' },
+  gears: { title: 'Gears', steps: ['The blue gear turns clockwise. Meshing gears turn the opposite way; gears on the same axle turn together.', 'A belt keeps the direction, a crossed belt flips it. Small gears spin faster than big ones.', 'Pick how the flagged gear turns, then tap Release.'], pts: 'Direction and speed right: 100. One of the two: 40.' },
   tower: { title: 'Will it stand?', steps: ['Check how each block rests on the one below. Dark blocks weigh 3×.', 'Tap the block that will hit the ground first, or choose “It stands”.', 'Tap Release and watch.'], pts: 'Right answer: 100 points. Right that it falls but wrong block: 25.' },
 };
 document.querySelectorAll('[data-how]').forEach(btn => btn.addEventListener('click', () => {
@@ -464,8 +481,36 @@ async function shopAction(action, it) {
   } catch (e) { toast(e.message); }
 }
 
+/* ---------- demo de experimentos nuevos (/?demo) ---------- */
+const DEMO = new URLSearchParams(location.search).has('demo');
+let demoData = null, demoLevel = 2, demoRun = 0;
+document.querySelectorAll('#demoLevels [data-level]').forEach(b => b.addEventListener('click', () => {
+  demoLevel = Number(b.dataset.level);
+  document.querySelectorAll('#demoLevels [data-level]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+}));
+async function startDemo() {
+  try { demoData = demoData || await (await fetch('demo.json?v=' + Date.now())).json(); } catch (e) { toast('Couldn’t load the demo.'); return; }
+  const variants = demoData.levels[demoLevel], full = variants[demoRun++ % variants.length].map(r => JSON.parse(JSON.stringify(r)));
+  const dayMeta = { n: 0, date: new Date().toISOString().slice(0, 10), level: demoLevel, W: demoData.W, H: demoData.H, FLOOR: demoData.FLOOR, R: demoData.R };
+  const st = { day: dayMeta, attempt: { id: 'demo' + Date.now(), num: 1, index: 1, round: 0, scores: [], demo: true }, rounds: full.map(publicRound) };
+  $('playLabel').textContent = 'Demo · ' + LEVEL[demoLevel] + ' · doesn’t count';
+  show('play');
+  let total = 0;
+  window.PhysleGame.play(st, {
+    submit: async (i, pred) => {
+      if (!validPrediction(full[i], pred, demoData.W)) throw new Error('Invalid prediction.');
+      const pts = scorePoints(full[i], pred); total += pts;
+      return { pts, round: JSON.parse(JSON.stringify(full[i])), total, finished: i === 4, coins: null };
+    },
+    error: (msg) => toast(msg),
+    done: showEnd,
+  });
+}
+$('demoPlay').addEventListener('click', startDemo);
+
 /* ---------- arranque ---------- */
 (async () => {
   try { await initAuth(); } catch (e) { console.error(e); }
   await refresh();
+  if (DEMO) show('demoHome');
 })();

@@ -11,7 +11,8 @@
   const KIND_NAME = { recta: 'straight', cicloide: 'curve', caida: 'drop and flat', joroba: 'gentle, then steep', valle: 'valley', olas: 'waves' };
   const ORD = (k) => ['1st', '2nd', '3rd', '4th'][k];
   const OBJ_NAME = { canica: 'Marble', rueda: 'Solid wheel', aro: 'Hoop', hielo: 'Ice cube' };
-  const TYPE_NAME = { balance: 'Balance', drop: 'Where will it land?', race: 'Which finishes first?', pool: 'Bank shot', tower: 'Will it stand?' };
+  const TYPE_NAME = { balance: 'Balance', drop: 'Where will it land?', race: 'Which finishes first?', pool: 'Bank shot', tower: 'Will it stand?',
+    loop: 'Loop the loop', laser: 'Laser', domino: 'Dominoes', float: 'Float or sink?', gears: 'Gears' };
   const num = (x, d = 1) => x.toFixed(d);
   const side = (u) => Math.abs(u) < 0.05 ? 'center' : num(Math.abs(u)) + (u < 0 ? ' left' : ' right');
 
@@ -57,6 +58,11 @@
         : 'They all start together, with no friction. In what order do they finish?<small>Tap the tracks in order, starting with the one you think wins.</small>',
     pool: () => 'The ball leaves along the arrow, bounces off the cushions and the cloth slows it down. Where does it stop?<small>Tap the table where you think it will come to rest.</small>',
     tower: () => 'If the tower falls, which block hits the ground first?<small>Tap that block, or choose “It stands” if you think it won’t fall. Dark blocks weigh three times as much.</small>',
+    loop: (r) => 'What’s the lowest height that gets the marble all the way round the loop?<small>Drag the marble up or down the ramp. Too low and it falls off the loop.' + (r.carpet ? ' The carpet slows it down.' : '') + '</small>',
+    laser: () => 'The laser bounces off every mirror it hits. Where does the beam end?<small>Tap the wall where you think it lands. Dark blocks absorb light.</small>',
+    domino: () => 'Someone pushes the first domino. Which is the last one to fall?<small>Tap that domino. Dark dominoes weigh three times as much.</small>',
+    float: (r) => 'Which of these float' + (r.salty ? ' in very salty water' : ' in water') + '?<small>Tap the ones that float; the rest will sink.' + (r.salty ? ' Salt water is denser than fresh water, so it pushes harder.' : '') + '</small>',
+    gears: () => 'The first gear turns clockwise. How does the gear with the flag turn?<small>Pick its direction and whether it spins faster or slower than the first one.</small>',
   };
   function startRound() {
     cancelAnimationFrame(anim && anim.raf);
@@ -69,7 +75,10 @@
     $('chips').hidden = true;
     if (r.type === 'race') buildRaceChips();
     if (r.type === 'tower') buildTowerChips();
-    renderPips(); draw();
+    if (r.type === 'float') { mark = []; buildFloatChips(); }
+    if (r.type === 'gears') buildGearChips();
+    if (r.type === 'loop') prepLoop(r);
+    renderPips(); ready(); draw();
   }
   function renderPips() {
     const p = $('pips'); p.innerHTML = '';
@@ -83,7 +92,7 @@
   const band = (s) => s >= 80 ? 'g' : s >= 40 ? 'y' : 'r';
   function ready() {
     const r = round();
-    $('go').disabled = r.type === 'race' ? order.length !== r.tracks.length : mark == null;
+    $('go').disabled = r.type === 'race' ? order.length !== r.tracks.length : r.type === 'float' ? false : mark == null;
   }
 
   /* ---------- chips ---------- */
@@ -136,6 +145,10 @@
     if (r.type === 'drop') mark = Math.max(R, Math.min(W - R, x));
     else if (r.type === 'balance') mark = Math.round(Math.max(-BAL.half, Math.min(BAL.half, (x - BAL.cx) / BAL.unit)) * 20) / 20;
     else if (r.type === 'pool') { const t = r.table, m = r.br; mark = [Math.max(t.x0 + m, Math.min(t.x1 - m, x)), Math.max(t.y0 + m, Math.min(t.y1 - m, y))]; }
+    else if (r.type === 'loop') { if (!aimLoop(r, x, y)) return; }
+    else if (r.type === 'laser') mark = snapWall(x, y);
+    else if (r.type === 'domino' && isDown) { const k = pickDomino(r, x, y); if (k < 0) return; mark = k; }
+    else if (r.type === 'float' && isDown) { const k = pickFloat(r, x, y); if (k < 0) return; toggleFloat(k); return; }
     else if (r.type === 'tower' && isDown) {
       const k = r.blocks.findIndex(b => x >= b.x - 4 && x <= b.x + b.w + 4 && y >= b.y - 2 && y <= b.y + b.h + 2);
       if (k >= 1) { mark = k; refreshTower(); }
@@ -151,7 +164,7 @@
   cv.addEventListener('pointerdown', (ev) => {
     if (phase !== 'aim' || sending) return;
     const [x, y] = toWorld(ev); const t = round().type;
-    if (t === 'drop' || t === 'balance' || t === 'pool') { dragging = true; cv.setPointerCapture(ev.pointerId); }
+    if (t === 'drop' || t === 'balance' || t === 'pool' || t === 'loop' || t === 'laser') { dragging = true; cv.setPointerCapture(ev.pointerId); }
     aimAt(x, y, true);
   });
   cv.addEventListener('pointermove', (ev) => { if (dragging && phase === 'aim') { const [x, y] = toWorld(ev); aimAt(x, y, false); } });
@@ -166,6 +179,7 @@
       if (r.type === 'drop') aimAt((mark ?? W / 2) + dx * 4 * f, 0);
       if (r.type === 'balance') aimAt(BAL.cx + ((mark ?? 0) + dx * 0.25 * f) * BAL.unit, 0);
       if (r.type === 'pool') { const p = mark ?? [200, 300]; aimAt(p[0] + dx * 4 * f, p[1] + dy * 4 * f); }
+      if (r.type === 'loop') { mark = Math.max(LOOPC.minH, Math.min(LOOPC.maxH, (mark ?? 150) - dy * 2 * f + dx * 2 * f)); ready(); draw(); }
       if (r.type === 'tower') { const n = r.blocks.length; mark = mark == null || mark < 1 ? 1 : Math.max(1, Math.min(n - 1, mark + (dy ? -dy : dx))); refreshTower(); }
     } else if (k === 'Enter' && !$('go').disabled) { ev.preventDefault(); release(); }
   });
@@ -177,6 +191,11 @@
     if (r.type === 'race') return Math.max(...r.tracks.map(t => t.times.at(-1)));
     if (r.type === 'balance') return 2.4;
     if (r.type === 'tower') return r.frames ? r.frames.length / 60 : 1.2;
+    if (r.type === 'loop') { if (!r.sim) r.sim = loopFrames(r, mark); return r.sim.length / 60; }
+    if (r.type === 'laser') return r.len / LASER_SPEED + 0.5;
+    if (r.type === 'domino') return r.frames.length / 60;
+    if (r.type === 'float') return 3.4;
+    if (r.type === 'gears') return 3.2;
   }
   async function release() {
     if (phase !== 'aim' || sending) return;
@@ -239,9 +258,36 @@
         l2: (ans < 0 ? 'No fall' : 'First to hit the ground: block ' + (ans + 1)) + ' · you: ' + name(pick), d: ans < 0 ? 'It stood' : 'Block ' + (ans + 1) + ' landed first' };
     }
   }
+  function scoreNew(r) {
+    if (r.type === 'loop') {
+      const err = Math.abs(mark - r.answer) / 2, made = mark >= r.answer;
+      return { pts: 0, l1: err <= 2 ? 'Perfect height!' : made ? (err <= 8 ? 'Made it, with a little to spare' : 'Made it, but you could start lower') : (err <= 8 ? 'So close: it just fell off' : 'Too low: it fell off'),
+        l2: 'Needed at least ' + cm(r.answer) + ' cm · you ' + cm(mark) + ' cm', d: 'Needed ' + cm(r.answer) + ' cm, you said ' + cm(mark) };
+    }
+    if (r.type === 'laser') {
+      let dpx = Math.abs(perimPos(mark) - perimPos(r.end)); dpx = Math.min(dpx, PERIM - dpx); const d = Math.round(dpx / 2);
+      return { pts: 0, l1: dpx <= 6 ? 'Bullseye!' : dpx <= 30 ? 'Very close' : dpx <= 80 ? 'Close' : 'Way off', l2: (r.path.length - 2) + ' reflections · you were ' + d + ' cm away along the wall', d: (r.path.length - 2) + ' reflections, ' + d + ' cm away' };
+    }
+    if (r.type === 'domino') {
+      const off = Math.abs(mark - r.answer), all = r.answer === r.dominoes.length - 1;
+      return { pts: 0, l1: off === 0 ? (all ? 'They all fall. Well spotted!' : 'Exactly right') : off === 1 ? 'So close: one off' : 'Not quite',
+        l2: (all ? 'All ' + r.dominoes.length + ' fell' : 'Last to fall: #' + (r.answer + 1)) + ' · you: #' + (mark + 1), d: all ? 'All fell' : 'Stopped at #' + (r.answer + 1) };
+    }
+    if (r.type === 'float') {
+      const right = r.items.filter((_, i) => mark.includes(i) === r.answer.includes(i)).length;
+      const fl = r.answer.map(i => FLOAT_NAME[r.items[i]]).join(', ');
+      return { pts: 0, l1: right === r.items.length ? 'All correct!' : right + ' of ' + r.items.length + ' right', l2: 'Floats: ' + fl, d: right + '/' + r.items.length + ' right' };
+    }
+    if (r.type === 'gears') {
+      const wl = r.w[r.parts.length - 1], dir = wl > 0 ? 'clockwise' : 'counter-clockwise', sp = Math.abs(wl);
+      const pd = mark < 2 ? 1 : -1, pf = mark % 2 === 0, okd = pd === Math.sign(wl), oks = pf === sp > 1;
+      return { pts: 0, l1: okd && oks ? 'Spot on' : okd ? 'Right direction, wrong speed' : oks ? 'Right speed, wrong direction' : 'It went the other way',
+        l2: 'It turns ' + dir + ' at ' + sp.toFixed(2) + '× the speed of the first gear', d: dir[0].toUpperCase() + dir.slice(1) + ', ' + sp.toFixed(2) + '×' };
+    }
+  }
   function finishRound() {
     const r = round(); phase = 'result';
-    const s = scoreRound(r); s.pts = serverPts;              // los puntos que valen son los del servidor
+    const s = scoreRound(r) || scoreNew(r); s.pts = serverPts;              // los puntos que valen son los del servidor
     scores.push(s.pts); details.push(s.d);
     try { sessionStorage.setItem(DKEY(attempt.id), JSON.stringify(details)); } catch (e) {}
     $('rPts').textContent = '+' + s.pts; $('rPts').className = 'pts ' + band(s.pts);
@@ -276,7 +322,7 @@
     ctx.clearRect(0, 0, W, H);
     paper();
     const r = round(); if (!r) return;
-    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower })[r.type](r);
+    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears })[r.type](r);
   }
   function paper() {
     ctx.fillStyle = C.plate; ctx.fillRect(0, 0, W, H);
@@ -641,6 +687,473 @@
       if (r.answer >= 0) { const [cx, cy] = fr ? fr[r.answer] : [0, 0]; label(cx, Math.min(cy - 34, floorY - 50), 'lands first: ' + (r.answer + 1), C.coral); }
       else label(200, r.blocks.at(-1).y - 22, 'it stands!', C.good);
     }
+  }
+
+
+  /* =================== Juegos nuevos =================== */
+
+  /* ---------- Loop the loop ---------- */
+  const LOOPC = { floorY: 470, x0: 34, x1: 150, topY: 92, rb: 9, minH: 24, maxH: 340, g: 980 };
+  const cm = (px) => Math.round(px / 2);                 // 2 px = 1 cm
+  function loopPath(r) {
+    if (r._path) return r._path;
+    const { floorY, x0, x1, topY, rb } = LOOPC, R = r.R, cx = r.cx, cy = floorY - R, rho = R - rb;
+    const pts = [];
+    const push = (x, y, seg, a) => pts.push({ x, y, seg, a });
+    // rampa: cuarto de elipse, vertical arriba y horizontal abajo
+    const N = 160;
+    for (let i = 0; i <= N; i++) {
+      const t = i / N, tx = x0 + (x1 - x0) * (1 - Math.cos(t * Math.PI / 2)), ty = topY + (floorY - topY) * Math.sin(t * Math.PI / 2);
+      const dx = (x1 - x0) * Math.sin(t * Math.PI / 2), dy = (floorY - topY) * Math.cos(t * Math.PI / 2), L = Math.hypot(dx, dy) || 1;
+      push(tx + dy / L * rb, ty - dx / L * rb, 'ramp');
+    }
+    for (let x = x1 + 2; x < cx; x += 2) push(x, floorY - rb, 'flat');
+    for (let i = 0; i <= 240; i++) { const a = i / 240 * Math.PI * 2; push(cx + rho * Math.sin(a), cy + rho * Math.cos(a), 'loop', a); }
+    for (let x = cx + 2; x <= 440; x += 2) push(x, floorY - rb, 'exit');
+    const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+    const h = (p) => (floorY - rb) - p.y;
+    let maxH = 0; for (const p of pts) if (p.seg === 'ramp') maxH = Math.max(maxH, h(p));
+    LOOPC.maxH = Math.floor(maxH - 6);
+    r._path = { pts, cum, cx, cy, rho, h };
+    return r._path;
+  }
+  function prepLoop(r) { loopPath(r); }
+  function aimLoop(r, x, y) { mark = Math.max(LOOPC.minH, Math.min(LOOPC.maxH, (LOOPC.floorY - LOOPC.rb) - y)); return true; }
+  function rampIndex(P, h0) { let k = 0; for (let i = 0; i < P.pts.length && P.pts[i].seg === 'ramp'; i++) if (P.h(P.pts[i]) >= h0) k = i; return k; }
+  function atS(P, s) {
+    const c = P.cum; s = Math.max(0, Math.min(c.at(-1), s));
+    let lo = 0, hi = c.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (c[m] <= s) lo = m; else hi = m; }
+    const f = (s - c[lo]) / (c[hi] - c[lo] || 1), a = P.pts[lo], b = P.pts[hi];
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, seg: a.seg, a: a.a, i: lo, dy: (b.y - a.y) / (c[hi] - c[lo] || 1), dx: (b.x - a.x) / (c[hi] - c[lo] || 1) };
+  }
+  // Simula la canica desde la altura elegida (misma física que la respuesta del servidor).
+  function loopFrames(r, h0) {
+    const P = loopPath(r), g = LOOPC.g, out = [], dt = 1 / 240;
+    let s = P.cum[Math.min(P.pts.length - 1, rampIndex(P, h0) + 1)], mode = 'track', v = 0, carpetDist = 0, t = 0, failT = null, fx = 0, fy = 0, fvx = 0, fvy = 0, spin = 0, lastX = null;
+    const inCarpet = (p) => r.carpet && p.seg === 'flat' && p.x >= r.carpet.x0 && p.x <= r.carpet.x1;
+    for (let step = 0; step < 240 * 9; step++, t += dt) {
+      let pos;
+      if (mode === 'track') {
+        const p = atS(P, s);
+        const K = g * (h0 - P.h(p)) - g * (r.carpet ? r.carpet.mu : 0) * carpetDist;
+        if (K <= 0) { mode = 'damped'; v = 0; failT = t; }
+        else {
+          v = Math.sqrt(Math.max(0, K) / 0.7);
+          if (p.seg === 'loop' && v * v / P.rho + g * Math.cos(p.a) < -1e-6) {   // se despega del rizo
+            mode = 'fly'; failT = t; fx = p.x; fy = p.y; fvx = p.dx * v; fvy = p.dy * v;
+          } else { const ds = v * dt; s += ds; if (inCarpet(p)) carpetDist += ds; }
+        }
+        pos = atS(P, s);
+        if (pos.x > 430) break;
+      }
+      if (mode === 'fly') {
+        fvy += g * dt; fx += fvx * dt; fy += fvy * dt;
+        const d = Math.hypot(fx - P.cx, fy - P.cy);
+        if (d >= P.rho || fy >= LOOPC.floorY - LOOPC.rb) {
+          // vuelve a tocar el rizo: sigue rodando por él, ya sin fuerza para subir
+          let best = 0, bd = Infinity;
+          P.pts.forEach((q, i) => { if (q.seg !== 'loop') return; const e = Math.hypot(q.x - fx, q.y - fy); if (e < bd) { bd = e; best = i; } });
+          s = P.cum[best]; v = 0; mode = 'damped';
+        }
+        pos = { x: fx, y: fy };
+      }
+      if (mode === 'damped') {
+        const p = atS(P, s);
+        const acc = (5 / 7) * g * p.dy - 2.2 * v - (r.carpet && inCarpet(p) ? Math.sign(v) * g * r.carpet.mu * 5 / 7 : 0);
+        v += acc * dt; s += v * dt; s = Math.max(0, Math.min(P.cum.at(-1), s));
+        pos = atS(P, s);
+        if (t - failT > 3) break;
+      }
+      if (lastX != null) spin += Math.hypot(pos.x - lastX[0], pos.y - lastX[1]) / LOOPC.rb * (mode === 'damped' ? Math.sign(v) || 1 : 1);
+      lastX = [pos.x, pos.y];
+      if (step % 4 === 0) out.push([pos.x, pos.y, spin]);
+    }
+    for (let k = 0; k < 18; k++) out.push(out.at(-1));
+    return out;
+  }
+  function drawLoop(r) {
+    const P = loopPath(r), { floorY, rb } = LOOPC;
+    ctx.fillStyle = C.paper; ctx.fillRect(0, floorY, W, H - floorY);
+    // regla de alturas
+    const rx = 14;
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(rx, floorY - rb); ctx.lineTo(rx, LOOPC.topY - 10); ctx.stroke();
+    ctx.font = mono(9, 500); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'left';
+    for (let c = 0; c * 2 <= LOOPC.maxH + 4; c += 10) {
+      const y = floorY - rb - c * 2, big = c % 50 === 0;
+      ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + (big ? 9 : 5), y); ctx.stroke();
+      if (big && c) ctx.fillText(String(c), rx + 10, y + 3);
+    }
+    ctx.save(); ctx.translate(rx - 4, 300); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillText('HEIGHT (cm)', 0, 0); ctx.restore();
+    // pista
+    const track = (pred) => { ctx.beginPath(); let on = false; for (const p of P.pts) { if (!pred(p)) { on = false; continue; }
+      const k = p.seg === 'loop' ? 1 + rb / P.rho : 1;
+      const x = p.seg === 'loop' ? P.cx + (p.x - P.cx) * k : p.seg === 'ramp' ? p.x - (p.x - p.x) : p.x, y = p.seg === 'loop' ? P.cy + (p.y - P.cy) * k : p.y + rb;
+      on ? ctx.lineTo(x, y) : ctx.moveTo(x, y); on = true; } ctx.stroke(); };
+    // la rampa: la pista real está desplazada rb hacia fuera de la trayectoria del centro
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 6;
+    ctx.beginPath();
+    for (let i = 0; i <= 80; i++) { const t = i / 80, x = LOOPC.x0 + (LOOPC.x1 - LOOPC.x0) * (1 - Math.cos(t * Math.PI / 2)), y = LOOPC.topY + (floorY - LOOPC.topY) * Math.sin(t * Math.PI / 2); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.lineTo(W + 10, floorY); ctx.stroke();
+    ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(P.cx, P.cy, r.R, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = C.plate; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(P.cx, P.cy, r.R, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    void track;
+    // soporte de la rampa
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.globalAlpha = 0.35;
+    for (const xx of [LOOPC.x0 + 6, LOOPC.x0 + 40]) { ctx.beginPath(); ctx.moveTo(xx, floorY); ctx.lineTo(xx, LOOPC.topY + 40); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    if (r.carpet) {
+      const { x0, x1 } = r.carpet;
+      ctx.fillStyle = C.violeta; roundRect(x0, floorY - 4, x1 - x0, 8, 2); ctx.fill();
+      ctx.fillStyle = C.plate; ctx.globalAlpha = 0.6; for (let x = x0 + 3; x < x1 - 2; x += 5) ctx.fillRect(x, floorY - 2, 2, 4); ctx.globalAlpha = 1;
+      label((x0 + x1) / 2, floorY + 26, 'carpet', C.violeta);
+    }
+    label(P.cx, P.cy + 4, 'loop ' + cm(r.R * 2) + ' cm', C['ink-2']);
+    // líneas de altura
+    const hy = (h) => floorY - rb - h;
+    if (phase === 'result') {
+      ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = C.coral; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(rx, hy(r.answer)); ctx.lineTo(LOOPC.x1 + 40, hy(r.answer)); ctx.stroke(); ctx.restore();
+      label(LOOPC.x1 + 70, hy(r.answer) + 4, 'needed ' + cm(r.answer) + ' cm', C.coral);
+    }
+    if (mark != null) {
+      ctx.save(); ctx.setLineDash([3, 4]); ctx.strokeStyle = C.azul; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(rx, hy(mark)); ctx.lineTo(LOOPC.x1, hy(mark)); ctx.stroke(); ctx.restore();
+      if (phase !== 'result' || Math.abs(mark - r.answer) > 14) label(LOOPC.x1 + 56, hy(mark) + 4, 'you ' + cm(mark) + ' cm', C.azul);
+    }
+    // canica
+    if (phase === 'aim') {
+      const k = rampIndex(P, mark ?? LOOPC.maxH * 0.6), p = P.pts[k];
+      ctx.globalAlpha = mark == null ? 0.55 : 1; drawSkin(ctx, p.x, p.y, rb, skin, 0); ctx.globalAlpha = 1;
+      if (mark == null) { ctx.font = mono(11); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'left'; ctx.fillText('drag the marble', p.x + 16, p.y + 4); }
+    } else {
+      const F = r.sim || (r.sim = loopFrames(r, mark));
+      const fi = phase === 'result' ? F.length - 1 : Math.min(F.length - 1, Math.floor(anim.t * 60));
+      trail(F, fi, C.coral);
+      const f = F[fi]; drawSkin(ctx, Math.min(f[0], W - rb), f[1], rb, skin, f[2]);
+    }
+  }
+
+  /* ---------- Laser ---------- */
+  const LROOM = { x0: 24, y0: 76, x1: 376, y1: 536 }, LASER_SPEED = 520;
+  function snapWall(x, y) {
+    const { x0, y0, x1, y1 } = LROOM;
+    const d = [Math.abs(y - y0), Math.abs(x - x1), Math.abs(y - y1), Math.abs(x - x0)], s = d.indexOf(Math.min(...d));
+    const cx = Math.max(x0 + 2, Math.min(x1 - 2, x)), cy = Math.max(y0 + 2, Math.min(y1 - 2, y));
+    return s === 0 ? [cx, y0] : s === 1 ? [x1, cy] : s === 2 ? [cx, y1] : [x0, cy];
+  }
+  function perimPos([x, y]) {
+    const { x0, y0, x1, y1 } = LROOM, w = x1 - x0, h = y1 - y0;
+    const d = [Math.abs(y - y0), Math.abs(x - x1), Math.abs(y - y1), Math.abs(x - x0)], s = d.indexOf(Math.min(...d));
+    return s === 0 ? x - x0 : s === 1 ? w + (y - y0) : s === 2 ? w + h + (x1 - x) : 2 * w + h + (y1 - y);
+  }
+  const PERIM = 2 * (LROOM.x1 - LROOM.x0) + 2 * (LROOM.y1 - LROOM.y0);
+  const ROOMBG = '#0e1620';
+  function beam(pts, upto) {
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const path = () => { ctx.beginPath(); let left = upto, tip = null; ctx.moveTo(...pts[0]);
+      for (let k = 1; k < pts.length; k++) { const [ax, ay] = pts[k - 1], [bx, by] = pts[k], L = Math.hypot(bx - ax, by - ay);
+        if (left >= L) { ctx.lineTo(bx, by); left -= L; tip = [bx, by]; } else { tip = [ax + (bx - ax) * left / L, ay + (by - ay) * left / L]; ctx.lineTo(...tip); break; } }
+      return tip; };
+    ctx.shadowColor = '#ff3b30'; ctx.shadowBlur = 14; ctx.strokeStyle = 'rgba(255,70,55,.55)'; ctx.lineWidth = 7; path(); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.strokeStyle = '#ff6a55'; ctx.lineWidth = 3; path(); ctx.stroke();
+    ctx.strokeStyle = '#fff2ee'; ctx.lineWidth = 1.2; const tip = path(); ctx.stroke();
+    ctx.restore();
+    return tip;
+  }
+  function drawLaser(r) {
+    const { x0, y0, x1, y1 } = LROOM;
+    ctx.fillStyle = ROOMBG; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1;
+    for (let x = x0 + 20; x < x1; x += 20) { ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke(); }
+    for (let y = y0 + 20; y < y1; y += 20) { ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); }
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 6; ctx.strokeRect(x0 - 3, y0 - 3, x1 - x0 + 6, y1 - y0 + 6);
+    ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center'; ctx.fillText('mirrors reflect on both sides', W / 2, y1 + 28);
+    for (const m of r.mirrors) {
+      if (m.kind === 'block') {
+        ctx.save(); ctx.translate((m.x1 + m.x2) / 2, (m.y1 + m.y2) / 2); ctx.rotate(Math.atan2(m.y2 - m.y1, m.x2 - m.x1));
+        const L = Math.hypot(m.x2 - m.x1, m.y2 - m.y1); ctx.fillStyle = '#2b3440'; ctx.strokeStyle = '#4b5866'; ctx.lineWidth = 1.5;
+        roundRect(-L / 2, -6, L, 12, 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,.12)'; for (let x = -L / 2 + 4; x < L / 2; x += 6) { ctx.beginPath(); ctx.moveTo(x, -6); ctx.lineTo(x + 6, 6); ctx.stroke(); }
+        ctx.restore(); continue;
+      }
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#7d8b99'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
+      ctx.strokeStyle = '#e8f1f8'; ctx.lineWidth = 3.2; ctx.beginPath(); ctx.moveTo(m.x1, m.y1); ctx.lineTo(m.x2, m.y2); ctx.stroke();
+    }
+    // emisor
+    const [sx, sy] = r.src;
+    ctx.save(); ctx.translate(sx, sy); ctx.rotate(r.ang);
+    ctx.fillStyle = '#d7dde3'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; roundRect(-14, -9, 24, 18, 3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ff3b30'; ctx.beginPath(); ctx.arc(10, 0, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    if (phase === 'aim') {
+      ctx.save(); ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(255,90,74,.8)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(sx + Math.cos(r.ang) * 12, sy + Math.sin(r.ang) * 12); ctx.lineTo(sx + Math.cos(r.ang) * 44, sy + Math.sin(r.ang) * 44); ctx.stroke(); ctx.restore();
+    } else {
+      const tip = beam(r.path, phase === 'result' ? Infinity : anim.t * LASER_SPEED);
+      if (tip && (phase === 'result' || anim.t * LASER_SPEED >= r.len)) {
+        const [ex, ey] = r.end;
+        ctx.save(); ctx.shadowColor = '#ff3b30'; ctx.shadowBlur = 18; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, ey, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.strokeStyle = '#ff6a55'; ctx.lineWidth = 2; for (const rr of [10, 16]) { ctx.globalAlpha = rr === 10 ? 0.7 : 0.35; ctx.beginPath(); ctx.arc(ex, ey, rr, 0, Math.PI * 2); ctx.stroke(); } ctx.globalAlpha = 1;
+      }
+    }
+    if (mark) {
+      const [mx, my] = mark;
+      ctx.strokeStyle = C.azul; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(mx, my, 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = C.azul; ctx.beginPath(); ctx.arc(mx, my, 3, 0, Math.PI * 2); ctx.fill();
+      const ly = my < y0 + 5 ? my - 16 : my > y1 - 5 ? my + 30 : my + 4;
+      if (phase !== 'result') label(mx < x0 + 5 ? mx + 34 : mx > x1 - 5 ? mx - 34 : mx, ly, 'you', C.azul);
+    }
+    if (phase === 'result') {
+      const [ex, ey] = r.end, ly = ey < y0 + 5 ? ey - 16 : ey > y1 - 5 ? ey + 30 : ey - 18;
+      label(ex < x0 + 5 ? ex + 50 : ex > x1 - 5 ? ex - 50 : ex, ly, 'beam ends here', '#e2412f');
+    }
+  }
+
+  /* ---------- Dominoes ---------- */
+  const DFLOOR = 470, DZ = 1.35;                         // la escena del dominó se ve ampliada
+  function pickDomino(r, x, y) {
+    x = x / DZ; y = DFLOOR + (y - DFLOOR) / DZ;
+    let best = -1, bd = 22;
+    r.dominoes.forEach((d, i) => { const dd = Math.abs(x - d.x); if (dd < bd && y > d.base - d.h - 60 && y < DFLOOR + 40) { bd = dd; best = i; } });
+    return best;
+  }
+  function drawDomino(r) {
+    ctx.fillStyle = C.paper; ctx.fillRect(0, DFLOOR, W, H - DFLOOR);
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, DFLOOR); ctx.lineTo(W, DFLOOR); ctx.stroke();
+    ctx.save(); ctx.translate(0, DFLOOR); ctx.scale(DZ, DZ); ctx.translate(0, -DFLOOR);
+    if (r.platform) {
+      const ds = r.dominoes.filter(d => d.base < DFLOOR), a = ds[0], b = ds.at(-1);
+      const x0 = a.x - a.w / 2 - 13, x1 = b.x + b.w / 2 + 13, top = a.base;
+      ctx.fillStyle = C.wood; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.fillRect(x0, top, x1 - x0, DFLOOR - top); ctx.strokeRect(x0, top, x1 - x0, DFLOOR - top);
+    }
+    const fr = r.frames && phase !== 'aim' ? r.frames[phase === 'result' ? r.frames.length - 1 : Math.min(r.frames.length - 1, Math.floor(anim.t * 60))] : null;
+    r.dominoes.forEach((d, i) => {
+      const th = fr ? fr[i] : 0;
+      ctx.save(); ctx.translate(d.x + d.w / 2, d.base); ctx.rotate(th);
+      const heavy = d.d > 1;
+      ctx.fillStyle = heavy ? C['ink-2'] : C.plate; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.8;
+      roundRect(-d.w, -d.h, d.w, d.h, Math.min(3, d.w / 3)); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = heavy ? C.plate : C.ink; ctx.globalAlpha = 0.5; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-d.w + 2, -d.h / 2); ctx.lineTo(-2, -d.h / 2); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.fillStyle = heavy ? C.plate : C.ink;
+      for (const f of [0.22, 0.75]) { ctx.beginPath(); ctx.arc(-d.w / 2, -d.h * f, Math.max(1, d.w * 0.14), 0, Math.PI * 2); ctx.fill(); }
+      if (mark === i && phase !== 'playing') { ctx.strokeStyle = C.azul; ctx.lineWidth = 3; roundRect(-d.w - 4, -d.h - 4, d.w + 8, d.h + 8, 4); ctx.stroke(); }
+      if (phase === 'result' && r.answer === i) { ctx.strokeStyle = C.coral; ctx.lineWidth = 3; roundRect(-d.w - 7, -d.h - 7, d.w + 14, d.h + 14, 5); ctx.stroke(); }
+      ctx.restore();
+    });
+    if (phase === 'aim') { const d = r.dominoes[0]; arrow(d.x - 20, d.base - d.h + 6, d.x - d.w / 2 - 3, d.base - d.h + 6, C.coral, 2.2); }
+    ctx.restore();
+    r.dominoes.forEach((d, i) => {
+      if (phase !== 'aim' && phase !== 'result') return;
+      ctx.font = mono(10, 600); ctx.textAlign = 'center'; ctx.fillStyle = mark === i ? C.azul : phase === 'result' && r.answer === i ? C.coral : C['ink-2'];
+      ctx.fillText(String(i + 1), d.x * DZ, DFLOOR + 18);
+    });
+    if (phase === 'result') {
+      const d = r.dominoes[r.answer];
+      label(Math.max(60, Math.min(W - 60, d.x * DZ)), DFLOOR - (DFLOOR - d.base + d.h) * DZ - 26, r.answer === r.dominoes.length - 1 ? 'they all fall!' : 'last to fall: #' + (r.answer + 1), C.coral);
+    }
+  }
+
+  /* ---------- Float or sink? ---------- */
+  const FLOAT_NAME = { apple: 'Apple', egg: 'Egg', ice: 'Ice cube', golf: 'Golf ball', pingpong: 'Ping-pong ball', cork: 'Cork', lemon: 'Lemon', lime: 'Lime',
+    potato: 'Potato', cola: 'Cola can', diet: 'Diet cola can', candle: 'Candle', pine: 'Pine block', ebony: 'Ebony block', coin: 'Coin', grape: 'Grape',
+    orange: 'Orange', peeled: 'Peeled orange', eraser: 'Eraser', cap: 'Bottle cap' };
+  const FL = { shelf: 200, surface: 330, bottom: 532, x0: 22, x1: 378 };
+  const fx = (r, i) => FL.x0 + 30 + i * ((FL.x1 - FL.x0 - 60) / (r.items.length - 1));
+  function pickFloat(r, x, y) {
+    if (y < FL.shelf - 50 || y > FL.shelf + 50) return -1;
+    let best = -1, bd = 30; r.items.forEach((_, i) => { const d = Math.abs(x - fx(r, i)); if (d < bd) { bd = d; best = i; } });
+    return best;
+  }
+  function toggleFloat(k) {
+    if (phase !== 'aim') return;
+    mark = mark.includes(k) ? mark.filter(i => i !== k) : [...mark, k].sort((a, b) => a - b);
+    refreshFloatChips(); draw();
+  }
+  function buildFloatChips() {
+    const r = round(), box = $('chips'); box.hidden = false; box.innerHTML = '';
+    r.items.forEach((k, i) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.id = 'chipF' + i; b.setAttribute('aria-pressed', 'false');
+      b.innerHTML = '<span class="dot" style="background:var(--azul)"></span>' + FLOAT_NAME[k];
+      b.addEventListener('click', () => toggleFloat(i)); box.appendChild(b);
+    });
+    refreshFloatChips();
+  }
+  function refreshFloatChips() { round().items.forEach((_, i) => { const b = $('chipF' + i); if (!b) return; const on = mark.includes(i); b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.querySelector('.dot').textContent = on ? '↑' : ''; }); ready(); }
+  function drawItem(kind, x, y, s, ang) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang || 0);
+    const ink = C.ink; ctx.lineWidth = 1.6; ctx.strokeStyle = ink;
+    const circ = (rr, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); };
+    const ell = (rx, ry, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); };
+    const box = (w, h, fill, rr = 3) => { ctx.fillStyle = fill; roundRect(-w / 2, -h / 2, w, h, rr); ctx.fill(); ctx.stroke(); };
+    const shine = (rx, ry, rr) => { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI * 2); ctx.fill(); };
+    const h = s / 2;
+    switch (kind) {
+      case 'apple': circ(h * 0.9, '#d93a32'); ctx.strokeStyle = '#6b3b1d'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -h * 0.8); ctx.lineTo(2, -h * 1.15); ctx.stroke(); ctx.fillStyle = '#4caf50'; ctx.beginPath(); ctx.ellipse(6, -h * 1.0, 5, 2.5, -0.5, 0, Math.PI * 2); ctx.fill(); shine(-h * 0.35, -h * 0.3, h * 0.2); break;
+      case 'egg': ell(h * 0.7, h * 0.92, '#f6ead2'); shine(-h * 0.25, -h * 0.4, h * 0.16); break;
+      case 'ice': ctx.globalAlpha = 0.85; box(s * 0.85, s * 0.85, '#bfe6f5', 5); ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-h * 0.5, -h * 0.2); ctx.lineTo(-h * 0.2, -h * 0.5); ctx.stroke(); break;
+      case 'golf': circ(h * 0.75, '#fbfbf7'); ctx.fillStyle = 'rgba(0,0,0,.18)'; for (const [a, b] of [[-4, -3], [3, -5], [5, 2], [-2, 4], [-6, 2], [1, -1]]) { ctx.beginPath(); ctx.arc(a * h / 12, b * h / 12, 1.3, 0, Math.PI * 2); ctx.fill(); } break;
+      case 'pingpong': circ(h * 0.62, '#ff9f43'); shine(-h * 0.2, -h * 0.25, h * 0.15); break;
+      case 'cork': ctx.fillStyle = '#c99a63'; ctx.beginPath(); ctx.moveTo(-h * 0.45, -h * 0.7); ctx.lineTo(h * 0.45, -h * 0.7); ctx.lineTo(h * 0.35, h * 0.7); ctx.lineTo(-h * 0.35, h * 0.7); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = 'rgba(80,40,0,.35)'; for (const [a, b] of [[-3, -4], [2, 0], [-1, 5], [3, -6]]) ctx.fillRect(a * h / 10, b * h / 10, 1.8, 1.8); break;
+      case 'lemon': ctx.fillStyle = '#f5d33b'; ctx.beginPath(); ctx.ellipse(0, 0, h * 0.95, h * 0.68, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(h * 0.9, 0); ctx.lineTo(h * 1.12, 0); ctx.stroke(); shine(-h * 0.3, -h * 0.25, h * 0.15); break;
+      case 'lime': ell(h * 0.78, h * 0.66, '#6fba3a'); shine(-h * 0.25, -h * 0.25, h * 0.14); break;
+      case 'potato': ctx.fillStyle = '#b58a54'; ctx.beginPath(); ctx.ellipse(0, 0, h * 0.95, h * 0.62, 0.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = 'rgba(70,40,10,.45)'; for (const [a, b] of [[-4, -1], [3, 2], [5, -3], [-1, 3]]) { ctx.beginPath(); ctx.arc(a * h / 10, b * h / 10, 1.2, 0, Math.PI * 2); ctx.fill(); } break;
+      case 'cola': case 'diet': {
+        const fill = kind === 'cola' ? '#d62828' : '#c9ced4', band = kind === 'cola' ? '#ffffff' : '#d62828';
+        box(s * 0.62, s * 1.0, fill, 4); ctx.fillStyle = band; ctx.beginPath(); ctx.moveTo(-s * 0.31, 2); ctx.quadraticCurveTo(0, -6, s * 0.31, 1); ctx.lineTo(s * 0.31, 5); ctx.quadraticCurveTo(0, -2, -s * 0.31, 6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#9aa3ab'; ctx.fillRect(-s * 0.24, -s * 0.5 - 2, s * 0.48, 3); break; }
+      case 'candle': box(s * 0.42, s * 0.95, '#fff5d6', 2); ctx.strokeStyle = ink; ctx.beginPath(); ctx.moveTo(0, -h * 0.95); ctx.lineTo(0, -h * 1.2); ctx.stroke(); break;
+      case 'pine': case 'ebony': box(s * 0.95, s * 0.6, kind === 'pine' ? '#e7c48a' : '#3a2a20', 2); ctx.strokeStyle = kind === 'pine' ? 'rgba(120,70,20,.4)' : 'rgba(255,255,255,.15)'; ctx.lineWidth = 1; for (const f of [-0.12, 0.08]) { ctx.beginPath(); ctx.moveTo(-h * 0.8, f * s); ctx.quadraticCurveTo(0, f * s - 3, h * 0.8, f * s + 1); ctx.stroke(); } break;
+      case 'coin': ell(h * 0.62, h * 0.62, '#d9a23b'); ctx.strokeStyle = '#8a5d10'; ctx.beginPath(); ctx.arc(0, 0, h * 0.42, 0, Math.PI * 2); ctx.stroke(); break;
+      case 'grape': circ(h * 0.45, '#7b3fbf'); shine(-h * 0.14, -h * 0.15, h * 0.1); break;
+      case 'orange': circ(h * 0.85, '#f28c1e'); ctx.fillStyle = 'rgba(255,255,255,.25)'; for (const [a, b] of [[-3, -2], [2, -4], [4, 3], [-2, 4]]) ctx.fillRect(a * h / 10, b * h / 10, 1.5, 1.5); break;
+      case 'peeled': circ(h * 0.75, '#ffb257'); ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; for (let k = 0; k < 6; k++) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(k * 1.047) * h * 0.72, Math.sin(k * 1.047) * h * 0.72); ctx.stroke(); } break;
+      case 'eraser': box(s * 0.9, s * 0.45, '#f4a6b8', 3); ctx.fillStyle = '#3d6fd6'; ctx.fillRect(0, -s * 0.225 + 1, s * 0.44, s * 0.45 - 2); break;
+      case 'cap': box(s * 0.6, s * 0.36, '#2c7be5', 2); ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(k * s * 0.1, -s * 0.16); ctx.lineTo(k * s * 0.1, s * 0.16); ctx.stroke(); } break;
+    }
+    ctx.restore();
+  }
+  function floatPos(r, i, t) {
+    const x = fx(r, i), s = 40, y0 = FL.shelf, d = r.dens[i], wd = r.water, delay = i * 0.12, gg = 1400;
+    const tt = Math.max(0, t - delay), fallT = Math.sqrt(2 * (FL.surface - y0) / gg);
+    if (tt <= fallT) return [x, y0 + 0.5 * gg * tt * tt, 0, false];
+    const u = tt - fallT;
+    if (d < wd) {
+      const yEq = FL.surface + s * (d / wd - 0.5) * 0.9;
+      const A = FL.surface - yEq + 26;
+      return [x, yEq + A * Math.exp(-3.2 * u) * Math.cos(7 * u), Math.sin(u * 3) * 0.08 * Math.exp(-u), true];
+    }
+    const vs = 70 + 260 * Math.min(1, (d - wd) / 0.6), yEnd = FL.bottom - s * 0.38;
+    const y = FL.surface + Math.min(yEnd - FL.surface, vs * u * (1 - Math.exp(-u * 4)) + 18 * (1 - Math.exp(-u * 6)));
+    return [x, y, Math.min(0.5, u * 0.3) * (i % 2 ? 1 : -1), true];
+  }
+  function drawFloat(r) {
+    // estante
+    ctx.fillStyle = C.wood; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.fillRect(FL.x0 + 8, FL.shelf + 24, FL.x1 - FL.x0 - 16, 8); ctx.strokeRect(FL.x0 + 8, FL.shelf + 24, FL.x1 - FL.x0 - 16, 8);
+    // tanque
+    const t = phase === 'result' ? 99 : anim ? anim.t : 0;
+    ctx.fillStyle = r.salty ? 'rgba(80,190,170,.28)' : 'rgba(60,140,230,.22)'; ctx.fillRect(FL.x0, FL.surface, FL.x1 - FL.x0, FL.bottom - FL.surface);
+    ctx.strokeStyle = r.salty ? 'rgba(40,150,130,.7)' : 'rgba(40,110,210,.7)'; ctx.lineWidth = 2; ctx.beginPath();
+    for (let x = FL.x0; x <= FL.x1; x += 4) { const y = FL.surface + Math.sin(x / 14 + t * 4) * 1.6; x === FL.x0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke();
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(FL.x0, FL.surface - 50); ctx.lineTo(FL.x0, FL.bottom); ctx.lineTo(FL.x1, FL.bottom); ctx.lineTo(FL.x1, FL.surface - 50); ctx.stroke();
+    ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center';
+    ctx.fillText(r.salty ? 'VERY SALTY WATER (like the Dead Sea)' : 'FRESH WATER', W / 2, FL.bottom + 22);
+    r.items.forEach((k, i) => {
+      const [x, y, a, wet] = phase === 'aim' ? [fx(r, i), FL.shelf, 0, false] : floatPos(r, i, t);
+      if (wet && anim && phase === 'playing') {                     // salpicadura al entrar
+        const te = t - i * 0.12 - Math.sqrt(2 * (FL.surface - FL.shelf) / 1400);
+        if (te > 0 && te < 0.6) { ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.5; ctx.globalAlpha = 1 - te / 0.6; ctx.beginPath(); ctx.ellipse(x, FL.surface, 12 + te * 50, 3 + te * 6, 0, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+      }
+      drawItem(k, x, y, 40, a);
+      const on = mark && mark.includes(i);
+      if (phase === 'aim') {
+        if (on) { ctx.strokeStyle = C.azul; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, 25, 0, Math.PI * 2); ctx.stroke(); label(x, y - 32, 'floats', C.azul); }
+        ctx.font = mono(9, 600); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center';
+        const words = FLOAT_NAME[k].split(' '), l1 = words.length > 1 ? words.slice(0, -1).join(' ') : words[0], l2 = words.length > 1 ? words.at(-1) : '';
+        ctx.fillText(l1, x, FL.shelf + 46); if (l2) ctx.fillText(l2, x, FL.shelf + 57);
+      }
+      if (phase === 'result') {
+        const ok = on === r.answer.includes(i);
+        ctx.font = mono(9, 600); ctx.textAlign = 'center'; ctx.fillStyle = C.ink;
+        const ly = r.answer.includes(i) ? FL.surface - 30 : FL.bottom - 46;
+        ctx.fillStyle = ok ? C.good : C.bad; ctx.fillText((ok ? '✓ ' : '✗ ') + String(r.dens[i]).replace(/^0/, '0'), x, ly);
+      }
+    });
+    if (phase === 'result') { ctx.font = mono(9); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center'; ctx.fillText('density in g/cm³ · water ' + r.water.toFixed(2), W / 2, FL.bottom + 36); }
+  }
+
+  /* ---------- Gears ---------- */
+  const GEAR_LABEL = ['↻ Clockwise · faster', '↻ Clockwise · slower', '↺ Counter-clockwise · faster', '↺ Counter-clockwise · slower'];
+  function buildGearChips() {
+    const box = $('chips'); box.hidden = false; box.innerHTML = '';
+    GEAR_LABEL.forEach((t, i) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.id = 'chipG' + i; b.setAttribute('aria-pressed', 'false');
+      b.textContent = t; b.addEventListener('click', () => { if (phase !== 'aim') return; mark = i; GEAR_LABEL.forEach((_, j) => $('chipG' + j).setAttribute('aria-pressed', j === i ? 'true' : 'false')); ready(); draw(); });
+      box.appendChild(b);
+    });
+  }
+  function gearPhases(r) {
+    if (r._ph) return r._ph;
+    const ph = r.parts.map(() => null); ph[0] = 0.1;
+    for (let it = 0; it < r.parts.length; it++) for (const l of r.links) for (const [i, j] of [[l.a, l.b], [l.b, l.a]]) {
+      if (ph[i] == null || ph[j] != null) continue;
+      if (l.kind === 'mesh') {
+        const A = r.parts[i], B = r.parts[j], al = Math.atan2(B.y - A.y, B.x - A.x);
+        ph[j] = (al + Math.PI) - Math.PI / B.t + (al - ph[i]) * A.t / B.t;
+      } else ph[j] = ph[i] * 0.37 + j;
+    }
+    return (r._ph = ph);
+  }
+  function gearShape(p, ang, fill) {
+    ctx.save(); ctx.translate(p.x, p.y);
+    if (p.kind === 'pulley') {
+      ctx.fillStyle = C['ink-2']; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = C.plate; ctx.beginPath(); ctx.arc(0, 0, p.r * 0.72, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.rotate(ang); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(k * 2.094) * p.r * 0.7, Math.sin(k * 2.094) * p.r * 0.7); ctx.stroke(); }
+    } else {
+      const n = p.t, pitch = Math.PI * 2 / n, ro = p.r + 2.6, ri = p.r - 2.8;
+      ctx.rotate(ang); ctx.fillStyle = fill; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.8; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (let k = 0; k < n; k++) { const a0 = k * pitch;
+        for (const [rr, da] of [[ri, -0.32], [ro, -0.17], [ro, 0.17], [ri, 0.32]]) { const a = a0 + da * pitch; (k || da > -0.3) ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); } }
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(0,0,0,.12)'; if (p.r > 22) for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(Math.cos(k * Math.PI / 2 + 0.785) * p.r * 0.5, Math.sin(k * Math.PI / 2 + 0.785) * p.r * 0.5, p.r * 0.16, 0, Math.PI * 2); ctx.fill(); }
+    }
+    ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  function belt(A, B, crossed, offset) {
+    const dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy), th = Math.atan2(dy, dx);
+    const be = Math.acos(Math.max(-1, Math.min(1, crossed ? (A.r + B.r) / d : (A.r - B.r) / d)));
+    ctx.save(); ctx.strokeStyle = C.ink; ctx.globalAlpha = 0.85; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.setLineDash([10, 5]); ctx.lineDashOffset = -offset;
+    for (const sg of [1, -1]) {
+      const a = th + sg * be, pa = [A.x + A.r * Math.cos(a), A.y + A.r * Math.sin(a)];
+      const b = crossed ? a + Math.PI : a, pb = [B.x + B.r * Math.cos(b), B.y + B.r * Math.sin(b)];
+      ctx.beginPath(); ctx.moveTo(...pa); ctx.lineTo(...pb); ctx.stroke();
+    }
+    ctx.setLineDash([]); ctx.lineWidth = 4; for (const P of [A, B]) { ctx.beginPath(); ctx.arc(P.x, P.y, P.r, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore();
+  }
+  function drawGears(r) {
+    const ph = gearPhases(r), t = phase === 'result' ? 3.2 : anim ? anim.t : 0;
+    const w = r.w || r.parts.map(() => 0), om = Math.PI;      // el primero: media vuelta por segundo
+    const angOf = (i) => ph[i] + (phase === 'aim' ? 0 : w[i] * om * t);
+    const last = r.parts.length - 1;
+    // centrar y ampliar el mecanismo para que llene la escena
+    let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+    r.parts.forEach(p => { bx0 = Math.min(bx0, p.x - p.r - 14); bx1 = Math.max(bx1, p.x + p.r + 14); by0 = Math.min(by0, p.y - p.r - 44); by1 = Math.max(by1, p.y + p.r + 40); });
+    const Z = Math.min(1.45, 380 / (bx1 - bx0), 520 / (by1 - by0));
+    const mx = (bx0 + bx1) / 2, my = (by0 + by1) / 2, scr = (x, y) => [W / 2 + (x - mx) * Z, H / 2 + 6 + (y - my) * Z];
+    ctx.save(); ctx.translate(W / 2, H / 2 + 6); ctx.scale(Z, Z); ctx.translate(-mx, -my);
+    const order = r.parts.map((p, i) => i).sort((a, b) => (r.parts[a].front ? 1 : 0) - (r.parts[b].front ? 1 : 0) || r.parts[b].r - r.parts[a].r);
+    const fillOf = (i) => i === 0 ? C.azul : i === last ? C.coral : r.parts[i].front ? C.violeta : C.mostaza;
+    // primero los de atrás, luego las correas, luego los de delante
+    order.filter(i => !r.parts[i].front).forEach(i => gearShape(r.parts[i], angOf(i), fillOf(i)));
+    r.links.filter(l => l.kind === 'belt').forEach(l => belt(r.parts[l.a], r.parts[l.b], l.crossed, angOf(l.a) * r.parts[l.a].r));
+    r.links.filter(l => l.kind === 'belt').forEach(l => { gearShape(r.parts[l.a], angOf(l.a)); gearShape(r.parts[l.b], angOf(l.b)); });
+    order.filter(i => r.parts[i].front).forEach(i => gearShape(r.parts[i], angOf(i), fillOf(i)));
+    // flecha del primero
+    const p0 = r.parts[0];
+    ctx.strokeStyle = C.azul; ctx.lineWidth = 3; ctx.lineCap = 'round'; const R0 = p0.r + 12;
+    ctx.beginPath(); ctx.arc(p0.x, p0.y, R0, -2.4, -0.9); ctx.stroke();
+    const ea = -0.9; ctx.fillStyle = C.azul; ctx.beginPath(); ctx.moveTo(p0.x + Math.cos(ea) * R0 + 6, p0.y + Math.sin(ea) * R0 + 3); ctx.lineTo(p0.x + Math.cos(ea) * R0 - 5, p0.y + Math.sin(ea) * R0 - 6); ctx.lineTo(p0.x + Math.cos(ea) * R0 - 4, p0.y + Math.sin(ea) * R0 + 7); ctx.closePath(); ctx.fill();
+    const startAt = [p0.x, p0.y - R0 - 12];
+    // bandera del último
+    const pl = r.parts[last];
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pl.x, pl.y); ctx.lineTo(pl.x, pl.y - pl.r - 26); ctx.stroke();
+    ctx.fillStyle = C.coral; ctx.beginPath(); ctx.moveTo(pl.x, pl.y - pl.r - 26); ctx.lineTo(pl.x + 20, pl.y - pl.r - 20); ctx.lineTo(pl.x, pl.y - pl.r - 14); ctx.closePath(); ctx.fill();
+    // marca giratoria en el último para ver el sentido
+    ctx.save(); ctx.translate(pl.x, pl.y); ctx.rotate(angOf(last)); ctx.fillStyle = '#fff'; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(pl.r * 0.55, 0, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+    // dientes de cada engranaje
+    ctx.font = mono(9, 600); ctx.textAlign = 'center';
+    r.parts.forEach((p, i) => { if (p.kind !== 'gear' || i === 0) return; const yy = p.front ? p.y + 4 : p.y + p.r * 0.5 + 4; ctx.fillStyle = p.front ? '#fff' : C.ink; if (p.r > 20 || p.front) ctx.fillText(String(p.t), p.x, yy); });
+    ctx.restore();
+    label(...scr(...startAt), 'START · ' + p0.t + ' teeth', C.azul);
+    const [lx, ly] = scr(pl.x, pl.y + pl.r + 4);
+    if (phase === 'result') {
+      const wl = r.w[last];
+      label(lx, Math.min(H - 14, ly + 20), (wl > 0 ? '↻ clockwise' : '↺ counter-clockwise') + ' · ' + Math.abs(wl).toFixed(2) + '× speed', C.coral);
+    } else if (mark != null) label(lx, Math.min(H - 14, ly + 20), GEAR_LABEL[mark].replace('Counter-clockwise', 'CCW').replace('Clockwise', 'CW'), C.azul);
   }
 
   window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME, setSkin: (look) => { skin = look || skin; draw(); }, drawMarble: (g, x, y, r, look, ang) => { readColors(); drawSkin(g, x, y, r, look, ang); } };
