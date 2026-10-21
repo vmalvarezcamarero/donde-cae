@@ -211,12 +211,21 @@
     const stands = r.type === 'tower' && r.answer < 0;
     $('slowmo').textContent = stands ? 'Still standing…' : 'Slow motion ×0.5';
     $('slowmo').hidden = !(r.type === 'race' || stands);
-    const dur = stands ? Math.min(duration(r), 1.6) : duration(r), t0 = performance.now();
+    // Pase lo que pase con la animación, el resultado siempre se muestra: si algo
+    // falla al dibujar o tarda demasiado, se salta al final en vez de quedarse en "Watch…".
     anim = { t: 0, raf: 0 };
+    let dur = 0;
+    try { dur = stands ? Math.min(duration(r), 1.6) : duration(r); } catch (e) { console.error('Gravle animation:', e); }
+    if (!(dur > 0) || !Number.isFinite(dur)) dur = 0.05;
+    const t0 = performance.now();
+    let ended = false;
+    const end = () => { if (ended) return; ended = true; cancelAnimationFrame(anim.raf); clearTimeout(watchdog); anim.t = dur; try { finishRound(); } catch (e) { console.error('Gravle result:', e); } };
+    const watchdog = setTimeout(end, (dur / speed + 4) * 1000);
     const step = (now) => {
-      anim.t = reduce ? dur : Math.min(dur, (now - t0) / 1000 * speed);
-      draw();
-      if (anim.t < dur) anim.raf = requestAnimationFrame(step); else finishRound();
+      if (ended) return;
+      anim.t = reduce ? dur : Math.min(dur, Math.max(0, (now - t0) / 1000 * speed));
+      try { draw(); } catch (e) { console.error('Gravle draw:', e); end(); return; }
+      if (anim.t < dur) anim.raf = requestAnimationFrame(step); else end();
     };
     anim.raf = requestAnimationFrame(step);
   }
@@ -294,7 +303,7 @@
     $('rL1').textContent = s.l1; $('rL2').textContent = s.l2;
     $('result').hidden = false; $('prompt').hidden = true; $('chips').hidden = true;
     $('go').disabled = false; $('go').textContent = roundIdx < 4 ? 'Next round' : 'See result';
-    renderPips(); draw();
+    renderPips(); try { draw(); } catch (e) { console.error('Gravle draw:', e); }
     $('go').focus({ preventScroll: true });
     // En pantallas bajas el resultado y el botón pueden quedar fuera: se baja hasta ellos.
     const gb = $('go').getBoundingClientRect();
@@ -322,6 +331,7 @@
     ctx.clearRect(0, 0, W, H);
     paper();
     const r = round(); if (!r) return;
+    if (phase === 'playing' && !anim) return;
     ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears })[r.type](r);
   }
   function paper() {
@@ -826,7 +836,7 @@
       if (mark == null) { ctx.font = mono(11); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'left'; ctx.fillText('drag the marble', p.x + 16, p.y + 4); }
     } else {
       const F = r.sim || (r.sim = loopFrames(r, mark));
-      const fi = phase === 'result' ? F.length - 1 : Math.min(F.length - 1, Math.floor(anim.t * 60));
+      const fi = phase === 'result' || !anim ? F.length - 1 : Math.max(0, Math.min(F.length - 1, Math.floor(anim.t * 60) || 0));
       trail(F, fi, C.coral);
       const f = F[fi]; drawSkin(ctx, Math.min(f[0], W - rb), f[1], rb, skin, f[2]);
     }
