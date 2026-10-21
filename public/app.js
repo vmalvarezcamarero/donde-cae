@@ -157,6 +157,9 @@ function renderHome() {
   $('noteLogin')?.addEventListener('click', openAuth);
   $('noteProfile')?.addEventListener('click', () => openProfile(true));
   $('streak').textContent = streakText();
+  // La tienda aparece después de la primera partida: al entrar, lo único importante es jugar.
+  const hasPlayed = Object.keys(store.get('played', {})).length > 0 || list.some(a => a.finished);
+  $('shopBtn').hidden = !hasPlayed;
 }
 function tick() {
   if (!resetAt) return;
@@ -265,7 +268,18 @@ $('tabWeek').addEventListener('click', () => openRank('week'));
 $('tabCountries').addEventListener('click', () => openRank('countries'));
 rankFilter.addEventListener('change', () => openRank(rankScope));
 
+// Mientras haya pocos jugadores, solo se enseña el ranking de hoy: tres rankings
+// medio vacíos se ven peor que uno lleno. Las pestañas Semana y Países y el filtro
+// por país aparecen solos cuando un día supera esta cifra de jugadores.
+const FULL_RANKINGS_FROM = 200;
+let fullRankings = store.get('fullRankings', false);
+function syncRankTabs() {
+  document.querySelector('#rank .tabs').hidden = !fullRankings;
+  $('rankFilterWrap').hidden = !fullRankings;
+}
 async function openRank(scope) {
+  if (!fullRankings) scope = 'day';
+  syncRankTabs();
   rankScope = scope; show('rank');
   for (const [id, s] of [['tabDay', 'day'], ['tabWeek', 'week'], ['tabCountries', 'countries']]) $(id).setAttribute('aria-selected', String(s === scope));
   if (scope === 'countries' && rankFilter.dataset.mode !== 'period') {
@@ -278,6 +292,7 @@ async function openRank(scope) {
   const q = scope === 'countries' ? 'scope=countries&period=' + (rankFilter.value || 'day') : 'scope=' + scope + (rankFilter.value ? '&country=' + rankFilter.value : '');
   let data;
   try { data = await api('/api/leaderboard?' + q); } catch (e) { list.innerHTML = ''; const li = document.createElement('li'); li.className = 'empty'; li.textContent = e.message; list.appendChild(li); return; }
+  if (scope === 'day' && !data.country && data.players >= FULL_RANKINGS_FROM && !fullRankings) { fullRankings = true; store.set('fullRankings', true); syncRankTabs(); }
   const d0 = new Date(data.from + 'T12:00:00'), d1 = new Date(data.to + 'T12:00:00');
   const range = data.from === data.to ? fmtDay.format(d0) : fmtShort.format(d0) + ' – ' + fmtShort.format(d1);
   list.innerHTML = '';
