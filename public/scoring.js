@@ -11,7 +11,7 @@ export function publicRound(r) {
       tracks: r.tracks.map(t => ({ kind: t.kind, obj: t.obj, color: t.color, pts: t.pts, sand: t.sand })) };
     case 'pool': return { type: r.type, level: r.level, start: r.start, v: r.v, table: r.table, br: r.br, frames: [r.frames[0]] };
     case 'tower': return { type: r.type, level: r.level, blocks: r.blocks };
-    case 'loop': return { type: r.type, level: r.level, R: r.R, cx: r.cx, carpet: r.carpet };
+    case 'loop': return { type: r.type, level: r.level, R: r.R, cx: r.cx, carpet: r.carpet, carpet2: r.carpet2 };
     case 'laser': return { type: r.type, level: r.level, src: r.src, ang: r.ang, mirrors: r.mirrors };
     case 'domino': return { type: r.type, level: r.level, dominoes: r.dominoes, platform: r.platform };
     case 'float': return { type: r.type, level: r.level, items: r.items, water: r.water, salty: r.salty };

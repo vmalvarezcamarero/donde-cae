@@ -140,6 +140,9 @@ function renderHome() {
     tries.appendChild(row);
   }
   const open = list.find(a => !a.finished), btn = $('playBtn');
+  // los iconos muestran los experimentos del intento que toca (el A es el común; el B, los otros cinco)
+  const nextSet = open ? open.set : !usedA ? 'A' : 'B';
+  renderExps(d.games?.[nextSet] || d.games?.A);
   btn.disabled = false;
   if (open) btn.textContent = 'Continue attempt ' + (list.indexOf(open) + 1);
   else if (list.length >= today.max) { btn.textContent = 'No attempts left until tomorrow'; btn.disabled = true; }
@@ -321,15 +324,24 @@ const HOW = {
   gears: { title: 'Gears', steps: ['The blue gear turns clockwise. Meshing gears turn the opposite way; gears on the same axle turn together.', 'A belt keeps the direction, a crossed belt flips it. Small gears spin faster than big ones.', 'Pick how the flagged gear turns, then tap Release.'], pts: 'Direction and speed right: 100. One of the two: 40.' },
   tower: { title: 'Will it stand?', steps: ['Check how each block rests on the one below. Dark blocks weigh 3×.', 'Tap the block that will hit the ground first, or choose “It stands”.', 'Tap Release and watch.'], pts: 'Right answer: 100 points. Right that it falls but wrong block: 25.' },
 };
-document.querySelectorAll('[data-how]').forEach(btn => btn.addEventListener('click', () => {
-  const h = HOW[btn.dataset.how];
+// Iconos de los 10 experimentos (vienen dibujados en index.html) y guía al tocarlos.
+const ICONS = {};
+document.querySelectorAll('.exp[data-how]').forEach(b => { ICONS[b.dataset.how] = b.innerHTML; });
+function renderExps(games) {
+  const ul = $('homeExps'); if (!ul || !games) return;
+  ul.innerHTML = '';
+  for (const g of games) { if (!ICONS[g]) continue; const li = document.createElement('li'); li.innerHTML = '<button class="exp" type="button" data-how="' + g + '">' + ICONS[g] + '</button>'; ul.appendChild(li); }
+}
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('[data-how]'); if (!btn) return;
+  const h = HOW[btn.dataset.how]; if (!h) return;
   $('howTitle').textContent = h.title;
   $('howIcon').innerHTML = btn.querySelector('svg').outerHTML;
   const ol = $('howSteps'); ol.innerHTML = '';
   for (const t of h.steps) { const li = document.createElement('li'); li.textContent = t; ol.appendChild(li); }
   $('howPts').innerHTML = '<b>Points:</b> '; $('howPts').append(h.pts);
   $('howDlg').showModal();
-}));
+});
 
 /* ---------- ventanas de cuenta ---------- */
 $('acctBtn').addEventListener('click', () => {

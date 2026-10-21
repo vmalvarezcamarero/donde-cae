@@ -60,7 +60,7 @@
     tower: () => 'If the tower falls, which block hits the ground first?<small>Tap that block, or choose “It stands” if you think it won’t fall. Dark blocks weigh three times as much.</small>',
     loop: (r) => 'What’s the lowest height that gets the marble all the way round the loop?<small>Drag the marble up or down the ramp. Too low and it falls off the loop.' + (r.carpet ? ' The carpet slows it down.' : '') + '</small>',
     laser: () => 'The laser bounces off every mirror it hits. Where does the beam end?<small>Tap the wall where you think it lands. Dark blocks absorb light.</small>',
-    bridge: (r) => 'How long must the plank be to bridge the gap?<small>Drag up to grow the plank. It tips over onto the other side and the marble rolls to its tip: too short or too long and it falls.' + (r.yb > r.ya ? ' The far side is lower.' : '') + '</small>',
+    bridge: (r) => 'How long must the plank be to bridge the gap?<small>Drag up to grow the plank. It tips over onto the other side and the marble rolls to its tip: too short or too long and it falls.' + (r.yb > r.ya ? ' The far side is lower.' : r.yb < r.ya ? ' The far side is higher: the plank will rest on its edge and the marble drops from the tip.' : '') + '</small>',
     domino: () => 'Someone pushes the first domino. Which is the last one to fall?<small>Tap that domino. Dark dominoes weigh three times as much.</small>',
     float: (r) => 'Which of these float' + (r.salty ? ' in very salty water' : ' in water') + '?<small>Tap the ones that float; the rest will sink.' + (r.salty ? ' Salt water is denser than fresh water, so it pushes harder.' : '') + '</small>',
     gears: () => 'The first gear turns clockwise. How does the gear with the flag turn?<small>Pick its direction and whether it spins faster or slower than the first one.</small>',
@@ -750,17 +750,19 @@
     const P = loopPath(r), g = LOOPC.g, out = [], dt = 1 / 240;
     let s = P.cum[Math.min(P.pts.length - 1, rampIndex(P, h0) + 1)], mode = 'track', v = 0, carpetDist = 0, t = 0, failT = null, fx = 0, fy = 0, fvx = 0, fvy = 0, spin = 0, lastX = null;
     const inCarpet = (p) => r.carpet && p.seg === 'flat' && p.x >= r.carpet.x0 && p.x <= r.carpet.x1;
+    const inCarpet2 = (p) => r.carpet2 && p.seg === 'exit' && p.x >= r.carpet2.x0 && p.x <= r.carpet2.x1;
+    let carpet2Dist = 0;
     for (let step = 0; step < 240 * 9; step++, t += dt) {
       let pos;
       if (mode === 'track') {
         const p = atS(P, s);
-        const K = g * (h0 - P.h(p)) - g * (r.carpet ? r.carpet.mu : 0) * carpetDist;
+        const K = g * (h0 - P.h(p)) - g * (r.carpet ? r.carpet.mu : 0) * carpetDist - g * (r.carpet2 ? r.carpet2.mu : 0) * carpet2Dist;
         if (K <= 0) { mode = 'damped'; v = 0; failT = t; }
         else {
           v = Math.sqrt(Math.max(0, K) / 0.7);
           if (p.seg === 'loop' && v * v / P.rho + g * Math.cos(p.a) < -1e-6) {   // se despega del rizo
             mode = 'fly'; failT = t; fx = p.x; fy = p.y; fvx = p.dx * v; fvy = p.dy * v;
-          } else { const ds = v * dt; s += ds; if (inCarpet(p)) carpetDist += ds; }
+          } else { const ds = v * dt; s += ds; if (inCarpet(p)) carpetDist += ds; if (inCarpet2(p)) carpet2Dist += ds; }
         }
         pos = atS(P, s);
         if (pos.x > 430) break;
@@ -823,6 +825,12 @@
     ctx.globalAlpha = 1;
     if (r.carpet) {
       const { x0, x1 } = r.carpet;
+      ctx.fillStyle = C.violeta; roundRect(x0, floorY - 4, x1 - x0, 8, 2); ctx.fill();
+      ctx.fillStyle = C.plate; ctx.globalAlpha = 0.6; for (let x = x0 + 3; x < x1 - 2; x += 5) ctx.fillRect(x, floorY - 2, 2, 4); ctx.globalAlpha = 1;
+      label((x0 + x1) / 2, floorY + 26, 'carpet', C.violeta);
+    }
+    if (r.carpet2) {
+      const { x0, x1 } = r.carpet2;
       ctx.fillStyle = C.violeta; roundRect(x0, floorY - 4, x1 - x0, 8, 2); ctx.fill();
       ctx.fillStyle = C.plate; ctx.globalAlpha = 0.6; for (let x = x0 + 3; x < x1 - 2; x += 5) ctx.fillRect(x, floorY - 2, 2, 4); ctx.globalAlpha = 1;
       label((x0 + x1) / 2, floorY + 26, 'carpet', C.violeta);
@@ -1180,13 +1188,19 @@
   const BR = { rb: 9, v: 210, g: 980 };
   function bridgeAngle(r, L) {
     const dy = r.yb - r.ya, ang = (px, py) => Math.atan2(px - r.xa, r.ya - py);
+    if (dy < 0) {                                                                 // destino más alto
+      const gap = r.xb - r.xa, thB = ang(r.xb, r.yb);
+      if (L >= Math.hypot(gap, -dy) - 0.01) return { th: thB, ok: L >= r.lo - 0.01 && L <= r.hi + 0.01 };   // apoyada en la esquina
+      if (L >= gap) return { th: Math.asin(gap / L), ok: false, wall: true };      // apoyada en la pared
+      return { th: Math.PI, ok: false };
+    }
     if (L >= r.lo - 0.01 && L <= r.hi + 0.01) return { th: Math.acos(Math.max(-1, Math.min(1, -dy / L))), ok: true };
     if (L > r.hi) return { th: ang(r.xc, r.yb), ok: false };                       // se apoya en la esquina lejana
     // corta: como el destino nunca está más alto, la punta no llega a tocar nada y la tabla cuelga en el vacío
     return { th: Math.PI, ok: false };
   }
   function bridgeFrames(r, L) {
-    const { th: thL, ok } = bridgeAngle(r, L), rb = BR.rb, out = [];
+    const { th: thL, ok, wall } = bridgeAngle(r, L), rb = BR.rb, out = [];
     const Tf = 0.45 + 0.2 * thL / Math.PI, dt = 1 / 60;
     const dir = [Math.sin(thL), -Math.cos(thL)], nrm = [-Math.cos(thL), -Math.sin(thL)];
     const hx = r.xa, hy = r.ya, steep = thL > 2.2;
@@ -1203,11 +1217,12 @@
         u += sp * dt; spin += sp * dt / rb;
         if (u >= L) {
           u = L;
-          if (ok) { mode = 'land'; stop = (r.xb + r.xc) / 2; }
-          else { mode = 'fall'; vx = dir[0] * sp; vy = dir[1] * sp; }
+          if (ok) { mode = 'land'; stop = (r.xb + r.xc) / 2; vy = 0; }
+          else { mode = 'fall'; vx = wall ? -15 : dir[0] * sp; vy = wall ? 0 : dir[1] * sp; }
         }
         bx = hx + dir[0] * u + nrm[0] * rb; by = hy + dir[1] * u + nrm[1] * rb;
       } else if (mode === 'land') {
+        if (by < r.yb - rb - 0.5) { vy += BR.g * dt; by = Math.min(r.yb - rb, by + vy * dt); out.push([th, bx, by, spin]); continue; }   // cae desde la punta
         by = r.yb - rb; const step = Math.sign(stop - bx) * Math.min(Math.abs(stop - bx), BR.v * 0.7 * dt); bx += step; spin += step / rb;
         if (Math.abs(stop - bx) < 0.5) { mode = 'done'; stop = t; }
       } else if (mode === 'fall') {
@@ -1233,8 +1248,8 @@
     const f = S ? S.frames[fi] : null;
     // tabla ideal (resultado)
     if (phase === 'result') {
-      const cx = (r.xb + r.xc) / 2;
-      ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = C.coral; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(r.xa, r.ya); ctx.lineTo(cx, r.yb); ctx.stroke(); ctx.restore();
+      const cx = (r.xb + r.xc) / 2, ti = bridgeAngle(r, r.answer).th;
+      ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = C.coral; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(r.xa, r.ya); ctx.lineTo(r.xa + r.answer * Math.sin(ti), r.ya - r.answer * Math.cos(ti)); ctx.stroke(); ctx.restore();
       label(Math.min(W - 70, cx + 10), r.yb + 40, 'perfect ' + cm(r.answer) + ' cm', C.coral);
     }
     // tabla

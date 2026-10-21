@@ -13,7 +13,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261021c">
+<link rel="stylesheet" href="styles.css?v=20261021d">
 </head>
 <body>
 <div class="app" id="app">
@@ -39,7 +39,7 @@
       <button class="gbtn main" type="button" data-google>Sign up with Google</button>
       <p class="joinalt"><button class="link" type="button" data-signup>Sign up with email</button><span aria-hidden="true">·</span><button class="link" type="button" data-signin>I have an account</button></p>
     </div>
-    <ul class="exps" aria-label="The five experiments. Tap one to see how to play">
+    <ul class="exps" id="homeExps" aria-label="Today’s five experiments. Tap one to see how to play">
       <li><button class="exp" type="button" data-how="balance"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M6 24 H34" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/><path d="M20 25 L14 34 H26 Z" fill="var(--ink)"/><rect x="8" y="15" width="8" height="8" rx="1.5" fill="var(--ink)"/><rect x="25" y="13" width="10" height="10" rx="1.5" fill="var(--azul)"/></svg>Balance</button></li>
       <li><button class="exp" type="button" data-how="drop"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 18 L26 23" stroke="var(--ink)" stroke-width="3.5" stroke-linecap="round"/><path d="M5 35 H35" stroke="var(--ink)" stroke-width="2"/><path d="M14 8 Q30 10 30 31" stroke="var(--coral)" stroke-width="1.5" stroke-dasharray="2 3" fill="none"/><circle cx="14" cy="9" r="4.5" fill="var(--coral)"/></svg>Landing</button></li>
       <li><button class="exp" type="button" data-how="race"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 8 Q8 30 34 31" stroke="var(--azul)" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M5 8 L34 31" stroke="var(--coral)" stroke-width="3" stroke-linecap="round"/><path d="M34 22 V35" stroke="var(--ink)" stroke-width="2"/></svg>Race</button></li>
@@ -227,7 +227,7 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="game.js?v=20261021c"></script>
-<script type="module" src="app.js?v=20261021c"></script>
+<script src="game.js?v=20261021d"></script>
+<script type="module" src="app.js?v=20261021d"></script>
 </body>
 </html>

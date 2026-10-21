@@ -8,7 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'));
 const dir = join(root, 'public', 'days');
 const files = readdirSync(dir).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
-const ORDER = ['balance', 'drop', 'race', 'pool', 'tower'];
+const TYPES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'float', 'gears'];
 const errors = [];
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 
@@ -21,8 +21,14 @@ for (const f of files) {
   for (const setId of ['A', 'B']) {
   const rounds = d.sets?.[setId];
   if (!Array.isArray(rounds) || rounds.length !== 5) { bad(`el reto ${setId} no tiene 5 rondas`); continue; }
+  if (new Set(rounds.map(r => r.type)).size !== 5) bad(`el reto ${setId} repite experimento`);
   rounds.forEach((r, i) => {
-    if (r.type !== ORDER[i]) bad(`ronda ${i + 1} es "${r.type}", se esperaba "${ORDER[i]}"`);
+    if (!TYPES.includes(r.type)) bad(`ronda ${i + 1}: tipo desconocido "${r.type}"`);
+    if (r.type === 'loop' && !(isNum(r.answer) && r.answer > 50 && r.R > 40)) bad('rizo sin altura mínima válida');
+    if (r.type === 'laser' && !(r.path?.length >= 3 && r.end?.every(isNum))) bad('láser sin recorrido');
+    if (r.type === 'bridge' && !(isNum(r.lo) && isNum(r.hi) && r.lo < r.answer && r.answer < r.hi && r.hi < r.ya)) bad('puente con medidas imposibles');
+    if (r.type === 'float' && !(r.items?.length >= 5 && Array.isArray(r.answer) && r.dens?.length === r.items.length)) bad('flotar sin objetos o respuesta');
+    if (r.type === 'gears' && !(r.parts?.length >= 3 && r.w?.length === r.parts.length && [1, -1].includes(r.answer?.dir))) bad('engranajes sin respuesta');
     if (r.type === 'balance' && !(isNum(r.answer) && Math.abs(r.answer) <= 10.5 && r.weights?.length >= 2)) bad('equilibrio sin solución válida');
     if (r.type === 'drop' && !(r.frames?.length > 30 && isNum(r.impactX) && r.impactX > 0 && r.impactX < d.W)) bad('caída sin trayectoria o impacto fuera del suelo');
     if (r.type === 'race') {

@@ -65,7 +65,8 @@ async function loadDay(env, date) {
   dayCache.set(date, day);
   return day;
 }
-const dayMeta = (d) => ({ n: d.n, date: d.date, level: d.level, W: d.W, H: d.H, FLOOR: d.FLOOR, R: d.R });
+const dayMeta = (d) => ({ n: d.n, date: d.date, level: d.level, W: d.W, H: d.H, FLOOR: d.FLOOR, R: d.R,
+  games: { A: d.sets.A.map(r => r.type), B: d.sets.B.map(r => r.type) } });   // qué experimentos tocan hoy
 
 /* ---------------- identidad ---------------- */
 async function identify(req, env, { requireUser = false } = {}) {

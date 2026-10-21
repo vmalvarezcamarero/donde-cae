@@ -13,8 +13,11 @@ const r3 = (x) => Math.round(x * 1000) / 1000;
 export const LOOP = { floorY: 470, rampX0: 34, rampX1: 150, topY: 92, ball: 9 };
 export function genLoop(seed, level) {
   const rand = mulberry32(seed);
-  const R = Math.round(level === 1 ? 70 + rand() * 20 : 60 + rand() * 36);   // radio del rizo (pista)
-  const cx = Math.round(300 - (R - 60) * 0.4);
+  // Trampa (Medium y Hard): a veces hay otra alfombra DESPUÉS del rizo. Frena, pero ya no importa.
+  const trap = level >= 2 && rand() < (level === 3 ? 0.6 : 0.35);
+  const R = Math.round(level === 1 ? 70 + rand() * 20 : trap ? 60 + rand() * 18 : 60 + rand() * 36);   // radio del rizo (pista)
+  const len2 = Math.round(36 + rand() * 24);
+  const cx = Math.round(trap ? Math.min(300 - (R - 60) * 0.4, 394 - 14 - len2 - R) : 300 - (R - 60) * 0.4);
   const rho = R - LOOP.ball;
   let carpet = null;
   if (level >= 2) {
@@ -22,8 +25,9 @@ export function genLoop(seed, level) {
     const x0 = Math.round(LOOP.rampX1 + 8 + rand() * Math.max(4, cx - LOOP.rampX1 - 30 - len));
     carpet = { x0, x1: x0 + len, mu };
   }
-  const answer = 2.7 * rho + (carpet ? carpet.mu * (carpet.x1 - carpet.x0) : 0);   // en px (1 px = 1 cm)
-  return { type: 'loop', level, R, cx, carpet, answer: r1(answer) };
+  const answer = 2.7 * rho + (carpet ? carpet.mu * (carpet.x1 - carpet.x0) : 0);   // en px (2 px = 1 cm)
+  const carpet2 = trap ? { x0: cx + R + 14, x1: cx + R + 14 + len2, mu: Math.round((0.2 + rand() * 0.2) * 100) / 100 } : null;
+  return { type: 'loop', level, R, cx, carpet, carpet2, answer: r1(answer) };
 }
 
 /* ---------- Laser: ¿dónde acaba el rayo? ---------- */
@@ -67,9 +71,10 @@ export function genLaser(seed, level) {
   const want = level === 1 ? 2 : level === 2 ? 3 : 4;
   const step = level === 1 ? Math.PI / 4 : Math.PI / 12;
   for (let a = 0; a < 20000; a++) {
-    const side = rand() < 0.5 ? 0 : 1;                      // emisor a la izquierda o abajo
-    const src = side === 0 ? [ROOM.x0 + 2, Math.round(140 + rand() * 330)] : [Math.round(70 + rand() * 260), ROOM.y1 - 2];
-    const base = side === 0 ? 0 : -Math.PI / 2;
+    const side = Math.floor(rand() * 4);                    // emisor en una de las cuatro paredes
+    const along = (a, b) => Math.round(a + rand() * (b - a));
+    const src = side === 0 ? [ROOM.x0 + 2, along(140, 470)] : side === 1 ? [along(70, 330), ROOM.y1 - 2] : side === 2 ? [along(70, 330), ROOM.y0 + 2] : [ROOM.x1 - 2, along(140, 470)];
+    const base = [0, -Math.PI / 2, Math.PI / 2, Math.PI][side];
     const ang = level === 1 ? base : base + Math.round(((rand() - 0.5) * 1.4) / step) * step;
     const n = want + (level === 1 ? 1 : 1 + Math.floor(rand() * 2));
     const mirrors = [];
@@ -239,7 +244,7 @@ export function genFloat(seed, level) {
     const n = level === 1 ? 5 : 6;
     const pool = FLOAT_POOLS[level].slice(), items = [];
     while (items.length < n) items.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
-    const salty = level === 3 && rand() < 0.5;
+    const salty = level === 3 ? rand() < 0.5 : level === 2 && rand() < 0.25;
     const water = salty ? 1.2 : 1.0;
     const floats = items.map(k => FLOAT_ITEMS[k].d < water);
     const nf = floats.filter(Boolean).length;
@@ -331,7 +336,8 @@ export function genGears(seed, level) {
 export function genBridge(seed, level) {
   const rand = mulberry32(seed);
   for (let a = 0; a < 5000; a++) {
-    const dy = level === 1 ? 0 : Math.round(level === 2 ? 40 + rand() * 100 : 100 + rand() * 110);
+    const higher = level === 3 && rand() < 0.45;            // destino más alto: la tabla se apoya en su esquina
+    const dy = level === 1 ? 0 : higher ? -Math.round(40 + rand() * 70) : Math.round(level === 2 ? 40 + rand() * 100 : 100 + rand() * 110);
     const ya = Math.round(level === 1 ? 380 + rand() * 70 : 300 + rand() * 120);
     const yb = ya + dy;
     if (yb > 560) continue;
@@ -340,7 +346,13 @@ export function genBridge(seed, level) {
     const wT = Math.round(level === 1 ? 60 + rand() * 30 : level === 2 ? 44 + rand() * 26 : 26 + rand() * 16);
     const xb = xa + gap, xc = xb + wT;
     if (xc > 388) continue;
-    const lo = Math.hypot(xb - xa, dy), hi = Math.hypot(xc - xa, dy), best = Math.hypot((xb + xc) / 2 - xa, dy);
+    let lo, hi, best;
+    if (dy >= 0) { lo = Math.hypot(xb - xa, dy); hi = Math.hypot(xc - xa, dy); best = Math.hypot((xb + xc) / 2 - xa, dy); }
+    else {
+      // la tabla cae sobre la esquina de la plataforma alta; la canica sube por ella y se deja caer desde la punta
+      const sinB = (xb - xa) / Math.hypot(xb - xa, -dy);
+      lo = Math.hypot(xb - xa, -dy); hi = (xc - xa) / sinB; best = ((xb + xc) / 2 - xa) / sinB;
+    }
     if (hi > ya - 40) continue;                                 // que quepa la tabla de pie en la pantalla
     return { type: 'bridge', level, xa, ya, xb, xc, yb, answer: r1(best), lo: r1(lo), hi: r1(hi) };
   }

@@ -1,10 +1,13 @@
-# Physle
+# Gravle (antes Physle)
 
-Juego diario de física, en inglés. Cada día, cinco experimentos: **Balance**, **Where will it land?**, **Which finishes first?**, **Bank shot** y **Will it stand?**. Dos intentos al día, cuentas con Google o email y rankings diario, semanal y por países.
+Juego diario de física, en inglés. Hay **10 experimentos**: Balance, Where will it land?, Which finishes first?, Bank shot, Will it stand?, Loop the loop, Laser, Bridge, Float or sink? y Gears. Cada día salen 5 en el primer intento y los otros 5 en el segundo. Cuentas con Google o email y rankings diario, semanal y por países.
 
 ## Cómo funciona
 
-- **Dos retos por día.** El intento 1 es el reto común (A) y el intento 2 es otro reto distinto de la misma dificultad (B). En el ranking cuenta tu mejor intento del día.
+- **Dos retos por día.** El intento 1 es el reto común (A) con 5 experimentos; el intento 2 (B) trae los otros 5. En el ranking cuenta tu mejor intento del día.
+- **Rotación semanal** (`scripts/generate.mjs`): cada experimento sale 3 o 4 veces por semana en el reto A, como mucho 2 del mismo tipo de respuesta por día (tocar un punto, deslizar o elegir), y de un día a otro se repiten entre 1 y 3.
+- **Física de los experimentos:** los cinco primeros en `scripts/rounds.mjs`, los cinco nuevos en `scripts/rounds2.mjs`.
+- **Demo:** `/?demo` deja probar los cinco nuevos sin que cuente (`node scripts/demo.mjs` regenera `public/demo.json`).
 - **El servidor puntúa.** Los retos con sus respuestas están en `public/days/`, pero el servidor bloquea su descarga. El navegador solo recibe la escena; envía su predicción y recibe el resultado y la animación.
 - **Sin cuenta se puede jugar**, pero esas partidas no entran en el ranking. Los intentos se cuentan por cuenta **y** por dispositivo, para que nadie practique sin cuenta y luego juegue con ventaja.
 - **Ranking:** diario (mejor intento del día), semanal (suma de lunes a domingo) y por países (media de sus jugadores). Se puede filtrar por país.
