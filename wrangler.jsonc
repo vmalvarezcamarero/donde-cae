@@ -1,27 +1,21 @@
 {
-  // Configuración de Cloudflare para Physle.
   "name": "physle",
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
+  "routes": [
+    { "pattern": "gravle.app", "custom_domain": true },
+    { "pattern": "www.gravle.app", "custom_domain": true }
+  ],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    // Estas rutas pasan por el servidor: la API y los retos (que se bloquean).
     "run_worker_first": ["/api/*", "/days/*"]
   },
   "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "physle",
-      "database_id": "aab4a57b-ee0d-46f3-ac35-2ec68b622dd1"
-    }
+    { "binding": "DB", "database_name": "physle", "database_id": "aab4a57b-ee0d-46f3-ac35-2ec68b622dd1" }
   ],
-  // Limpieza diaria de partidas antiguas sin cuenta (04:00 UTC).
   "triggers": { "crons": ["0 4 * * *"] },
-  "vars": {
-    "TIMEZONE": "Europe/Madrid",
-    "FIREBASE_PROJECT_ID": "physle"
-  }
+  "vars": { "TIMEZONE": "Europe/Madrid", "FIREBASE_PROJECT_ID": "physle" }
 }
