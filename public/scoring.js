@@ -15,6 +15,7 @@ export function publicRound(r) {
     case 'laser': return { type: r.type, level: r.level, src: r.src, ang: r.ang, mirrors: r.mirrors };
     case 'domino': return { type: r.type, level: r.level, dominoes: r.dominoes, platform: r.platform };
     case 'float': return { type: r.type, level: r.level, items: r.items, water: r.water, salty: r.salty };
+    case 'bridge': return { type: r.type, level: r.level, xa: r.xa, ya: r.ya, xb: r.xb, xc: r.xc, yb: r.yb };
     case 'gears': return { type: r.type, level: r.level, parts: r.parts, links: r.links };
   }
   throw new Error('tipo de ronda desconocido');
@@ -33,6 +34,7 @@ export function validPrediction(r, p, W = 400) {
     case 'domino': return Number.isInteger(p) && p >= 0 && p < r.dominoes.length;
     case 'float': return Array.isArray(p) && p.length <= r.items.length && new Set(p).size === p.length && p.every(i => Number.isInteger(i) && i >= 0 && i < r.items.length);
     case 'gears': return Number.isInteger(p) && p >= 0 && p <= 3;
+    case 'bridge': return num(p) && p >= 0 && p <= 600;
     case 'race': {
       const n = r.tracks.length;
       return Array.isArray(p) && p.length === n && new Set(p).size === n && p.every(i => Number.isInteger(i) && i >= 0 && i < n);
@@ -76,6 +78,14 @@ export function scorePoints(r, p) {
       return d <= 6 ? 100 : Math.round(100 * Math.exp(-(d - 6) / 40));
     }
     case 'domino': return [100, 45, 15][Math.abs(p - r.answer)] ?? 0;
+    case 'bridge': {
+      if (p >= r.lo && p <= r.hi) {                                // llega: 50–100 según lo cerca del centro
+        const off = Math.abs(p - r.answer), half = Math.max(r.answer - r.lo, r.hi - r.answer);
+        return off <= 4 ? 100 : Math.max(50, Math.round(100 - 50 * (off - 4) / Math.max(1, half - 4)));
+      }
+      const miss = p < r.lo ? r.lo - p : p - r.hi;               // se cae: hasta 30 si ha sido por poco
+      return Math.round(30 * Math.exp(-miss / 30));
+    }
     case 'float': {
       const right = r.items.filter((_, i) => p.includes(i) === r.answer.includes(i)).length;
       return Math.round(100 * (right / r.items.length) ** 2);

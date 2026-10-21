@@ -12,7 +12,7 @@
   const ORD = (k) => ['1st', '2nd', '3rd', '4th'][k];
   const OBJ_NAME = { canica: 'Marble', rueda: 'Solid wheel', aro: 'Hoop', hielo: 'Ice cube' };
   const TYPE_NAME = { balance: 'Balance', drop: 'Where will it land?', race: 'Which finishes first?', pool: 'Bank shot', tower: 'Will it stand?',
-    loop: 'Loop the loop', laser: 'Laser', domino: 'Dominoes', float: 'Float or sink?', gears: 'Gears' };
+    loop: 'Loop the loop', laser: 'Laser', domino: 'Dominoes', bridge: 'Bridge', float: 'Float or sink?', gears: 'Gears' };
   const num = (x, d = 1) => x.toFixed(d);
   const side = (u) => Math.abs(u) < 0.05 ? 'center' : num(Math.abs(u)) + (u < 0 ? ' left' : ' right');
 
@@ -60,6 +60,7 @@
     tower: () => 'If the tower falls, which block hits the ground first?<small>Tap that block, or choose “It stands” if you think it won’t fall. Dark blocks weigh three times as much.</small>',
     loop: (r) => 'What’s the lowest height that gets the marble all the way round the loop?<small>Drag the marble up or down the ramp. Too low and it falls off the loop.' + (r.carpet ? ' The carpet slows it down.' : '') + '</small>',
     laser: () => 'The laser bounces off every mirror it hits. Where does the beam end?<small>Tap the wall where you think it lands. Dark blocks absorb light.</small>',
+    bridge: (r) => 'How long must the plank be to bridge the gap?<small>Drag up to grow the plank. It tips over onto the other side and the marble rolls to its tip: too short or too long and it falls.' + (r.yb > r.ya ? ' The far side is lower.' : '') + '</small>',
     domino: () => 'Someone pushes the first domino. Which is the last one to fall?<small>Tap that domino. Dark dominoes weigh three times as much.</small>',
     float: (r) => 'Which of these float' + (r.salty ? ' in very salty water' : ' in water') + '?<small>Tap the ones that float; the rest will sink.' + (r.salty ? ' Salt water is denser than fresh water, so it pushes harder.' : '') + '</small>',
     gears: () => 'The first gear turns clockwise. How does the gear with the flag turn?<small>Pick its direction and whether it spins faster or slower than the first one.</small>',
@@ -147,6 +148,7 @@
     else if (r.type === 'pool') { const t = r.table, m = r.br; mark = [Math.max(t.x0 + m, Math.min(t.x1 - m, x)), Math.max(t.y0 + m, Math.min(t.y1 - m, y))]; }
     else if (r.type === 'loop') { if (!aimLoop(r, x, y)) return; }
     else if (r.type === 'laser') mark = snapWall(x, y);
+    else if (r.type === 'bridge') { if (!aimBridge(r, x, y)) return; }
     else if (r.type === 'domino' && isDown) { const k = pickDomino(r, x, y); if (k < 0) return; mark = k; }
     else if (r.type === 'float' && isDown) { const k = pickFloat(r, x, y); if (k < 0) return; toggleFloat(k); return; }
     else if (r.type === 'tower' && isDown) {
@@ -164,7 +166,7 @@
   cv.addEventListener('pointerdown', (ev) => {
     if (phase !== 'aim' || sending) return;
     const [x, y] = toWorld(ev); const t = round().type;
-    if (t === 'drop' || t === 'balance' || t === 'pool' || t === 'loop' || t === 'laser') { dragging = true; cv.setPointerCapture(ev.pointerId); }
+    if (t === 'drop' || t === 'balance' || t === 'pool' || t === 'loop' || t === 'laser' || t === 'bridge') { dragging = true; cv.setPointerCapture(ev.pointerId); }
     aimAt(x, y, true);
   });
   cv.addEventListener('pointermove', (ev) => { if (dragging && phase === 'aim') { const [x, y] = toWorld(ev); aimAt(x, y, false); } });
@@ -179,6 +181,7 @@
       if (r.type === 'drop') aimAt((mark ?? W / 2) + dx * 4 * f, 0);
       if (r.type === 'balance') aimAt(BAL.cx + ((mark ?? 0) + dx * 0.25 * f) * BAL.unit, 0);
       if (r.type === 'pool') { const p = mark ?? [200, 300]; aimAt(p[0] + dx * 4 * f, p[1] + dy * 4 * f); }
+      if (r.type === 'bridge') { mark = Math.max(10, Math.min(r.ya - 20, (mark ?? 100) - dy * 2 * f + dx * 2 * f)); ready(); draw(); }
       if (r.type === 'loop') { mark = Math.max(LOOPC.minH, Math.min(LOOPC.maxH, (mark ?? 150) - dy * 2 * f + dx * 2 * f)); ready(); draw(); }
       if (r.type === 'tower') { const n = r.blocks.length; mark = mark == null || mark < 1 ? 1 : Math.max(1, Math.min(n - 1, mark + (dy ? -dy : dx))); refreshTower(); }
     } else if (k === 'Enter' && !$('go').disabled) { ev.preventDefault(); release(); }
@@ -194,6 +197,7 @@
     if (r.type === 'loop') { if (!r.sim) r.sim = loopFrames(r, mark); return r.sim.length / 60; }
     if (r.type === 'laser') return r.len / LASER_SPEED + 0.5;
     if (r.type === 'domino') return r.frames.length / 60;
+    if (r.type === 'bridge') { if (!r.sim) r.sim = bridgeFrames(r, mark); return r.sim.frames.length / 60; }
     if (r.type === 'float') return 3.4;
     if (r.type === 'gears') return 3.2;
   }
@@ -277,6 +281,11 @@
       let dpx = Math.abs(perimPos(mark) - perimPos(r.end)); dpx = Math.min(dpx, PERIM - dpx); const d = Math.round(dpx / 2);
       return { pts: 0, l1: dpx <= 6 ? 'Bullseye!' : dpx <= 30 ? 'Very close' : dpx <= 80 ? 'Close' : 'Way off', l2: (r.path.length - 2) + ' reflections · you were ' + d + ' cm away along the wall', d: (r.path.length - 2) + ' reflections, ' + d + ' cm away' };
     }
+    if (r.type === 'bridge') {
+      const ok = mark >= r.lo && mark <= r.hi, off = Math.abs(mark - r.answer) / 2;
+      return { pts: 0, l1: ok ? (off <= 2 ? 'Perfect plank!' : 'Made it across') : mark < r.lo ? 'Too short: into the void' : 'Too long: it rolled off the end',
+        l2: 'Safe from ' + cm(r.lo) + ' to ' + cm(r.hi) + ' cm · perfect ' + cm(r.answer) + ' · you ' + cm(mark), d: 'Perfect ' + cm(r.answer) + ' cm, you said ' + cm(mark) };
+    }
     if (r.type === 'domino') {
       const off = Math.abs(mark - r.answer), all = r.answer === r.dominoes.length - 1;
       return { pts: 0, l1: off === 0 ? (all ? 'They all fall. Well spotted!' : 'Exactly right') : off === 1 ? 'So close: one off' : 'Not quite',
@@ -332,7 +341,7 @@
     paper();
     const r = round(); if (!r) return;
     if (phase === 'playing' && !anim) return;
-    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears })[r.type](r);
+    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge })[r.type](r);
   }
   function paper() {
     ctx.fillStyle = C.plate; ctx.fillRect(0, 0, W, H);
@@ -1164,6 +1173,88 @@
       const wl = r.w[last];
       label(lx, Math.min(H - 14, ly + 20), (wl > 0 ? '↻ clockwise' : '↺ counter-clockwise') + ' · ' + Math.abs(wl).toFixed(2) + '× speed', C.coral);
     } else if (mark != null) label(lx, Math.min(H - 14, ly + 20), GEAR_LABEL[mark].replace('Counter-clockwise', 'CCW').replace('Clockwise', 'CW'), C.azul);
+  }
+
+
+  /* ---------- Bridge ---------- */
+  const BR = { rb: 9, v: 210, g: 980 };
+  function bridgeAngle(r, L) {
+    const dy = r.yb - r.ya, ang = (px, py) => Math.atan2(px - r.xa, r.ya - py);
+    if (L >= r.lo - 0.01 && L <= r.hi + 0.01) return { th: Math.acos(Math.max(-1, Math.min(1, -dy / L))), ok: true };
+    if (L > r.hi) return { th: ang(r.xc, r.yb), ok: false };                       // se apoya en la esquina lejana
+    // corta: como el destino nunca está más alto, la punta no llega a tocar nada y la tabla cuelga en el vacío
+    return { th: Math.PI, ok: false };
+  }
+  function bridgeFrames(r, L) {
+    const { th: thL, ok } = bridgeAngle(r, L), rb = BR.rb, out = [];
+    const Tf = 0.45 + 0.2 * thL / Math.PI, dt = 1 / 60;
+    const dir = [Math.sin(thL), -Math.cos(thL)], nrm = [-Math.cos(thL), -Math.sin(thL)];
+    const hx = r.xa, hy = r.ya, steep = thL > 2.2;
+    // recorrido de la canica: plataforma → tabla → (destino o caída)
+    let bx = r.xa - 34, by = r.ya - rb, spin = 0, mode = 'wait', u = 0, vx = 0, vy = 0, t = 0, stop = null;
+    for (let k = 0; k < 60 * 9; k++, t += dt) {
+      const th = t < Tf ? thL * (t / Tf) ** 2 : thL;
+      if (mode === 'wait' && t >= Tf + 0.25) mode = 'top';
+      if (mode === 'top') {
+        bx += BR.v * dt; spin += BR.v * dt / rb;
+        if (bx >= hx) { bx = hx; if (steep) { mode = 'fall'; vx = BR.v * 0.6; vy = 0; } else { mode = 'plank'; u = 0; } }
+      } else if (mode === 'plank') {
+        const sp = BR.v + Math.max(0, -Math.cos(thL)) * 180;           // cuesta abajo va algo más rápida
+        u += sp * dt; spin += sp * dt / rb;
+        if (u >= L) {
+          u = L;
+          if (ok) { mode = 'land'; stop = (r.xb + r.xc) / 2; }
+          else { mode = 'fall'; vx = dir[0] * sp; vy = dir[1] * sp; }
+        }
+        bx = hx + dir[0] * u + nrm[0] * rb; by = hy + dir[1] * u + nrm[1] * rb;
+      } else if (mode === 'land') {
+        by = r.yb - rb; const step = Math.sign(stop - bx) * Math.min(Math.abs(stop - bx), BR.v * 0.7 * dt); bx += step; spin += step / rb;
+        if (Math.abs(stop - bx) < 0.5) { mode = 'done'; stop = t; }
+      } else if (mode === 'fall') {
+        vy += BR.g * dt; bx += vx * dt; by += vy * dt; spin += 0.25;
+        if (by > 660) { mode = 'done'; stop = t; }
+      } else if (mode === 'done' && t - stop > 0.5) break;
+      out.push([th, bx, by, spin]);
+    }
+    return { frames: out, ok, th: thL };
+  }
+  function aimBridge(r, x, y) { mark = Math.max(10, Math.min(r.ya - 20, r.ya - y)); return true; }
+  function drawBridge(r) {
+    const rb = BR.rb;
+    // vacío
+    const grd = ctx.createLinearGradient(0, 380, 0, H); grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(0,0,0,.28)');
+    ctx.fillStyle = grd; ctx.fillRect(0, 380, W, H - 380);
+    // plataformas
+    const pillar = (x0, x1, y) => { ctx.fillStyle = C.ink; ctx.fillRect(x0, y, x1 - x0, H - y + 2); ctx.fillStyle = C.wood; ctx.fillRect(x0, y, x1 - x0, 6); };
+    pillar(-2, r.xa, r.ya); pillar(r.xb, r.xc, r.yb);
+    ctx.fillStyle = C.coral; ctx.fillRect((r.xb + r.xc) / 2 - 4, r.yb - 1, 8, 4);
+    const S = phase === 'aim' ? null : (r.sim || (r.sim = bridgeFrames(r, mark)));
+    const fi = !S ? 0 : phase === 'result' || !anim ? S.frames.length - 1 : Math.max(0, Math.min(S.frames.length - 1, Math.floor(anim.t * 60) || 0));
+    const f = S ? S.frames[fi] : null;
+    // tabla ideal (resultado)
+    if (phase === 'result') {
+      const cx = (r.xb + r.xc) / 2;
+      ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = C.coral; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(r.xa, r.ya); ctx.lineTo(cx, r.yb); ctx.stroke(); ctx.restore();
+      label(Math.min(W - 70, cx + 10), r.yb + 40, 'perfect ' + cm(r.answer) + ' cm', C.coral);
+    }
+    // tabla
+    const L = mark ?? 0;
+    if (L > 0 || phase !== 'aim') {
+      const th = f ? f[0] : 0;
+      ctx.save(); ctx.translate(r.xa, r.ya); ctx.rotate(th);
+      ctx.fillStyle = C.wood; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; roundRect(-6, -L, 6, L, 2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = C.ink; ctx.globalAlpha = 0.2; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-3, -L + 4); ctx.lineTo(-3, -4); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+    if (phase === 'aim') {
+      if (mark == null) {
+        ctx.save(); ctx.setLineDash([4, 5]); ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(r.xa - 3, r.ya); ctx.lineTo(r.xa - 3, r.ya - 70); ctx.stroke(); ctx.restore();
+        arrow(r.xa - 3, r.ya - 40, r.xa - 3, r.ya - 90, C.azul, 2.5);
+        ctx.font = mono(11); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'left'; ctx.fillText('drag up to grow the plank', Math.max(8, r.xa - 60), r.ya - 104);
+      }
+      drawSkin(ctx, r.xa - 34, r.ya - rb, rb, skin, 0);
+    } else drawSkin(ctx, f[1], f[2], rb, skin, f[3]);
+    if (phase === 'result' && mark != null) label(Math.max(60, r.xa - 10), r.ya - 30, 'you ' + cm(mark) + ' cm', C.azul);
   }
 
   window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME, setSkin: (look) => { skin = look || skin; draw(); }, drawMarble: (g, x, y, r, look, ang) => { readColors(); drawSkin(g, x, y, r, look, ang); } };

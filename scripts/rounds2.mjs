@@ -323,3 +323,26 @@ export function genGears(seed, level) {
   }
   throw new Error('No gears ' + seed);
 }
+
+/* ---------- Bridge: ¿qué largo tiene que tener la tabla? ----------
+   La tabla se levanta en vertical en el borde de la plataforma y cae girando
+   sobre ese borde. La canica rueda hasta su punta: si la punta queda sobre la
+   plataforma de destino, llega; si no, cae al vacío. 2 px = 1 cm. */
+export function genBridge(seed, level) {
+  const rand = mulberry32(seed);
+  for (let a = 0; a < 5000; a++) {
+    const dy = level === 1 ? 0 : Math.round(level === 2 ? 40 + rand() * 100 : 100 + rand() * 110);
+    const ya = Math.round(level === 1 ? 380 + rand() * 70 : 300 + rand() * 120);
+    const yb = ya + dy;
+    if (yb > 560) continue;
+    const xa = Math.round(60 + rand() * 60);
+    const gap = Math.round(level === 1 ? 90 + rand() * 120 : level === 2 ? 80 + rand() * 130 : 120 + rand() * 120);
+    const wT = Math.round(level === 1 ? 60 + rand() * 30 : level === 2 ? 44 + rand() * 26 : 26 + rand() * 16);
+    const xb = xa + gap, xc = xb + wT;
+    if (xc > 388) continue;
+    const lo = Math.hypot(xb - xa, dy), hi = Math.hypot(xc - xa, dy), best = Math.hypot((xb + xc) / 2 - xa, dy);
+    if (hi > ya - 40) continue;                                 // que quepa la tabla de pie en la pantalla
+    return { type: 'bridge', level, xa, ya, xb, xc, yb, answer: r1(best), lo: r1(lo), hi: r1(hi) };
+  }
+  throw new Error('No bridge ' + seed);
+}
