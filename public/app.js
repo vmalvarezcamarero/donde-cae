@@ -4,6 +4,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
 import { SKINS, NAME_COLORS, WELCOME_COINS } from './shop.js';
 import { publicRound, validPrediction, scorePoints } from './scoring.js';
+import { makeCard } from './card.js';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -13,6 +14,7 @@ const countryName = (cc) => { try { return regionName.of(cc); } catch (e) { retu
 const fmtDay = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 const fmtShort = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 const LEVEL = { 1: 'Easy', 2: 'Medium', 3: 'Hard' };
+const SITE = 'gravle.app';   // dirección que aparece al compartir
 const band = (s) => s >= 80 ? 'g' : s >= 40 ? 'y' : 'r';
 const squares = (sc) => sc.map(s => s >= 80 ? '🟩' : s >= 40 ? '🟨' : '🟥').join('');
 
@@ -208,8 +210,9 @@ async function startAttempt() {
     done: showEnd,
   });
 }
+let lastResult = null;
 async function showEnd(r) {
-  show('end');
+  show('end'); lastResult = r;
   const isDemo = !!r.attempt.demo;
   if (!isDemo) { const played = store.get('played', {}); played[r.day.date] = Math.max(played[r.day.date] || 0, r.total); store.set('played', played); }
   $('endLabel').textContent = 'Gravle #' + r.day.n + ' · attempt ' + (r.attempt.index || r.attempt.num);
@@ -231,7 +234,7 @@ async function showEnd(r) {
     $('endLabel').textContent = 'Demo · ' + LEVEL[r.day.level] + ' · new experiments';
     if ($('endJoin')) $('endJoin').hidden = true;
     $('again').hidden = false; $('again').textContent = 'Play again (new maps)';
-    $('share').textContent = 'Gravle · new experiments demo  ' + r.total + '/500\n' + squares(r.scores) + '\n' + location.host + '/?demo';
+    $('share').textContent = 'Gravle · new experiments demo  ' + r.total + '/500\n' + squares(r.scores) + '\n' + SITE + '/?demo';
     return;
   }
   await refresh();
@@ -239,13 +242,38 @@ async function showEnd(r) {
   $('again').hidden = left <= 0;
   $('again').textContent = left > 0 ? 'Second attempt' : '';
   const streak = streakText();
-  $('share').textContent = 'Gravle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' (attempt ' + (r.attempt.index || r.attempt.num) + ')' : '') + '  ' + r.total + '/500\n' + squares(r.scores) + (streak ? '\n' + streak : '') + '\n' + location.host;
+  $('share').textContent = 'Gravle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' (attempt ' + (r.attempt.index || r.attempt.num) + ')' : '') + '  ' + r.total + '/500\n' + squares(r.scores) + (streak ? '\n' + streak : '') + '\n' + SITE;
 }
 $('copy').addEventListener('click', () => {
   const txt = $('share').textContent, btn = $('copy');
   const done = () => { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy result'; }, 1600); };
   const fallback = () => { const sel = getSelection(), rg = document.createRange(); rg.selectNodeContents($('share')); sel.removeAllRanges(); sel.addRange(rg); btn.textContent = 'Text selected: copy it'; };
   try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+});
+// Compartir la tarjeta como imagen: en el móvil abre el menú de compartir
+// (WhatsApp, Instagram, TikTok…); en el ordenador la descarga.
+$('shareImg').addEventListener('click', async () => {
+  const r = lastResult, btn = $('shareImg'); if (!r) return;
+  btn.disabled = true; btn.textContent = 'Making image…';
+  try {
+    const host = SITE;
+    const blob = await makeCard({
+      title: r.attempt.demo ? 'Gravle · demo' : 'Gravle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' · attempt ' + (r.attempt.index || r.attempt.num) : ''),
+      sub: fmtDay.format(new Date(r.day.date + 'T12:00:00')) + ' · ' + LEVEL[r.day.level],
+      total: r.total, scores: r.scores, names: r.types.map(t => window.PhysleGame.TYPE_NAME[t]),
+      icons: r.types.map(t => (ICONS[t] || '').replace(/<\/svg>[\s\S]*$/, '</svg>')),
+      streak: r.attempt.demo ? '' : streakText(), host,
+    });
+    const file = new File([blob], 'gravle-' + (r.day.n || 'demo') + '.png', { type: 'image/png' });
+    const text = $('share').textContent;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], text }); } catch (e) { if (e.name !== 'AbortError') throw e; }
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Image saved. Share it wherever you like!');
+    }
+  } catch (e) { console.error(e); toast('Couldn’t create the image. Try “Copy result” instead.'); }
+  btn.disabled = false; btn.textContent = 'Share image';
 });
 $('endHome').addEventListener('click', () => { if (lastEndDemo) { show('demoHome'); return; } show('home'); refresh(); });
 

@@ -8,12 +8,18 @@
 <meta property="og:title" content="Gravle">
 <meta property="og:description" content="Can you predict physics? 5 experiments a day.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://gravle.app/">
+<meta property="og:image" content="https://gravle.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://gravle.app/og.png">
 <meta name="theme-color" content="#e9efeb" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101b1f" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261021e">
+<link rel="stylesheet" href="styles.css?v=20261021f">
 </head>
 <body>
 <div class="app" id="app">
@@ -113,7 +119,8 @@
     </div>
     <pre class="share" id="share"></pre>
     <div class="bar">
-      <button class="btn" id="copy" type="button">Copy result</button>
+      <button class="btn" id="shareImg" type="button" style="flex:1">Share image</button>
+      <button class="btn ghost" id="copy" type="button" style="flex:1">Copy result</button>
     </div>
     <div class="bar">
       <button class="btn ghost" id="again" type="button" style="flex:1">Second attempt</button>
@@ -227,7 +234,7 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="game.js?v=20261021e"></script>
-<script type="module" src="app.js?v=20261021e"></script>
+<script src="game.js?v=20261021f"></script>
+<script type="module" src="app.js?v=20261021f"></script>
 </body>
 </html>
