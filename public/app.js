@@ -135,7 +135,7 @@ function renderHome() {
     const a = list[i - 1], row = document.createElement('div');
     row.className = 'try' + (a && a.finished && a.total === best ? ' best' : '');
     const shared = a ? a.set === 'A' : (!usedA && i === list.length + 1);
-    const label = 'Attempt ' + i + ' · ' + (shared ? 'shared challenge' : 'new challenge');
+    const label = 'Attempt ' + i + ' · ' + (shared ? 'shared' : 'new games');
     const state = !a ? 'Available' : a.finished ? squares(a.scores) : 'In progress (' + a.round + '/5)';
     row.innerHTML = '<span class="k"></span><span></span><b></b>';
     row.children[0].textContent = label; row.children[1].textContent = state; row.children[2].textContent = a && a.finished ? a.total : '—';
@@ -498,7 +498,7 @@ function renderShop() {
   if (!accountsOn) note.textContent = 'The shop opens together with accounts, very soon.';
   else if (!user) note.innerHTML = 'Coins are saved to your account. <button class="link" type="button" id="shopLogin">Sign in or sign up</button> to start earning ' + WELCOME_COINS + ' as a welcome gift.';
   else if (!p) note.innerHTML = 'Finish your profile to unlock the shop. <button class="link" type="button" id="shopProfile">Do it now</button>';
-  else note.textContent = shopTab === 'skin' ? 'Your marble in “Where will it land?” and “Bank shot”.' : 'How your name looks on the leaderboards.';
+  else note.textContent = shopTab === 'skin' ? 'Your marble in Landing, Bank shot, Loop and Bridge.' : 'How your name looks on the leaderboards.';
   $('shopLogin')?.addEventListener('click', openAuth);
   $('shopProfile')?.addEventListener('click', () => openProfile(true));
   const box = $('items'); box.innerHTML = '';
