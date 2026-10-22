@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Gravle · Five physics experiments a day</title>
-<meta name="description" content="Five physics experiments every day: predict where the marble lands, who wins the race or whether the tower stands. Compete on the global leaderboard.">
-<meta property="og:title" content="Gravle">
+<title>Gravle · The daily physics game</title>
+<meta name="description" content="Gravle is a free daily physics puzzle game. Five new experiments every day: predict where the marble lands, whether the tower stands, where the laser ends… Play in your browser and compete on the global leaderboard.">
+<link rel="canonical" href="https://gravle.app/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"Gravle","url":"https://gravle.app/","description":"A free daily physics puzzle game: five new physics experiments every day. Predict the outcome, then watch the simulation.","genre":["Puzzle","Physics","Daily game"],"gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any","inLanguage":"en","isAccessibleForFree":true,"image":"https://gravle.app/og.png","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"}}</script>
+<meta property="og:title" content="Gravle · The daily physics game">
 <meta property="og:description" content="Can you predict physics? 5 experiments a day.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://gravle.app/">
@@ -19,7 +21,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261021f">
+<link rel="stylesheet" href="styles.css?v=20261022a">
 </head>
 <body>
 <div class="app" id="app">
@@ -157,8 +159,12 @@
     <div class="items" id="items"></div>
   </section>
 
+  <section class="about" aria-labelledby="aboutTitle">
+    <h2 id="aboutTitle">What is Gravle?</h2>
+    <p>Gravle is a free daily physics game. Every day there are five new experiments: guess where a marble will land, which object wins a race, whether a tower stands, where a laser beam ends, how long a bridge must be, which objects float, how gears turn and more. Make your prediction, release, and watch the simulation. You get two attempts a day and your best one counts on the global leaderboard.</p>
+  </section>
   <div class="foot">
-    <span>Gravle · a new challenge every day</span>
+    <span>Gravle · the daily physics game</span>
     <a href="privacy.html">Privacy</a>
   </div>
 </div>
@@ -234,7 +240,7 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="game.js?v=20261021f"></script>
-<script type="module" src="app.js?v=20261021f"></script>
+<script src="game.js?v=20261022a"></script>
+<script type="module" src="app.js?v=20261022a"></script>
 </body>
 </html>

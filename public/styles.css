@@ -257,3 +257,8 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .btn.busy::after { content: ""; display: inline-block; width: 1.2em; text-align: left; animation: dots 1.2s steps(4, end) infinite; }
 @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
 @media (prefers-reduced-motion: reduce) { .btn.busy::after { animation: none; content: "…"; } }
+
+/* Texto "What is Gravle?" al pie: ayuda a que Google entienda la página */
+.about { color: var(--ink-2); font-size: 13px; line-height: 1.5; }
+.about h2 { font: 700 14px var(--font-body); color: var(--ink); margin: 0 0 4px; }
+.about p { margin: 0; }
