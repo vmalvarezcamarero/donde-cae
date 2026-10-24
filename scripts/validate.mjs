@@ -8,7 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'));
 const dir = join(root, 'public', 'days');
 const files = readdirSync(dir).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
-const TYPES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'float', 'gears', 'orbit', 'magnet', 'pour', 'pulley', 'swing', 'spring'];
+const TYPES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'float', 'gears', 'orbit', 'magnet', 'pour', 'pulley', 'swing', 'spring', 'flip', 'jump'];
 const errors = [];
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 
@@ -31,6 +31,8 @@ for (const f of files) {
     if (r.type === 'orbit' && !(r.planets?.length >= 1 && r.frames?.length > 30 && (r.crash >= 0 || r.end?.every(isNum)))) bad('órbita sin final');
     if (r.type === 'magnet' && !(r.mags?.length >= 2 && r.win >= 0 && r.win < r.mags.length && r.frames?.length > 10)) bad('imanes sin ganador');
     if (r.type === 'pour' && !(r.glasses?.length >= 4 && r.first >= 0 && r.frames?.length > 30)) bad('vasos sin ganador');
+    if (r.type === 'flip' && !(r.rows?.length >= 2 && Number.isInteger(r.answer) && r.answer >= 0 && r.answer <= r.rows.length && r.n >= 2)) bad('canicas sin cubo');
+    if (r.type === 'jump' && !(Number.isInteger(r.answer) && r.answer >= 0 && r.answer <= 6 && r.frames?.length > 60 && r.answer !== r.testSlot)) bad('salto sin autobús');
     if (r.type === 'pulley' && ![-1, 0, 1].includes(r.answer)) bad('poleas sin respuesta');
     if (r.type === 'swing' && !(isNum(r.impactX) && r.frames?.length > 20)) bad('péndulo sin caída');
     if (r.type === 'spring' && !(isNum(r.answer) && r.lo <= r.answer && r.answer <= r.hi)) bad('muelle sin tensión correcta');

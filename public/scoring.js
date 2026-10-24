@@ -20,6 +20,8 @@ export function publicRound(r) {
     case 'magnet': return { type: r.type, level: r.level, mags: r.mags, start: r.start };
     case 'pour': return { type: r.type, level: r.level, glasses: r.glasses, pipes: r.pipes };
     case 'pulley': return { type: r.type, level: r.level, left: r.left, right: r.right };
+    case 'flip': return { type: r.type, level: r.level, rows: r.rows, n: r.n };
+    case 'jump': return { type: r.type, level: r.level, lipY: r.lipY, ang: r.ang, deg: r.deg, kmh: r.kmh, test: r.test, testX: r.testX };
     case 'swing': return { type: r.type, level: r.level, px: r.px, py: r.py, L: r.L, th0: r.th0, thc: r.thc, step: r.step };
     case 'spring': return { type: r.type, level: r.level, lx: r.lx, ly: r.ly, ang: r.ang, k: r.k, tx: r.tx, ty: r.ty, bw: r.bw, test: r.test, testX: r.testX, platform: r.platform };
     case 'gears': return { type: r.type, level: r.level, parts: r.parts, links: r.links };
@@ -45,6 +47,8 @@ export function validPrediction(r, p, W = 400) {
     case 'magnet': return Number.isInteger(p) && p >= 0 && p < r.mags.length;
     case 'pour': return Number.isInteger(p) && p >= 0 && p < r.glasses.length;
     case 'pulley': return p === -1 || p === 0 || p === 1;
+    case 'flip': return Number.isInteger(p) && p >= 0 && p <= r.rows.length;
+    case 'jump': return Number.isInteger(p) && p >= 0 && p <= 6;
     case 'swing': return num(p) && p >= 0 && p <= W;
     case 'spring': return num(p) && p >= 0 && p <= 80;
     case 'race': {
@@ -99,6 +103,8 @@ export function scorePoints(r, p) {
     case 'magnet': return p === r.win ? 100 : 0;
     case 'pour': return p === r.first ? 100 : 0;
     case 'pulley': return p === r.answer ? 100 : 0;
+    case 'flip': return p === r.answer ? 100 : 0;
+    case 'jump': return [100, 40][Math.abs(p - r.answer)] ?? 0;
     case 'swing': {
       const err = Math.abs(p - r.impactX) / 4;
       return err <= 2 ? 100 : Math.round(100 * Math.exp(-(err - 2) / 20));

@@ -13,7 +13,7 @@
   const OBJ_NAME = { canica: 'Marble', rueda: 'Solid wheel', aro: 'Hoop', hielo: 'Ice cube' };
   const TYPE_NAME = { balance: 'Balance', drop: 'Where will it land?', race: 'Which finishes first?', pool: 'Bank shot', tower: 'Will it stand?',
     loop: 'Loop the loop', laser: 'Laser', domino: 'Dominoes', bridge: 'Bridge',
-    orbit: 'Orbit', magnet: 'Magnets', pour: 'Which glass fills first?', pulley: 'Pulleys', swing: 'Cut the rope', spring: 'Spring shot', float: 'Float or sink?', gears: 'Gears' };
+    orbit: 'Orbit', magnet: 'Magnets', pour: 'Which glass fills first?', pulley: 'Pulleys', swing: 'Cut the rope', spring: 'Spring shot', flip: 'Marble run', jump: 'Bike jump', float: 'Float or sink?', gears: 'Gears' };
   const num = (x, d = 1) => x.toFixed(d);
   const side = (u) => Math.abs(u) < 0.05 ? 'center' : num(Math.abs(u)) + (u < 0 ? ' left' : ' right');
 
@@ -66,6 +66,8 @@
     orbit: () => 'Where does the comet end up?<small>Gravity bends its path: bigger planets pull harder. Tap the planet it crashes into, or the edge where it leaves.</small>',
     magnet: () => 'The steel ball starts still. Which magnet grabs it?<small>Stronger magnets (×3) pull more, but the pull fades fast with distance. Tap a magnet.</small>',
     pour: () => 'The tap fills glass A. Which glass is full first?<small>Water leaves through the lowest open pipe. Pipes marked ✕ are blocked. Tap a glass.</small>',
+    flip: (r) => 'Marbles 1 to ' + r.n + ' roll down one after another. Which cup does marble #' + r.n + ' end up in?<small>A yellow flipper sends the marble the way it points, then flips to the other side. Grey ramps never flip. Tap a cup.</small>',
+    jump: (r) => 'At ' + r.kmh + ' km/h, where does the bike land?<small>The dotted line is a test jump at ' + r.test + ' km/h. Twice as fast flies four times as far. Tap a bus, or the green ramp if it clears them all.</small>',
     pulley: () => 'Which side goes down?<small>Count the ropes holding each weight: every extra rope shares the load.</small>',
     swing: (r) => 'The ball swings and the rope is cut at the scissors. Where does it land?<small>Tap the floor.' + (r.step ? ' Careful with the step.' : '') + '</small>',
     spring: () => 'How far do you pull the spring to land the ball in the bucket?<small>The dotted line is a test shot. Pulling twice as far launches twice as fast, and that goes much more than twice as far. Drag the ball back.</small>',
@@ -162,6 +164,8 @@
     else if (r.type === 'swing') mark = Math.max(R, Math.min(W - R, x));
     else if (r.type === 'orbit' && isDown) { const k = pickPlanet(r, x, y); mark = k >= 0 ? [k] : snapWall(x, y); }
     else if (r.type === 'magnet' && isDown) { const k = pickMagnet(r, x, y); if (k < 0) return; mark = k; }
+    else if (r.type === 'flip' && isDown) { const k = pickCup(r, x, y); if (k < 0) return; mark = k; }
+    else if (r.type === 'jump' && isDown) { const k = pickBus(x, y); if (k < 0) return; mark = k; }
     else if (r.type === 'pour' && isDown) { const k = pickGlass(r, x, y); if (k < 0) return; mark = k; }
     else if (r.type === 'domino' && isDown) { const k = pickDomino(r, x, y); if (k < 0) return; mark = k; }
     else if (r.type === 'float' && isDown) { const k = pickFloat(r, x, y); if (k < 0) return; toggleFloat(k); return; }
@@ -215,6 +219,8 @@
     if (r.type === 'orbit' || r.type === 'magnet' || r.type === 'swing') return r.frames.length / 60 + 0.3;
     if (r.type === 'pour') return r.frames.length / (60 * (r.speed || 1));
     if (r.type === 'pulley') return 2.0;
+    if (r.type === 'flip') return flipPlan(r).dur + 0.4;
+    if (r.type === 'jump') return r.frames.length / 60;
     if (r.type === 'spring') { if (!r.sim) r.sim = springPath(r, mark); return r.sim.pts.length / 60; }
     if (r.type === 'float') return 3.4;
     if (r.type === 'gears') return 3.2;
@@ -308,6 +314,11 @@
     }
     if (r.type === 'magnet') { const m = r.mags[r.win]; return { pts: 0, l1: mark === r.win ? 'Right magnet!' : 'The ×' + m.s + ' magnet won', l2: 'Strength ×' + m.s + ' · distance matters a lot', d: '×' + m.s + ' magnet won' }; }
     if (r.type === 'pour') return { pts: 0, l1: mark === r.first ? 'Right glass!' : 'Glass ' + GL(r.first) + ' filled first', l2: 'Glass ' + GL(r.first) + ' · you picked ' + GL(mark), d: 'Glass ' + GL(r.first) + ' first' };
+    if (r.type === 'flip') { const ok = mark === r.answer;
+      return { pts: 0, l1: ok ? 'Right cup!' : 'Marble #' + r.n + ' went into cup ' + GL(r.answer), l2: 'Cup ' + GL(r.answer) + ' · you picked ' + GL(mark) + ' · every flipper switches after each marble', d: 'Cup ' + GL(r.answer) + ', you said ' + GL(mark) }; }
+    if (r.type === 'jump') { const off = Math.abs(mark - r.answer), nm = (i) => i >= 6 ? 'the green ramp' : 'bus ' + (i + 1);
+      return { pts: 0, l1: off === 0 ? (r.answer >= 6 ? 'Cleared them all. Spot on!' : 'Perfect landing!') : off === 1 ? 'One bus off' : 'Way off',
+        l2: r.kmh + ' km/h landed on ' + nm(r.answer) + ' · you said ' + nm(mark) + (r.lipY === JP.roof ? ' · ×' + (r.kmh / r.test).toFixed(2) + ' speed = ×' + ((r.kmh / r.test) ** 2).toFixed(2) + ' distance' : ' · the high ramp adds extra fall'), d: 'Landed on ' + nm(r.answer) + ', you said ' + nm(mark) }; }
     if (r.type === 'pulley') { const txt = r.answer === 0 ? 'balanced' : (r.answer < 0 ? 'left' : 'right') + ' goes down';
       return { pts: 0, l1: mark === r.answer ? 'Correct: ' + txt : 'Not quite: ' + txt, l2: 'Left ' + r.left.m + ' kg ÷ ' + r.left.a + ' = ' + (r.left.m / r.left.a).toFixed(1) + ' · right ' + r.right.m + ' kg ÷ ' + r.right.a + ' = ' + (r.right.m / r.right.a).toFixed(1), d: txt[0].toUpperCase() + txt.slice(1) }; }
     if (r.type === 'swing') { const err = Math.abs(mark - r.impactX) / 4;
@@ -374,7 +385,7 @@
     paper();
     const r = round(); if (!r) return;
     if (phase === 'playing' && !anim) return;
-    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge, orbit: drawOrbit, magnet: drawMagnet, pour: drawPour, pulley: drawPulley, swing: drawSwing, spring: drawSpring })[r.type](r);
+    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge, orbit: drawOrbit, magnet: drawMagnet, pour: drawPour, pulley: drawPulley, flip: drawFlip, jump: drawJump, swing: drawSwing, spring: drawSpring })[r.type](r);
   }
   function paper() {
     ctx.fillStyle = C.plate; ctx.fillRect(0, 0, W, H);
@@ -1584,6 +1595,171 @@
     if (phase === 'aim' && mark == null) label(r.lx + 40, r.ly - 120, 'drag the ball back ↙', C['ink-2']);
     if (phase === 'result') label(r.tx, r.ty - 26, 'perfect: ' + (r.answer / 2).toFixed(1) + ' cm', C.coral);
     drawSkin(ctx, bxp, byp, 9, skin, 0);
+  }
+
+  /* ---------- Marble run (palancas) ---------- */
+  function flipGeo(r) {
+    const D = r.rows.length, SP = D === 2 ? 110 : D === 3 ? 88 : 74, DY = D === 2 ? 120 : D === 3 ? 100 : 78, Y0 = D === 4 ? 160 : 170;
+    const P = (k, j) => [200 + (j - k / 2) * SP, Y0 + k * DY];
+    return { D, SP, DY, Y0, P, cupW: Math.min(64, SP * 0.74), cupH: 52 };
+  }
+  function pickCup(r, x, y) { const g = flipGeo(r); for (let j = 0; j <= g.D; j++) { const [cx, cy] = g.P(g.D, j); if (Math.abs(x - cx) < g.SP / 2 && y > cy - 60) return j; } return -1; }
+  function simFlipClient(rows, n) {
+    const st = rows.map(row => row.map(p => p.d)), paths = [];
+    for (let m = 0; m < n; m++) { let j = 0; const path = [0]; for (let k = 0; k < rows.length; k++) { const d = st[k][j]; if (rows[k][j].t === 'f') st[k][j] = -d; if (d > 0) j++; path.push(j); } paths.push(path); }
+    return paths;
+  }
+  function flipPlan(r) {
+    if (r._plan) return r._plan;
+    const g = flipGeo(r), paths = simFlipClient(r.rows, r.n), ms = [], flips = [];
+    let t = 0;
+    paths.forEach((path, m) => {
+      const f = m === r.n - 1 ? 1 : 0.5, tIn = 0.34 * f, seg = 0.32 * f, s0 = t;
+      for (let k = 0; k < g.D; k++) if (r.rows[k][path[k]].t === 'f') flips.push({ t: s0 + tIn + k * seg + seg * 0.25, k, j: path[k] });
+      const end = s0 + tIn + g.D * seg + 0.12 * f;
+      ms.push({ path, s0, tIn, seg, end, f });
+      t = end + 0.08;
+    });
+    return (r._plan = { ms, flips, dur: t });
+  }
+  const queuePos = (g, m) => [176 - m * 21, g.Y0 - 62];
+  function drawFlip(r) {
+    const g = flipGeo(r), { D, P } = g;
+    const T = phase === 'aim' ? -1 : phase === 'result' ? 1e9 : (anim ? anim.t : 0);
+    const plan = T >= 0 ? flipPlan(r) : null;
+    const st = r.rows.map(row => row.map(p => p.d));
+    if (plan) plan.flips.forEach(e => { if (e.t <= T) st[e.k][e.j] *= -1; });
+    // entrada y bandeja
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(176 - (r.n - 1) * 21 - 14, g.Y0 - 52); ctx.lineTo(192, g.Y0 - 52); ctx.stroke();
+    ctx.strokeStyle = C.line; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(200, g.Y0 - 56); ctx.lineTo(200, g.Y0); ctx.stroke();
+    // raíles
+    for (let k = 0; k < D; k++) for (let j = 0; j <= k; j++) {
+      const [x, y] = P(k, j);
+      for (const dj of [0, 1]) {
+        const [x2, y2] = P(k + 1, j + dj), on = (st[k][j] > 0) === (dj === 1);
+        ctx.strokeStyle = on ? C['ink-2'] : C.line; ctx.lineWidth = on ? 6 : 5; ctx.globalAlpha = on ? 0.9 : 0.55;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2 - (k + 1 === D ? 6 : 0)); ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+    // cubos
+    for (let j = 0; j <= D; j++) {
+      const [cx, cy] = P(D, j), x0 = cx - g.cupW / 2;
+      ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(x0, cy, g.cupW, g.cupH);
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x0 + 3, cy + g.cupH); ctx.lineTo(x0 + g.cupW - 3, cy + g.cupH); ctx.lineTo(x0 + g.cupW, cy); ctx.stroke();
+      ctx.fillStyle = C.ink; ctx.font = '800 16px "Bricolage Grotesque", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(GL(j), cx, cy + g.cupH + 20);
+      if (mark === j && phase !== 'playing') { ctx.strokeStyle = C.azul; ctx.lineWidth = 3; roundRect(x0 - 6, cy - 6, g.cupW + 12, g.cupH + 34, 7); ctx.stroke(); if (phase === 'aim') label(cx, cy - 16, 'you', C.azul); }
+      if (phase === 'result' && r.answer === j) { ctx.strokeStyle = C.coral; ctx.lineWidth = 3.5; roundRect(x0 - 10, cy - 10, g.cupW + 20, g.cupH + 42, 9); ctx.stroke(); label(cx, cy - 20, 'marble #' + r.n, C.coral); }
+    }
+    // palancas y rampas
+    for (let k = 0; k < D; k++) for (let j = 0; j <= k; j++) {
+      const [x, y] = P(k, j), d = st[k][j], [x2, y2] = P(k + 1, j + (d > 0 ? 1 : 0)), L = Math.hypot(x2 - x, y2 - y), ux = (x2 - x) / L, uy = (y2 - y) / L;
+      const fixed = r.rows[k][j].t === 'r';
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 11; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + ux * 24, y + uy * 24); ctx.stroke();
+      ctx.strokeStyle = fixed ? '#9aa6b2' : '#f2b705'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + ux * 24, y + uy * 24); ctx.stroke();
+      ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // canicas
+    const ball = (x, y, m) => {
+      const last = m === r.n - 1;
+      ctx.fillStyle = last ? C.coral : '#9aa6b2'; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = '800 10px "Bricolage Grotesque", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(m + 1), x, y + 3.5);
+    };
+    const inCup = {};
+    for (let m = 0; m < r.n; m++) {
+      const M = plan ? plan.ms[m] : null;
+      if (!M || T < M.s0) { const [qx, qy] = queuePos(g, m); ball(qx, qy, m); if (phase === 'aim' && m === r.n - 1) label(qx, qy - 22, 'marble #' + r.n, C.coral); continue; }
+      const cup = M.path[D];
+      if (T >= M.end) { const q = inCup[cup] = (inCup[cup] || 0) + 1; const [cx, cy] = P(D, cup); ball(cx + (q % 2 ? -9 : 9), cy + g.cupH - 10 - Math.floor((q - 1) / 2) * 16, m); continue; }
+      let x, y; const tt = T - M.s0;
+      if (tt < M.tIn) { const [qx, qy] = queuePos(g, m), u = tt / M.tIn; if (u < 0.4) { x = qx + (200 - qx) * u / 0.4; y = qy; } else { x = 200; y = qy + (g.Y0 - qy) * (u - 0.4) / 0.6; } }
+      else {
+        const s = (tt - M.tIn) / M.seg, k = Math.min(D - 1, Math.floor(s)), u = Math.min(1, s - k);
+        const [xa, ya] = P(k, M.path[k]), [xb, yb0] = P(k + 1, M.path[k + 1]), yb = k + 1 === D ? yb0 + g.cupH - 10 : yb0;
+        x = xa + (xb - xa) * u; y = ya + (yb - ya) * u;
+      }
+      ball(x, y, m);
+    }
+    ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center';
+    ctx.fillText('yellow flips after every marble · grey never flips', W / 2, 588);
+  }
+
+  /* ---------- Bike jump ---------- */
+  const JP = { ground: 520, roof: 476, lx: 96, bus0: 112, busW: 38, gap: 4, nBus: 6, land0: 364, kpx: 6.4 };
+  const busX = (i) => JP.bus0 + i * (JP.busW + JP.gap);
+  const slotC = (i) => i >= 6 ? 382 : busX(i) + JP.busW / 2;
+  function pickBus(x, y) { if (y < 200) return -1; if (x >= JP.land0 - 2) return 6; for (let i = 0; i < 6; i++) if (x >= busX(i) - 2 && x <= busX(i) + JP.busW + 2) return i; return -1; }
+  function jumpArc(r, kmh) {
+    const v = kmh * JP.kpx, vx = v * Math.cos(r.ang), vy0 = -v * Math.sin(r.ang), pts = [];
+    for (let t = 0; t < 3; t += 1 / 120) { const x = JP.lx + vx * t, y = r.lipY + vy0 * t + 490 * t * t; pts.push([x, y]); if (vy0 + 980 * t > 0 && y >= JP.roof) break; }
+    return pts;
+  }
+  function drawBike(x, y, ang, ghost) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang); if (ghost) ctx.globalAlpha = 0.3;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 3;
+    for (const wx of [-12, 12]) { ctx.beginPath(); ctx.arc(wx, -7, 6.5, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.strokeStyle = ghost ? C['ink-2'] : C.coral; ctx.lineWidth = 4.5;
+    ctx.beginPath(); ctx.moveTo(-12, -7); ctx.lineTo(-4, -15); ctx.lineTo(8, -15); ctx.lineTo(12, -7); ctx.stroke();
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(8, -15); ctx.lineTo(10, -20); ctx.stroke();
+    ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(-3, -16); ctx.lineTo(0, -28); ctx.lineTo(9, -21); ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(2, -32, 5.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  function drawJump(r) {
+    const { ground, roof } = JP;
+    // fondo: cielo, nubes y ciudad a lo lejos
+    ctx.fillStyle = 'rgba(90,150,220,.10)'; ctx.fillRect(0, 0, W, ground);
+    ctx.fillStyle = 'rgba(255,255,255,.75)';
+    for (const [cx, cy, s] of [[80, 330, 1], [300, 300, 1.3], [210, 380, 0.8]]) { ctx.beginPath(); ctx.ellipse(cx, cy, 30 * s, 10 * s, 0, 0, Math.PI * 2); ctx.ellipse(cx + 16 * s, cy - 7 * s, 18 * s, 10 * s, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = 'rgba(60,72,92,.12)';
+    let bx = 0; for (let k = 0; bx < W; k++) { const w = 22 + (k * 37) % 26, h = 40 + (k * 53) % 70; ctx.fillRect(bx, ground - 44 - h, w, h + 44); bx += w + 3; }
+    ctx.fillStyle = C.paper; ctx.fillRect(0, ground, W, H - ground);
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, ground); ctx.lineTo(W, ground); ctx.stroke();
+    // plataforma y rampa
+    const hw = Math.min(ground - r.lipY, 36), baseY = r.lipY + hw, footX = JP.lx - hw / Math.tan(r.ang);
+    if (baseY < ground) { ctx.fillStyle = C['ink-2']; ctx.fillRect(-2, baseY, JP.lx + 2, ground - baseY); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.strokeRect(-2, baseY, JP.lx + 2, ground - baseY); }
+    ctx.fillStyle = C.wood; ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(footX, baseY); ctx.lineTo(JP.lx, r.lipY); ctx.lineTo(JP.lx, baseY); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.font = mono(10); ctx.fillStyle = C.ink; ctx.textAlign = 'right'; ctx.fillText(r.deg + '°', JP.lx - 6, baseY - 4);
+    // autobuses
+    for (let i = 0; i < 6; i++) {
+      const x = busX(i), bh = ground - 6 - roof;
+      ctx.fillStyle = C.mostaza; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; roundRect(x, roof, JP.busW, bh, 5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#dfe9f3'; for (let w = 0; w < 3; w++) { roundRect(x + 4 + w * 11, roof + 7, 8, 10, 2); ctx.fill(); }
+      ctx.fillStyle = C.ink; for (const wx of [x + 9, x + JP.busW - 9]) { ctx.beginPath(); ctx.arc(wx, ground - 5, 5, 0, Math.PI * 2); ctx.fill(); }
+      ctx.font = '800 15px "Bricolage Grotesque", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), x + JP.busW / 2, ground + 22);
+    }
+    // rampa de aterrizaje
+    ctx.fillStyle = C.good; ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(JP.land0, roof); ctx.lineTo(W + 2, roof + 36 * 0.9); ctx.lineTo(W + 2, ground); ctx.lineTo(JP.land0, ground); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.font = '800 11px "Bricolage Grotesque", system-ui, sans-serif'; ctx.fillText('ALL', 382, ground + 20);
+    // panel de velocidades
+    ctx.fillStyle = C.paper; ctx.strokeStyle = C.line; ctx.lineWidth = 2; roundRect(24, 178, 352, 62, 10); ctx.fill(); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.fillText('test jump', 112, 196); ctx.fillText('this jump', 288, 196);
+    ctx.font = '800 24px "Bricolage Grotesque", system-ui, sans-serif'; ctx.fillStyle = C['ink-2']; ctx.fillText(r.test + ' km/h', 112, 226);
+    ctx.fillStyle = C.coral; ctx.fillText(r.kmh + ' km/h', 288, 226);
+    ctx.fillStyle = C['ink-2']; ctx.font = '800 18px system-ui, sans-serif'; ctx.fillText('→', 200, 222);
+    // salto de prueba
+    const TP = jumpArc(r, r.test);
+    ctx.save(); ctx.setLineDash([3, 5]); ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 1.5; ctx.beginPath(); TP.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); ctx.restore();
+    const [tx, ty] = TP[TP.length - 1]; drawBike(tx, ty, 0, true);
+    label(tx, ty - 48, 'test ' + r.test + ' km/h', C['ink-2']);
+    // marca
+    if (mark != null && phase !== 'playing') {
+      const cx = slotC(mark), x0 = mark >= 6 ? JP.land0 - 4 : busX(mark) - 4, w = mark >= 6 ? W - JP.land0 + 2 : JP.busW + 8;
+      ctx.strokeStyle = C.azul; ctx.lineWidth = 3; roundRect(x0, roof - 6, w, ground - roof + 36, 6); ctx.stroke();
+      if (phase === 'aim') label(cx, roof - 18, 'you', C.azul);
+    }
+    if (phase === 'result') {
+      const cx = slotC(r.answer), x0 = r.answer >= 6 ? JP.land0 - 8 : busX(r.answer) - 8, w = r.answer >= 6 ? W - JP.land0 + 6 : JP.busW + 16;
+      ctx.strokeStyle = C.coral; ctx.lineWidth = 3.5; roundRect(x0, roof - 10, w, ground - roof + 44, 8); ctx.stroke();
+      label(cx, ground + 46, 'landed here', C.coral);
+    }
+    // moto
+    const fi = phase === 'aim' ? 13 : frameAt(r.frames), f = r.frames ? r.frames[fi] : null;
+    if (phase !== 'aim' && f) { trail(r.frames.map(q => [q[0], q[1] - 10]), fi, C.coral); drawBike(f[0], f[1], f[2], false); }
+    else { const x = Math.max(14, footX - 26); drawBike(x, baseY, 0, false); }
   }
 
   window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME, setSkin: (look) => { skin = look || skin; draw(); }, drawMarble: (g, x, y, r, look, ang) => { readColors(); drawSkin(g, x, y, r, look, ang); } };

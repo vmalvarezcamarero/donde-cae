@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { W, H, FLOOR, R, hashStr, mulberry32, genBalance, genDrop, genRace, genPool, genTower } from './rounds.mjs';
 import { genLoop, genLaser, genBridge, genFloat, genGears } from './rounds2.mjs';
 import { genOrbit, genMagnets, genPour, genPulley, genSwing, genSpring } from './rounds3.mjs';
+import { genFlip, genJump } from './rounds4.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'));
@@ -40,11 +41,11 @@ const RACE_FORMATS = ['curvas', 'objetos', 'terrenos'];
 // el reto A (el del primer intento, igual para todos) y el reto B son los otros 5:
 // así el segundo intento es de verdad distinto. Como mucho 2 de cada grupo en el
 // reto A, para mezclar formas de jugar.
-// 15 experimentos. "Float or sink?" queda fuera de la rotación (no gustó en la beta).
-export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'gears', 'orbit', 'magnet', 'pour', 'pulley', 'swing', 'spring'];
-const GROUP = { drop: 'tap', pool: 'tap', laser: 'tap', swing: 'tap', orbit: 'tap',
+// 15 experimentos. "Float or sink?", Orbit y Pour quedan fuera de la rotación (no gustaron en la beta).
+export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'gears', 'jump', 'magnet', 'flip', 'pulley', 'swing', 'spring'];
+const GROUP = { drop: 'tap', pool: 'tap', laser: 'tap', swing: 'tap', jump: 'tap',
   balance: 'slide', loop: 'slide', bridge: 'slide', spring: 'slide',
-  race: 'pick', tower: 'pick', gears: 'pick', magnet: 'pick', pour: 'pick', pulley: 'pick' };
+  race: 'pick', tower: 'pick', gears: 'pick', magnet: 'pick', flip: 'pick', pulley: 'pick' };
 
 // Plan de la semana (de lunes a domingo): reparte los juegos para que cada uno
 // salga 3 o 4 veces en el reto A y ninguno desaparezca varios días seguidos.
@@ -113,6 +114,8 @@ function buildSet(date, setId, n, lvl, games) {
     pulley: () => genPulley(seed + 14, lvl),
     swing: () => genSwing(seed + 15, lvl),
     spring: () => genSpring(seed + 16, lvl),
+    flip: () => genFlip(seed + 17, lvl),
+    jump: () => genJump(seed + 18, lvl),
   };
   return games.map(g => make[g]());
 }
