@@ -10,7 +10,7 @@ for (const lvl of [1, 2, 3]) {
   out.levels[lvl] = [];
   for (let v = 0; v < VARIANTS; v++) {
     const seed = hashStr('demo:' + lvl + ':' + v);
-    out.levels[lvl].push([genJump(seed + 1, lvl), genFlip(seed + 3, lvl), genMagnets(seed + 2, lvl), genPulley(seed + 4, lvl), genSwing(seed + 5, lvl), genSpring(seed + 6, lvl)]);
+    out.levels[lvl].push([genFlip(seed + 3, lvl), genMagnets(seed + 2, lvl), genPulley(seed + 4, lvl), genSwing(seed + 5, lvl), genSpring(seed + 6, lvl)]);
   }
 }
 writeFileSync(new URL('../public/demo.json', import.meta.url), JSON.stringify(out));

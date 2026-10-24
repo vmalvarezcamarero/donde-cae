@@ -66,7 +66,7 @@
     orbit: () => 'Where does the comet end up?<small>Gravity bends its path: bigger planets pull harder. Tap the planet it crashes into, or the edge where it leaves.</small>',
     magnet: () => 'The steel ball starts still. Which magnet grabs it?<small>Stronger magnets (×3) pull more, but the pull fades fast with distance. Tap a magnet.</small>',
     pour: () => 'The tap fills glass A. Which glass is full first?<small>Water leaves through the lowest open pipe. Pipes marked ✕ are blocked. Tap a glass.</small>',
-    flip: (r) => 'Marbles 1 to ' + r.n + ' roll down one after another. Which cup does marble #' + r.n + ' end up in?<small>A yellow flipper sends the marble the way it points, then flips to the other side. Grey ramps never flip. Tap a cup.</small>',
+    flip: (r) => 'Marbles 1 to ' + r.n + ' roll down one after another. Which cup does marble #' + r.n + ' end up in?<small>Each yellow gate blocks one tube, so the marble takes the open one (green arrow). Then the gate swaps sides for the next marble. Grey gates never move. Tap a cup.</small>',
     jump: (r) => 'At ' + r.kmh + ' km/h, where does the bike land?<small>The dotted line is a test jump at ' + r.test + ' km/h. Twice as fast flies four times as far. Tap a bus, or the green ramp if it clears them all.</small>',
     pulley: () => 'Which side goes down?<small>Count the ropes holding each weight: every extra rope shares the load.</small>',
     swing: (r) => 'The ball swings and the rope is cut at the scissors. Where does it land?<small>Tap the floor.' + (r.step ? ' Careful with the step.' : '') + '</small>',
@@ -1627,22 +1627,24 @@
     const g = flipGeo(r), { D, P } = g;
     const T = phase === 'aim' ? -1 : phase === 'result' ? 1e9 : (anim ? anim.t : 0);
     const plan = T >= 0 ? flipPlan(r) : null;
-    const st = r.rows.map(row => row.map(p => p.d));
-    if (plan) plan.flips.forEach(e => { if (e.t <= T) st[e.k][e.j] *= -1; });
-    // entrada y bandeja
+    // estado de cada compuerta en el instante T (con el giro animado)
+    const FLIPT = 0.2, st = r.rows.map(row => row.map(p => p.d)), prog = r.rows.map(row => row.map(() => 1));
+    if (plan) plan.flips.forEach(e => { if (e.t <= T) { st[e.k][e.j] *= -1; const p = (T - e.t) / FLIPT; if (p < 1) prog[e.k][e.j] = p; } });
+    const tube = (pts, w) => {
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = C.ink; ctx.lineWidth = w + 5; ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(...q) : ctx.moveTo(...q)); ctx.stroke();
+      ctx.strokeStyle = C.paper; ctx.lineWidth = w; ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(...q) : ctx.moveTo(...q)); ctx.stroke();
+    };
+    // bandeja de salida y tubo de entrada
     ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(176 - (r.n - 1) * 21 - 14, g.Y0 - 52); ctx.lineTo(192, g.Y0 - 52); ctx.stroke();
-    ctx.strokeStyle = C.line; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(200, g.Y0 - 56); ctx.lineTo(200, g.Y0); ctx.stroke();
-    // raíles
+    ctx.beginPath(); ctx.moveTo(176 - (r.n - 1) * 21 - 14, g.Y0 - 52); ctx.lineTo(188, g.Y0 - 52); ctx.stroke();
+    tube([[200, g.Y0 - 60], [200, g.Y0]], 16);
+    // tubos
     for (let k = 0; k < D; k++) for (let j = 0; j <= k; j++) {
       const [x, y] = P(k, j);
-      for (const dj of [0, 1]) {
-        const [x2, y2] = P(k + 1, j + dj), on = (st[k][j] > 0) === (dj === 1);
-        ctx.strokeStyle = on ? C['ink-2'] : C.line; ctx.lineWidth = on ? 6 : 5; ctx.globalAlpha = on ? 0.9 : 0.55;
-        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2 - (k + 1 === D ? 6 : 0)); ctx.stroke();
-      }
+      for (const dj of [0, 1]) { const [x2, y2] = P(k + 1, j + dj); tube([[x, y], [x2, k + 1 === D ? y2 + 4 : y2]], 16); }
     }
-    ctx.globalAlpha = 1;
+    for (let k = 0; k < D; k++) for (let j = 0; j <= k; j++) { const [x, y] = P(k, j); ctx.fillStyle = C.paper; ctx.beginPath(); ctx.arc(x, y, 10.5, 0, Math.PI * 2); ctx.fill(); }
     // cubos
     for (let j = 0; j <= D; j++) {
       const [cx, cy] = P(D, j), x0 = cx - g.cupW / 2;
@@ -1652,13 +1654,29 @@
       if (mark === j && phase !== 'playing') { ctx.strokeStyle = C.azul; ctx.lineWidth = 3; roundRect(x0 - 6, cy - 6, g.cupW + 12, g.cupH + 34, 7); ctx.stroke(); if (phase === 'aim') label(cx, cy - 16, 'you', C.azul); }
       if (phase === 'result' && r.answer === j) { ctx.strokeStyle = C.coral; ctx.lineWidth = 3.5; roundRect(x0 - 10, cy - 10, g.cupW + 20, g.cupH + 42, 9); ctx.stroke(); label(cx, cy - 20, 'marble #' + r.n, C.coral); }
     }
-    // palancas y rampas
+    // compuertas: la pala tapa el tubo cerrado y una flecha verde marca el abierto
+    const gate = (x, y, ang, fixed, s = 1) => {
+      // pieza en T que gira sobre el eje: el travesaño corta el tubo cerrado
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.scale(s, s);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const col = fixed ? '#9aa6b2' : '#f2b705';
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 11; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(20, 0); ctx.moveTo(20, -15); ctx.lineTo(20, 15); ctx.stroke();
+      ctx.strokeStyle = col; ctx.lineWidth = 6.5; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(20, 0); ctx.moveTo(20, -15); ctx.lineTo(20, 15); ctx.stroke();
+      ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = fixed ? '#9aa6b2' : '#fff'; ctx.beginPath(); ctx.arc(0, 0, 2.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    };
+    const chevron = (x, y, ang, col) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.strokeStyle = col; ctx.lineWidth = 3.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (const o of [-6, 4]) { ctx.beginPath(); ctx.moveTo(o - 4, -5.5); ctx.lineTo(o + 2, 0); ctx.lineTo(o - 4, 5.5); ctx.stroke(); } ctx.restore();
+    };
     for (let k = 0; k < D; k++) for (let j = 0; j <= k; j++) {
-      const [x, y] = P(k, j), d = st[k][j], [x2, y2] = P(k + 1, j + (d > 0 ? 1 : 0)), L = Math.hypot(x2 - x, y2 - y), ux = (x2 - x) / L, uy = (y2 - y) / L;
-      const fixed = r.rows[k][j].t === 'r';
-      ctx.strokeStyle = C.ink; ctx.lineWidth = 11; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + ux * 24, y + uy * 24); ctx.stroke();
-      ctx.strokeStyle = fixed ? '#9aa6b2' : '#f2b705'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + ux * 24, y + uy * 24); ctx.stroke();
-      ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill();
+      const [x, y] = P(k, j), d = st[k][j], fixed = r.rows[k][j].t === 'r';
+      const angTo = (dj) => { const [x2, y2] = P(k + 1, j + dj); return Math.atan2(y2 - y, x2 - x); };
+      const openA = angTo(d > 0 ? 1 : 0), closedA = angTo(d > 0 ? 0 : 1), oldClosed = angTo(d > 0 ? 1 : 0);
+      const p = prog[k][j], e = p * p * (3 - 2 * p), ga = oldClosed + (closedA - oldClosed) * e;
+      if (p >= 1) { const [x2, y2] = P(k + 1, j + (d > 0 ? 1 : 0)); chevron(x + (x2 - x) * 0.42, y + (y2 - y) * 0.42, openA, C.good); }
+      gate(x, y, ga, fixed);
     }
     // canicas
     const ball = (x, y, m) => {
@@ -1682,8 +1700,9 @@
       }
       ball(x, y, m);
     }
-    ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center';
-    ctx.fillText('yellow flips after every marble · grey never flips', W / 2, 588);
+    // leyenda
+    gate(26, 584, -1.2, false, 0.7); ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'left'; ctx.fillText('swaps sides after each marble', 52, 583);
+    gate(232, 584, -1.2, true, 0.7); ctx.fillText('never moves', 258, 583);
   }
 
   /* ---------- Bike jump ---------- */

@@ -41,9 +41,9 @@ const RACE_FORMATS = ['curvas', 'objetos', 'terrenos'];
 // el reto A (el del primer intento, igual para todos) y el reto B son los otros 5:
 // así el segundo intento es de verdad distinto. Como mucho 2 de cada grupo en el
 // reto A, para mezclar formas de jugar.
-// 15 experimentos. "Float or sink?", Orbit y Pour quedan fuera de la rotación (no gustaron en la beta).
-export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'gears', 'jump', 'magnet', 'flip', 'pulley', 'swing', 'spring'];
-const GROUP = { drop: 'tap', pool: 'tap', laser: 'tap', swing: 'tap', jump: 'tap',
+// 14 experimentos. "Float or sink?", Orbit, Pour y Bike jump quedan fuera de la rotación (no gustaron en la beta).
+export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'gears', 'magnet', 'flip', 'pulley', 'swing', 'spring'];
+const GROUP = { drop: 'tap', pool: 'tap', laser: 'tap', swing: 'tap',
   balance: 'slide', loop: 'slide', bridge: 'slide', spring: 'slide',
   race: 'pick', tower: 'pick', gears: 'pick', magnet: 'pick', flip: 'pick', pulley: 'pick' };
 
@@ -63,10 +63,10 @@ export function weekPlan(monday) {
     return p.length === 5 ? p : null;
   };
   // Reglas del reto A de la semana:
-  //  · cada juego sale 2 o 3 veces (35 huecos para 15 juegos),
+  //  · cada juego sale 2 o 3 veces (35 huecos para 14 juegos),
   //  · como mucho 2 juegos del mismo tipo de respuesta por día,
   //  · de un día al siguiente se repiten como mucho 2.
-  // El reto B (segundo intento) son 5 de los 10 que no salen en el A, con la misma regla de tipos.
+  // El reto B (segundo intento) son 5 de los 9 que no salen en el A, con la misma regla de tipos.
   let best = null;
   for (let tryN = 0; tryN < 4000 && !best; tryN++) {
     const count = Object.fromEntries(GAMES.map(g => [g, 0])), days = [];
