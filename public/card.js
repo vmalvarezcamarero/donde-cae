@@ -36,11 +36,11 @@ export async function makeCard(res) {
   g.fillStyle = P.ink2; g.font = '600 34px ' + MONO; g.fillText(res.title.toUpperCase(), px + 56, py + 82);
   if (res.sub) { g.font = '500 30px ' + MONO; g.fillText(res.sub.toUpperCase(), px + 56, py + 126); }
   g.fillStyle = P.ink; g.font = '800 200px ' + DISPLAY; g.fillText(String(res.total), px + 50, py + 320);
-  const tw = g.measureText(String(res.total)).width; g.fillStyle = P.ink2; g.font = '700 64px ' + DISPLAY; g.fillText('/ 500', px + 70 + tw, py + 320);
+  const tw = g.measureText(String(res.total)).width; g.fillStyle = P.ink2; g.font = '700 64px ' + DISPLAY; g.fillText('/ ' + res.scores.length * 100, px + 70 + tw, py + 320);
   // rondas
   const icons = await Promise.all(res.icons.map(svgImage));
   res.scores.forEach((s, i) => {
-    const y = py + 380 + i * 96;
+    const y = py + 380 + i * Math.min(96, 500 / res.scores.length);
     g.fillStyle = band(s); rr(g, px + 56, y + 14, 56, 56, 12); g.fill();
     if (icons[i]) g.drawImage(icons[i], px + 136, y - 2, 88, 88);
     g.fillStyle = P.ink; g.font = '600 44px ' + BODY; g.fillText(res.names[i], px + 246, y + 58);

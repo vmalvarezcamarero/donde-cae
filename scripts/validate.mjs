@@ -8,7 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'));
 const dir = join(root, 'public', 'days');
 const files = readdirSync(dir).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
-const TYPES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'float', 'gears'];
+const TYPES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'float', 'gears', 'orbit', 'magnet', 'pour', 'pulley', 'swing', 'spring'];
 const errors = [];
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 
@@ -28,6 +28,12 @@ for (const f of files) {
     if (r.type === 'laser' && !(r.path?.length >= 3 && r.end?.every(isNum))) bad('láser sin recorrido');
     if (r.type === 'bridge' && !(isNum(r.lo) && isNum(r.hi) && r.lo < r.answer && r.answer < r.hi && r.hi < r.ya)) bad('puente con medidas imposibles');
     if (r.type === 'float' && !(r.items?.length >= 5 && Array.isArray(r.answer) && r.dens?.length === r.items.length)) bad('flotar sin objetos o respuesta');
+    if (r.type === 'orbit' && !(r.planets?.length >= 1 && r.frames?.length > 30 && (r.crash >= 0 || r.end?.every(isNum)))) bad('órbita sin final');
+    if (r.type === 'magnet' && !(r.mags?.length >= 2 && r.win >= 0 && r.win < r.mags.length && r.frames?.length > 10)) bad('imanes sin ganador');
+    if (r.type === 'pour' && !(r.glasses?.length >= 4 && r.first >= 0 && r.frames?.length > 30)) bad('vasos sin ganador');
+    if (r.type === 'pulley' && ![-1, 0, 1].includes(r.answer)) bad('poleas sin respuesta');
+    if (r.type === 'swing' && !(isNum(r.impactX) && r.frames?.length > 20)) bad('péndulo sin caída');
+    if (r.type === 'spring' && !(isNum(r.answer) && r.lo <= r.answer && r.answer <= r.hi)) bad('muelle sin tensión correcta');
     if (r.type === 'gears' && !(r.parts?.length >= 3 && r.w?.length === r.parts.length && [1, -1].includes(r.answer?.dir))) bad('engranajes sin respuesta');
     if (r.type === 'balance' && !(isNum(r.answer) && Math.abs(r.answer) <= 10.5 && r.weights?.length >= 2)) bad('equilibrio sin solución válida');
     if (r.type === 'drop' && !(r.frames?.length > 30 && isNum(r.impactX) && r.impactX > 0 && r.impactX < d.W)) bad('caída sin trayectoria o impacto fuera del suelo');

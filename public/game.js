@@ -12,7 +12,8 @@
   const ORD = (k) => ['1st', '2nd', '3rd', '4th'][k];
   const OBJ_NAME = { canica: 'Marble', rueda: 'Solid wheel', aro: 'Hoop', hielo: 'Ice cube' };
   const TYPE_NAME = { balance: 'Balance', drop: 'Where will it land?', race: 'Which finishes first?', pool: 'Bank shot', tower: 'Will it stand?',
-    loop: 'Loop the loop', laser: 'Laser', domino: 'Dominoes', bridge: 'Bridge', float: 'Float or sink?', gears: 'Gears' };
+    loop: 'Loop the loop', laser: 'Laser', domino: 'Dominoes', bridge: 'Bridge',
+    orbit: 'Orbit', magnet: 'Magnets', pour: 'Which glass fills first?', pulley: 'Pulleys', swing: 'Cut the rope', spring: 'Spring shot', float: 'Float or sink?', gears: 'Gears' };
   const num = (x, d = 1) => x.toFixed(d);
   const side = (u) => Math.abs(u) < 0.05 ? 'center' : num(Math.abs(u)) + (u < 0 ? ' left' : ' right');
 
@@ -56,11 +57,18 @@
       : r.format === 'terrenos'
         ? 'Watch out for the sand: it slows the marbles down. In what order do they finish?<small>Tap the tracks in order, starting with the one you think wins.</small>'
         : 'They all start together, with no friction. In what order do they finish?<small>Tap the tracks in order, starting with the one you think wins.</small>',
-    pool: () => 'The ball leaves along the arrow, bounces off the cushions and the cloth slows it down. Where does it stop?<small>Tap the table where you think it will come to rest.</small>',
-    tower: () => 'If the tower falls, which block hits the ground first?<small>Tap that block, or choose “It stands” if you think it won’t fall. Dark blocks weigh three times as much.</small>',
+    pool: () => 'The ball leaves along the arrow and bounces off the cushions. Where does it stop?<small>Above the table you can see how far it would roll in a straight line; every cushion it hits keeps about 2/3 of what’s left. Rail ticks are every 20 cm.</small>',
+    tower: (r) => { const mats = [...new Set(r.blocks.map(b => b.mat || (b.d > 1 ? 'steel' : 'wood')))];
+      return 'If the tower falls, which block hits the ground first?<small>Tap that block, or choose “It stands”. Same size, different weight: ' + mats.map(m => MAT_NAME[m] + ' ×' + MAT_W[m]).join(' · ') + '.</small>'; },
     loop: (r) => 'What’s the lowest height that gets the marble all the way round the loop?<small>Drag the marble up or down the ramp. Too low and it falls off the loop.' + (r.carpet ? ' The carpet slows it down.' : '') + '</small>',
     laser: () => 'The laser bounces off every mirror it hits. Where does the beam end?<small>Tap the wall where you think it lands. Dark blocks absorb light.</small>',
     bridge: (r) => 'How long must the plank be to bridge the gap?<small>Drag up to grow the plank. It tips over onto the other side and the marble rolls to its tip: too short or too long and it falls.' + (r.yb > r.ya ? ' The far side is lower.' : r.yb < r.ya ? ' The far side is higher: the plank will rest on its edge and the marble drops from the tip.' : '') + '</small>',
+    orbit: () => 'Where does the comet end up?<small>Gravity bends its path: bigger planets pull harder. Tap the planet it crashes into, or the edge where it leaves.</small>',
+    magnet: () => 'The steel ball starts still. Which magnet grabs it?<small>Stronger magnets (×3) pull more, but the pull fades fast with distance. Tap a magnet.</small>',
+    pour: () => 'The tap fills glass A. Which glass is full first?<small>Water leaves through the lowest open pipe. Pipes marked ✕ are blocked. Tap a glass.</small>',
+    pulley: () => 'Which side goes down?<small>Count the ropes holding each weight: every extra rope shares the load.</small>',
+    swing: (r) => 'The ball swings and the rope is cut at the scissors. Where does it land?<small>Tap the floor.' + (r.step ? ' Careful with the step.' : '') + '</small>',
+    spring: () => 'How far do you pull the spring to land the ball in the bucket?<small>The dotted line is a test shot. Pulling twice as far launches twice as fast, and that goes much more than twice as far. Drag the ball back.</small>',
     domino: () => 'Someone pushes the first domino. Which is the last one to fall?<small>Tap that domino. Dark dominoes weigh three times as much.</small>',
     float: (r) => 'Which of these float' + (r.salty ? ' in very salty water' : ' in water') + '?<small>Tap the ones that float; the rest will sink.' + (r.salty ? ' Salt water is denser than fresh water, so it pushes harder.' : '') + '</small>',
     gears: () => 'The first gear turns clockwise. How does the gear with the flag turn?<small>Pick its direction and whether it spins faster or slower than the first one.</small>',
@@ -78,12 +86,13 @@
     if (r.type === 'tower') buildTowerChips();
     if (r.type === 'float') { mark = []; buildFloatChips(); }
     if (r.type === 'gears') buildGearChips();
+    if (r.type === 'pulley') buildPulleyChips();
     if (r.type === 'loop') prepLoop(r);
     renderPips(); ready(); draw();
   }
   function renderPips() {
     const p = $('pips'); p.innerHTML = '';
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < day.rounds.length; i++) {
       const d = document.createElement('span'); d.className = 'pip';
       if (i < scores.length) d.classList.add(band(scores[i]));
       else if (i === roundIdx) d.classList.add('now');
@@ -149,6 +158,11 @@
     else if (r.type === 'loop') { if (!aimLoop(r, x, y)) return; }
     else if (r.type === 'laser') mark = snapWall(x, y);
     else if (r.type === 'bridge') { if (!aimBridge(r, x, y)) return; }
+    else if (r.type === 'spring') { if (!aimSpring(r, x, y)) return; }
+    else if (r.type === 'swing') mark = Math.max(R, Math.min(W - R, x));
+    else if (r.type === 'orbit' && isDown) { const k = pickPlanet(r, x, y); mark = k >= 0 ? [k] : snapWall(x, y); }
+    else if (r.type === 'magnet' && isDown) { const k = pickMagnet(r, x, y); if (k < 0) return; mark = k; }
+    else if (r.type === 'pour' && isDown) { const k = pickGlass(r, x, y); if (k < 0) return; mark = k; }
     else if (r.type === 'domino' && isDown) { const k = pickDomino(r, x, y); if (k < 0) return; mark = k; }
     else if (r.type === 'float' && isDown) { const k = pickFloat(r, x, y); if (k < 0) return; toggleFloat(k); return; }
     else if (r.type === 'tower' && isDown) {
@@ -166,7 +180,7 @@
   cv.addEventListener('pointerdown', (ev) => {
     if (phase !== 'aim' || sending) return;
     const [x, y] = toWorld(ev); const t = round().type;
-    if (t === 'drop' || t === 'balance' || t === 'pool' || t === 'loop' || t === 'laser' || t === 'bridge') { dragging = true; cv.setPointerCapture(ev.pointerId); }
+    if (t === 'drop' || t === 'balance' || t === 'pool' || t === 'loop' || t === 'laser' || t === 'bridge' || t === 'spring' || t === 'swing') { dragging = true; cv.setPointerCapture(ev.pointerId); }
     aimAt(x, y, true);
   });
   cv.addEventListener('pointermove', (ev) => { if (dragging && phase === 'aim') { const [x, y] = toWorld(ev); aimAt(x, y, false); } });
@@ -198,6 +212,10 @@
     if (r.type === 'laser') return r.len / LASER_SPEED + 0.5;
     if (r.type === 'domino') return r.frames.length / 60;
     if (r.type === 'bridge') { if (!r.sim) r.sim = bridgeFrames(r, mark); return r.sim.frames.length / 60; }
+    if (r.type === 'orbit' || r.type === 'magnet' || r.type === 'swing') return r.frames.length / 60 + 0.3;
+    if (r.type === 'pour') return r.frames.length / (60 * (r.speed || 1));
+    if (r.type === 'pulley') return 2.0;
+    if (r.type === 'spring') { if (!r.sim) r.sim = springPath(r, mark); return r.sim.pts.length / 60; }
     if (r.type === 'float') return 3.4;
     if (r.type === 'gears') return 3.2;
   }
@@ -281,6 +299,21 @@
       let dpx = Math.abs(perimPos(mark) - perimPos(r.end)); dpx = Math.min(dpx, PERIM - dpx); const d = Math.round(dpx / 2);
       return { pts: 0, l1: dpx <= 6 ? 'Bullseye!' : dpx <= 30 ? 'Very close' : dpx <= 80 ? 'Close' : 'Way off', l2: (r.path.length - 2) + ' reflections · you were ' + d + ' cm away along the wall', d: (r.path.length - 2) + ' reflections, ' + d + ' cm away' };
     }
+    if (r.type === 'orbit') {
+      const name = (i) => ({ coral: 'red', azul: 'blue', mostaza: 'yellow', violeta: 'purple', good: 'green' })[r.planets[i].c] + ' planet';
+      if (r.crash >= 0) { const ok = mark.length === 1 && mark[0] === r.crash; return { pts: 0, l1: ok ? 'Direct hit!' : 'It crashed into the ' + name(r.crash), l2: mark.length === 1 ? 'You picked the ' + name(mark[0]) : 'You thought it would escape', d: 'Crashed into the ' + name(r.crash) }; }
+      if (mark.length !== 2) return { pts: 0, l1: 'It escaped!', l2: 'You thought it would hit the ' + name(mark[0]), d: 'Escaped' };
+      let d = Math.abs(perimPos(mark) - perimPos(r.end)); d = Math.min(d, PERIM - d);
+      return { pts: 0, l1: d <= 10 ? 'Spot on!' : d <= 40 ? 'Very close' : d <= 100 ? 'Close' : 'Way off', l2: 'It escaped · you were ' + Math.round(d / 2) + ' cm away along the edge', d: 'Escaped, ' + Math.round(d / 2) + ' cm away' };
+    }
+    if (r.type === 'magnet') { const m = r.mags[r.win]; return { pts: 0, l1: mark === r.win ? 'Right magnet!' : 'The ×' + m.s + ' magnet won', l2: 'Strength ×' + m.s + ' · distance matters a lot', d: '×' + m.s + ' magnet won' }; }
+    if (r.type === 'pour') return { pts: 0, l1: mark === r.first ? 'Right glass!' : 'Glass ' + GL(r.first) + ' filled first', l2: 'Glass ' + GL(r.first) + ' · you picked ' + GL(mark), d: 'Glass ' + GL(r.first) + ' first' };
+    if (r.type === 'pulley') { const txt = r.answer === 0 ? 'balanced' : (r.answer < 0 ? 'left' : 'right') + ' goes down';
+      return { pts: 0, l1: mark === r.answer ? 'Correct: ' + txt : 'Not quite: ' + txt, l2: 'Left ' + r.left.m + ' kg ÷ ' + r.left.a + ' = ' + (r.left.m / r.left.a).toFixed(1) + ' · right ' + r.right.m + ' kg ÷ ' + r.right.a + ' = ' + (r.right.m / r.right.a).toFixed(1), d: txt[0].toUpperCase() + txt.slice(1) }; }
+    if (r.type === 'swing') { const err = Math.abs(mark - r.impactX) / 4;
+      return { pts: 0, l1: err <= 2 ? 'Spot on!' : err <= 7 ? 'Very close' : err <= 18 ? 'Close' : 'Way off', l2: 'Landed at ' + (r.impactX / 4).toFixed(0) + ' · your mark ' + (mark / 4).toFixed(0), d: 'Landed at ' + (r.impactX / 4).toFixed(0) + ', you said ' + (mark / 4).toFixed(0) }; }
+    if (r.type === 'spring') { const ok = mark >= r.lo && mark <= r.hi, off = Math.abs(mark - r.answer) / 2;
+      return { pts: 0, l1: ok ? (off <= 1 ? 'Swish! Perfect pull' : 'In the bucket!') : mark < r.lo ? 'Too soft: fell short' : 'Too hard: flew over', l2: 'Perfect pull ' + (r.answer / 2).toFixed(1) + ' cm · you ' + (mark / 2).toFixed(1) + ' cm', d: 'Perfect ' + (r.answer / 2).toFixed(1) + ' cm, you ' + (mark / 2).toFixed(1) }; }
     if (r.type === 'bridge') {
       const ok = mark >= r.lo && mark <= r.hi, off = Math.abs(mark - r.answer) / 2;
       return { pts: 0, l1: ok ? (off <= 2 ? 'Perfect plank!' : 'Made it across') : mark < r.lo ? 'Too short: into the void' : 'Too long: it rolled off the end',
@@ -311,7 +344,7 @@
     $('rPts').textContent = '+' + s.pts; $('rPts').className = 'pts ' + band(s.pts);
     $('rL1').textContent = s.l1; $('rL2').textContent = s.l2;
     $('result').hidden = false; $('prompt').hidden = true; $('chips').hidden = true;
-    $('go').disabled = false; $('go').textContent = roundIdx < 4 ? 'Next round' : 'See result';
+    $('go').disabled = false; $('go').textContent = roundIdx < lastN() ? 'Next round' : 'See result';
     renderPips(); try { draw(); } catch (e) { console.error('Gravle draw:', e); }
     $('go').focus({ preventScroll: true });
     // En pantallas bajas el resultado y el botón pueden quedar fuera: se baja hasta ellos.
@@ -320,7 +353,7 @@
       $('go').scrollIntoView({ block: 'end', behavior: reduce ? 'auto' : 'smooth' });
   }
   function next() {
-    if (roundIdx < 4) { roundIdx++; startRound(); return; }
+    if (roundIdx < lastN()) { roundIdx++; startRound(); return; }
     $('play').hidden = true;
     hooks.done({ attempt, day, scores, details, total: scores.reduce((a, b) => a + b, 0), types: day.rounds.map(r => r.type), coins: lastCoins });
   }
@@ -341,7 +374,7 @@
     paper();
     const r = round(); if (!r) return;
     if (phase === 'playing' && !anim) return;
-    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge })[r.type](r);
+    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge, orbit: drawOrbit, magnet: drawMagnet, pour: drawPour, pulley: drawPulley, swing: drawSwing, spring: drawSpring })[r.type](r);
   }
   function paper() {
     ctx.fillStyle = C.plate; ctx.fillRect(0, 0, W, H);
@@ -647,12 +680,19 @@
     ctx.fillStyle = C.plate;
     for (const [dx, dy] of [[0.25, 0], [0.5, 0], [0.75, 0], [0.25, 1], [0.5, 1], [0.75, 1]]) { ctx.beginPath(); ctx.arc(t.x0 + (t.x1 - t.x0) * dx, dy ? t.y1 + b / 2 : t.y0 - b / 2, 2, 0, Math.PI * 2); ctx.fill(); }
     ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center';
-    ctx.fillText('160 × 210 cm table · the cloth slows the ball', W / 2, t.y1 + b + 22);
-    // fuerza
-    const v = Math.hypot(r.v[0], r.v[1]), f = Math.min(1, v / 700);
-    ctx.textAlign = 'left'; ctx.fillText('POWER', t.x0 - b, 46);
+    ctx.fillText('160 × 210 cm table · each cushion keeps about 2/3 of the roll left', W / 2, t.y1 + b + 22);
+    // regla en las bandas: una marca cada 20 cm
+    ctx.fillStyle = C.plate; ctx.globalAlpha = 0.85;
+    for (let x = t.x0 + 40; x < t.x1; x += 40) { ctx.fillRect(x - 0.75, t.y0 - b + 2, 1.5, 6); ctx.fillRect(x - 0.75, t.y1 + b - 8, 1.5, 6); }
+    for (let y = t.y0 + 40; y < t.y1; y += 40) { ctx.fillRect(t.x0 - b + 2, y - 0.75, 6, 1.5); ctx.fillRect(t.x1 + b - 8, y - 0.75, 6, 1.5); }
+    ctx.globalAlpha = 1;
+    // fuerza y cuánto rodaría en línea recta (sin bandas): v² / (2·deceleración), 2 px = 1 cm
+    const v = Math.hypot(r.v[0], r.v[1]), f = Math.min(1, v / 700), roll = v * v / (2 * 230) / 2;
+    ctx.textAlign = 'left'; ctx.fillStyle = C['ink-2']; ctx.fillText('POWER', t.x0 - b, 46);
     ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.strokeRect(t.x0 + 50, 37, 200, 12);
     ctx.fillStyle = C.coral; ctx.fillRect(t.x0 + 51.5, 38.5, 197 * f, 9);
+    ctx.fillStyle = C.ink; ctx.font = mono(11); ctx.fillText('rolls ' + (roll / 100).toFixed(1) + ' m in a straight line', t.x0 + 50, 70);
+    ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'right'; ctx.fillText('ticks: 20 cm', t.x1 + b, 70);
     const [sx, sy] = r.start;
     if (phase === 'aim') arrow(sx, sy, sx + r.v[0] / v * (24 + 70 * f), sy + r.v[1] / v * (24 + 70 * f), C.coral, 3);
     if (mark) {
@@ -676,6 +716,21 @@
   }
 
   /* ---------- ¿Aguanta? ---------- */
+  // Bloques de madera, piedra, acero u oro: cada uno con su aspecto
+  const MAT_NAME = { wood: 'Wood', stone: 'Stone', steel: 'Steel', gold: 'Gold' }, MAT_W = { wood: 1, stone: 2, steel: 4, gold: 6 };
+  function blockMaterial(mat, w, h) {
+    ctx.save(); roundRect(-w / 2, -h / 2, w, h, 4);
+    if (mat === 'wood') ctx.fillStyle = C.wood;
+    else if (mat === 'stone') ctx.fillStyle = '#9aa1a9';
+    else if (mat === 'steel') { const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2); g.addColorStop(0, '#c9d3dc'); g.addColorStop(0.45, '#6f7c89'); g.addColorStop(1, '#46525e'); ctx.fillStyle = g; }
+    else { const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2); g.addColorStop(0, '#fff2b0'); g.addColorStop(0.35, '#e3b341'); g.addColorStop(0.7, '#b8860b'); g.addColorStop(1, '#f5d76e'); ctx.fillStyle = g; }
+    ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke(); ctx.clip();
+    if (mat === 'wood') { ctx.strokeStyle = 'rgba(120,70,20,.3)'; ctx.lineWidth = 1; for (const f of [-0.22, 0.18]) { ctx.beginPath(); ctx.moveTo(-w / 2 + 6, h * f); ctx.quadraticCurveTo(0, h * f - 3, w / 2 - 6, h * f + 2); ctx.stroke(); } }
+    if (mat === 'stone') { ctx.fillStyle = 'rgba(40,46,54,.22)'; for (let k = 0; k < 9; k++) { const sx = ((k * 37) % 100) / 100 * w - w / 2, sy = ((k * 53) % 100) / 100 * h - h / 2; ctx.beginPath(); ctx.arc(sx, sy, 1.8 + (k % 3), 0, Math.PI * 2); ctx.fill(); } }
+    if (mat === 'steel') { ctx.fillStyle = '#e6ecf1'; for (const sx of [-w / 2 + 7, w / 2 - 7]) for (const sy of [-h / 2 + 7, h / 2 - 7]) { ctx.beginPath(); ctx.arc(sx, sy, 2.2, 0, Math.PI * 2); ctx.fill(); } }
+    if (mat === 'gold') { ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-w / 2 + 10, -h / 2 + 8); ctx.lineTo(-w / 2 + 26, -h / 2 + 8); ctx.stroke(); }
+    ctx.restore();
+  }
   function drawTower(r) {
     const floorY = 540;
     ctx.fillStyle = C.paper; ctx.fillRect(0, floorY, W, H - floorY);
@@ -690,13 +745,12 @@
       const [cx, cy, a] = fr ? fr[i] : [b.x + b.w / 2, b.y + b.h / 2, 0];
       if (wob && i > 0) { ctx.translate(200, floorY); ctx.rotate(wob * i / r.blocks.length); ctx.translate(-200, -floorY); }
       ctx.translate(cx, cy); ctx.rotate(a);
-      const heavy = b.d > 1, w = b.w - 3, h = b.h - 3;
-      ctx.fillStyle = heavy ? C['ink-2'] : C.wood; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
-      roundRect(-w / 2, -h / 2, w, h, 4); ctx.fill(); ctx.stroke();
-      if (!heavy) { ctx.strokeStyle = C.ink; ctx.globalAlpha = 0.15; ctx.lineWidth = 1; for (const f of [-0.2, 0.2]) { ctx.beginPath(); ctx.moveTo(-w / 2 + 6, h * f); ctx.lineTo(w / 2 - 6, h * f + 2); ctx.stroke(); } ctx.globalAlpha = 1; }
-      ctx.fillStyle = heavy ? C.plate : C.ink; ctx.textAlign = 'center';
-      ctx.font = '800 16px "Bricolage Grotesque", system-ui, sans-serif'; ctx.fillText(String(i + 1), heavy ? -8 : 0, 6);
-      if (heavy) { ctx.font = mono(10); ctx.fillText('×3', 12, 5); }
+      const mat = b.mat || (b.d > 1 ? 'steel' : 'wood'), w = b.w - 3, h = b.h - 3;
+      blockMaterial(mat, w, h);
+      const dark = mat === 'steel' || mat === 'stone';
+      ctx.fillStyle = dark ? '#fff' : C.ink; ctx.textAlign = 'center';
+      ctx.font = '800 16px "Bricolage Grotesque", system-ui, sans-serif'; ctx.fillText(String(i + 1), b.d > 1 ? -10 : 0, 6);
+      if (b.d > 1) { ctx.font = mono(10); ctx.fillText('×' + b.d, 12, 5); }
       if (mark === i && phase !== 'playing') { ctx.strokeStyle = C.azul; ctx.lineWidth = 3.5; roundRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 6); ctx.stroke(); }
       if (phase === 'result' && r.answer === i) { ctx.strokeStyle = C.coral; ctx.lineWidth = 3.5; roundRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8, 6); ctx.stroke(); }
       ctx.restore();
@@ -1270,6 +1324,266 @@
       drawSkin(ctx, r.xa - 34, r.ya - rb, rb, skin, 0);
     } else drawSkin(ctx, f[1], f[2], rb, skin, f[3]);
     if (phase === 'result' && mark != null) label(Math.max(60, r.xa - 10), r.ya - 30, 'you ' + cm(mark) + ' cm', C.azul);
+  }
+
+
+  /* =================== Seis experimentos más =================== */
+  const lastN = () => day.rounds.length - 1;
+  function floorRuler(fy) {
+    ctx.fillStyle = C.paper; ctx.fillRect(0, fy, W, H - fy);
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, fy); ctx.lineTo(W, fy); ctx.stroke();
+    ctx.lineWidth = 1; ctx.fillStyle = C['ink-2']; ctx.font = mono(10); ctx.textAlign = 'center';
+    for (let u = 0; u <= 100; u += 2.5) { const x = u * 4, big = u % 10 === 0, mid = u % 5 === 0;
+      ctx.strokeStyle = C.ink; ctx.beginPath(); ctx.moveTo(x, fy); ctx.lineTo(x, fy + (big ? 12 : mid ? 8 : 4)); ctx.stroke();
+      if (big && u > 0 && u < 100) ctx.fillText(String(u), x, fy + 25); }
+  }
+  function floorMark(fy) {
+    if (mark == null) return;
+    ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = C.azul; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(mark, 70); ctx.lineTo(mark, fy); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = C.azul; ctx.beginPath(); ctx.moveTo(mark, fy - 1); ctx.lineTo(mark - 7, fy - 13); ctx.lineTo(mark + 7, fy - 13); ctx.closePath(); ctx.fill();
+    label(mark, fy - 22, 'you ' + (mark / 4).toFixed(0), C.azul);
+  }
+  const frameAt = (fr, mult = 1) => !fr ? 0 : phase === 'result' || !anim ? fr.length - 1 : Math.max(0, Math.min(fr.length - 1, Math.floor(anim.t * 60 * mult) || 0));
+
+  /* ---------- Orbit ---------- */
+  const PCOL = (c) => C[c] || C.coral;
+  function pickPlanet(r, x, y) { let best = -1, bd = Infinity; r.planets.forEach((p, i) => { const d = Math.hypot(p.x - x, p.y - y); if (d < p.r + 14 && d < bd) { bd = d; best = i; } }); return best; }
+  function drawOrbit(r) {
+    const { x0, y0, x1, y1 } = LROOM;
+    ctx.fillStyle = '#0b1120'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.fillStyle = '#fff';
+    for (let k = 0; k < 70; k++) { const sx = x0 + ((k * 97) % 353), sy = y0 + ((k * 211) % 460); ctx.globalAlpha = 0.25 + ((k * 13) % 10) / 20; ctx.fillRect(sx, sy, k % 7 === 0 ? 2 : 1.2, k % 7 === 0 ? 2 : 1.2); }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 6; ctx.strokeRect(x0 - 3, y0 - 3, x1 - x0 + 6, y1 - y0 + 6);
+    ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center'; ctx.fillText('bigger planet = stronger gravity', W / 2, y1 + 28);
+    r.planets.forEach((p, i) => {
+      const g = ctx.createRadialGradient(p.x - p.r * 0.35, p.y - p.r * 0.35, p.r * 0.1, p.x, p.y, p.r); g.addColorStop(0, '#fff'); g.addColorStop(0.25, PCOL(p.c)); g.addColorStop(1, '#111827');
+      ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 2.2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+      if (p.r > 26) { ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(p.x, p.y, p.r * 1.6, p.r * 0.45, -0.35, 0, Math.PI * 2); ctx.stroke(); }
+      if (Array.isArray(mark) && mark.length === 1 && mark[0] === i && phase !== 'playing') { ctx.strokeStyle = C.azul; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 8, 0, Math.PI * 2); ctx.stroke(); label(p.x, p.y - p.r - 16, 'you', C.azul); }
+    });
+    const [sx, sy] = r.start;
+    if (phase === 'aim') {
+      const sp = Math.hypot(r.vel[0], r.vel[1]), ux = r.vel[0] / sp, uy = r.vel[1] / sp;
+      arrow(sx + ux * 10, sy + uy * 10, sx + ux * (30 + sp * 0.18), sy + uy * (30 + sp * 0.18), '#ffd166', 2.5);
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(sx, sy, 5, 0, Math.PI * 2); ctx.fill();
+    } else {
+      const fi = frameAt(r.frames);
+      ctx.lineCap = 'round';
+      for (let k = Math.max(1, fi - (phase === 'result' ? r.frames.length : 40)); k <= fi; k++) {
+        ctx.globalAlpha = phase === 'result' ? 0.45 : (k - (fi - 40)) / 40 * 0.8; ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(...r.frames[k - 1]); ctx.lineTo(...r.frames[k]); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      const [cx, cy] = r.frames[fi];
+      ctx.save(); ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 14; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      if (phase === 'result') {
+        if (r.crash >= 0) { const p = r.planets[r.crash]; ctx.strokeStyle = C.coral; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 12, 0, Math.PI * 2); ctx.stroke(); label(p.x, p.y + p.r + 26, 'crashed here!', C.coral); }
+        else { const [ex, ey] = r.end; ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; for (const rr of [9, 15]) { ctx.beginPath(); ctx.arc(ex, ey, rr, 0, Math.PI * 2); ctx.stroke(); } label(ex < x0 + 5 ? ex + 50 : ex > x1 - 5 ? ex - 50 : ex, ey < y0 + 5 ? ey - 16 : ey > y1 - 5 ? ey + 30 : ey - 18, 'left here', C.coral); }
+      }
+    }
+    if (Array.isArray(mark) && mark.length === 2) {
+      const [mx, my] = mark; ctx.strokeStyle = C.azul; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(mx, my, 9, 0, Math.PI * 2); ctx.stroke();
+      if (phase !== 'result') label(mx < x0 + 5 ? mx + 34 : mx > x1 - 5 ? mx - 34 : mx, my < y0 + 5 ? my - 16 : my > y1 - 5 ? my + 30 : my + 4, 'you', C.azul);
+    }
+  }
+
+  /* ---------- Magnets ---------- */
+  function pickMagnet(r, x, y) { let best = -1, bd = Infinity; r.mags.forEach((m, i) => { const d = Math.hypot(m.x - x, m.y - y); if (d < m.r + 22 && d < bd) { bd = d; best = i; } }); return best; }
+  function drawMagnet(r) {
+    const T = { x0: 30, y0: 90, x1: 370, y1: 520 };
+    ctx.fillStyle = C.ink; roundRect(T.x0 - 10, T.y0 - 10, T.x1 - T.x0 + 20, T.y1 - T.y0 + 20, 12); ctx.fill();
+    ctx.fillStyle = '#e8e2d4'; ctx.fillRect(T.x0, T.y0, T.x1 - T.x0, T.y1 - T.y0);
+    ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center'; ctx.fillText('pull = strength ÷ distance²', W / 2, T.y1 + 32);
+    r.mags.forEach((m, i) => {
+      ctx.strokeStyle = 'rgba(200,40,40,.16)'; ctx.lineWidth = 1.5;
+      for (let k = 1; k <= m.s + 1; k++) { ctx.beginPath(); ctx.arc(m.x, m.y, m.r + k * 14, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.save(); ctx.translate(m.x, m.y);
+      ctx.fillStyle = '#d62828'; ctx.beginPath(); ctx.arc(0, 0, m.r, Math.PI / 2, Math.PI * 1.5); ctx.fill();
+      ctx.fillStyle = '#2c68d0'; ctx.beginPath(); ctx.arc(0, 0, m.r, -Math.PI / 2, Math.PI / 2); ctx.fill();
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, m.r, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = '800 ' + (11 + m.s * 3) + 'px "Bricolage Grotesque", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('×' + m.s, 0, 5 + m.s);
+      ctx.restore();
+      if (mark === i && phase !== 'playing') { ctx.strokeStyle = C.azul; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, m.r + 9, 0, Math.PI * 2); ctx.stroke(); label(m.x, m.y - m.r - 18, 'you', C.azul); }
+      if (phase === 'result' && r.win === i) { ctx.strokeStyle = C.coral; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(m.x, m.y, m.r + 14, 0, Math.PI * 2); ctx.stroke(); label(m.x, m.y + m.r + 30, 'grabbed it!', C.coral); }
+    });
+    const fi = phase === 'aim' ? 0 : frameAt(r.frames);
+    const [bx, by] = phase === 'aim' ? r.start : r.frames[fi];
+    if (phase !== 'aim') { ctx.save(); ctx.setLineDash([2, 5]); ctx.strokeStyle = C.ink; ctx.globalAlpha = 0.35; ctx.lineWidth = 1.5; ctx.beginPath(); r.frames.slice(0, fi + 1).forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); ctx.restore(); }
+    const g = ctx.createRadialGradient(bx - 3, by - 3, 1, bx, by, 9); g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#9aa6b2'); g.addColorStop(1, '#3c4652');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, 9, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.stroke();
+    if (phase === 'aim') label(bx, by - 22, 'steel ball', C['ink-2']);
+  }
+
+  /* ---------- Pour ---------- */
+  const GL = (i) => String.fromCharCode(65 + i);
+  function pipePath(r, p) {
+    const a = r.glasses[p.from], b = r.glasses[p.to], sx = a.x + p.side * a.w / 2, sy = a.y - p.h;
+    const ex = b.x + (b.x > sx ? -1 : 1) * Math.min(8, b.w / 4), top = b.y - b.h - 10;
+    return [[sx, sy], [ex, sy], [ex, top]];
+  }
+  function pickGlass(r, x, y) { let best = -1; r.glasses.forEach((g, i) => { if (x > g.x - g.w / 2 - 10 && x < g.x + g.w / 2 + 10 && y > g.y - g.h - 14 && y < g.y + 22) best = i; }); return best; }
+  function drawPour(r) {
+    const fr = r.frames ? r.frames[frameAt(r.frames, r.speed || 1)] : null, levels = fr ? fr.slice(0, r.glasses.length) : r.glasses.map(() => 0), flowing = fr ? fr[r.glasses.length] : [];
+    const G0 = r.glasses[0], tapY = G0.y - G0.h - 46;
+    // grifo
+    ctx.fillStyle = '#9aa6b2'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+    roundRect(G0.x - 60, tapY - 20, 66, 16, 4); ctx.fill(); ctx.stroke(); roundRect(G0.x - 4, tapY - 20, 14, 26, 3); ctx.fill(); ctx.stroke();
+    if (phase !== 'aim') { ctx.fillStyle = 'rgba(60,140,230,.75)'; ctx.fillRect(G0.x, tapY + 6, 5, G0.y - tapY - 6 - levels[0]); }
+    // tuberías
+    r.pipes.forEach((p, k) => {
+      const pts = pipePath(r, p);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 9; ctx.beginPath(); pts.forEach((q, j) => j ? ctx.lineTo(...q) : ctx.moveTo(...q)); ctx.stroke();
+      ctx.strokeStyle = '#c9d1d9'; ctx.lineWidth = 5; ctx.beginPath(); pts.forEach((q, j) => j ? ctx.lineTo(...q) : ctx.moveTo(...q)); ctx.stroke();
+      if (flowing.includes(k)) {
+        ctx.strokeStyle = 'rgba(60,140,230,.9)'; ctx.lineWidth = 3.5; ctx.beginPath(); pts.forEach((q, j) => j ? ctx.lineTo(...q) : ctx.moveTo(...q)); ctx.stroke();
+        const b = r.glasses[p.to], [ex, ey] = pts[2]; ctx.fillStyle = 'rgba(60,140,230,.75)'; ctx.fillRect(ex - 2, ey, 4, Math.max(0, b.y - ey - levels[p.to]));
+      }
+      if (p.closed) { const [x, y] = pts[0]; const cx = x + p.side * 12; ctx.strokeStyle = '#d62828'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(cx - 6, y - 6); ctx.lineTo(cx + 6, y + 6); ctx.moveTo(cx + 6, y - 6); ctx.lineTo(cx - 6, y + 6); ctx.stroke(); }
+    });
+    // vasos
+    r.glasses.forEach((g, i) => {
+      const lx = g.x - g.w / 2, ty = g.y - g.h;
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(lx, ty, g.w, g.h);
+      if (levels[i] > 0) { ctx.fillStyle = 'rgba(60,140,230,.55)'; ctx.fillRect(lx, g.y - levels[i], g.w, levels[i]); }
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(lx, ty); ctx.lineTo(lx, g.y); ctx.lineTo(lx + g.w, g.y); ctx.lineTo(lx + g.w, ty); ctx.stroke();
+      ctx.fillStyle = C.ink; ctx.font = '800 15px "Bricolage Grotesque", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(GL(i), g.x, g.y + 18);
+      if (mark === i && phase !== 'playing') { ctx.strokeStyle = C.azul; ctx.lineWidth = 3; roundRect(lx - 6, ty - 6, g.w + 12, g.h + 12, 6); ctx.stroke(); }
+      if (phase === 'result' && r.first === i) { ctx.strokeStyle = C.coral; ctx.lineWidth = 3.5; roundRect(lx - 9, ty - 9, g.w + 18, g.h + 18, 8); ctx.stroke(); label(g.x, ty - 20, 'full first!', C.coral); }
+    });
+  }
+
+  /* ---------- Pulleys ---------- */
+  const PUL_LABEL = [['⬅ Left goes down', -1], ['Right goes down ➡', 1], ['⚖ Stays balanced', 0]];
+  function buildPulleyChips() {
+    const box = $('chips'); box.hidden = false; box.innerHTML = '';
+    PUL_LABEL.forEach(([t, v], i) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.id = 'chipP' + i; b.setAttribute('aria-pressed', 'false'); b.textContent = t;
+      b.addEventListener('click', () => { if (phase !== 'aim') return; mark = v; PUL_LABEL.forEach((_, j) => $('chipP' + j).setAttribute('aria-pressed', j === i ? 'true' : 'false')); ready(); draw(); });
+      box.appendChild(b);
+    });
+  }
+  function drawPulley(r) {
+    const t = phase === 'result' ? 1 : phase === 'playing' && anim ? Math.min(1, anim.t / 1.6) : 0, e = t * t * (3 - 2 * t);
+    const dir = phase === 'aim' ? 0 : r.answer, travel = 70;
+    ctx.fillStyle = C.ink; ctx.fillRect(30, 84, 340, 12);
+    for (let x = 36; x < 370; x += 14) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, 84); ctx.lineTo(x - 8, 76); ctx.stroke(); }
+    const pc = [200, 128], pr = 20;
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(200, 96); ctx.lineTo(200, 128); ctx.stroke();
+    const side = (s, sgn) => {
+      const a = s.a, x = 200 + sgn * 110, down = dir === 0 ? Math.sin((anim ? anim.t : 0) * 12) * 2 * (1 - t) : (dir === sgn ? 1 : -1) * travel * e / a;
+      const blockY = 300 + down, w = 18 + a * 12;
+      // cuerda principal desde la polea central
+      ctx.strokeStyle = '#8a6d3b'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(200 + sgn * pr, 128); ctx.lineTo(x - (a > 1 ? sgn * 0 : 0) + (a > 1 ? -(a - 1) * 6 : 0), a > 1 ? 160 : 160); ctx.stroke();
+      if (a === 1) { ctx.beginPath(); ctx.moveTo(x, 160); ctx.lineTo(x, blockY); ctx.stroke(); }
+      else {
+        // polipasto: bloque fijo arriba y bloque móvil abajo, unidos por "a" tramos de cuerda
+        ctx.fillStyle = '#9aa6b2'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; roundRect(x - w / 2, 160, w, 16, 5); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, 96); ctx.lineTo(x, 160); ctx.stroke();
+        ctx.strokeStyle = '#8a6d3b'; ctx.lineWidth = 2.5;
+        for (let k = 0; k < a; k++) { const rx = x - (a - 1) * 6 + k * 12; ctx.beginPath(); ctx.moveTo(rx, 176); ctx.lineTo(rx, blockY - 8); ctx.stroke(); }
+        ctx.fillStyle = '#9aa6b2'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; roundRect(x - w / 2, blockY - 10, w, 16, 5); ctx.fill(); ctx.stroke();
+        label(x + sgn * (w / 2 + 34), 240 + down / 2, a + ' ropes', C.azul);
+      }
+      // gancho y peso
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x, blockY + 6); ctx.lineTo(x, blockY + 22); ctx.stroke();
+      const bs = 36 + s.m * 3.2;
+      ctx.fillStyle = C['ink-2']; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; roundRect(x - bs / 2, blockY + 22, bs, bs, 6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '800 ' + Math.round(14 + s.m) + 'px "Bricolage Grotesque", system-ui, sans-serif'; ctx.fillText(s.m + ' kg', x, blockY + 22 + bs / 2 + 6);
+      if (a === 1) label(x + sgn * 40, 240 + down / 2, '1 rope', C.azul);
+    };
+    // polea central
+    side(r.left, -1); side(r.right, 1);
+    ctx.fillStyle = '#c9d1d9'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(pc[0], pc[1], pr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(pc[0], pc[1], 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.paper; ctx.fillRect(0, 556, W, H - 556); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, 556); ctx.lineTo(W, 556); ctx.stroke();
+    if (phase === 'result') label(200, 520, r.answer === 0 ? 'balanced: it doesn’t move' : (r.answer < 0 ? 'left' : 'right') + ' side goes down', C.coral);
+  }
+
+  /* ---------- Swing (cut the rope) ---------- */
+  function drawSwing(r) {
+    const fy = SWING_FLOOR;
+    floorRuler(fy);
+    if (r.step) { ctx.fillStyle = C.wood; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.fillRect(r.step.x0, r.step.y, r.step.x1 - r.step.x0, fy - r.step.y); ctx.strokeRect(r.step.x0, r.step.y, r.step.x1 - r.step.x0, fy - r.step.y); }
+    // soporte
+    ctx.fillStyle = C.ink; ctx.fillRect(r.px - 30, r.py - 10, 60, 8);
+    ctx.beginPath(); ctx.arc(r.px, r.py, 4, 0, Math.PI * 2); ctx.fill();
+    // arco del recorrido y tijeras
+    const P = (th) => [r.px + r.L * Math.sin(th), r.py + r.L * Math.cos(th)];
+    ctx.save(); ctx.setLineDash([3, 5]); ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let k = 0; k <= 40; k++) { const th = r.th0 + (r.thc - r.th0) * k / 40, [x, y] = P(th); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); ctx.restore();
+    const [cx, cy] = P(r.thc);
+    const fi = phase === 'aim' ? -1 : frameAt(r.frames);
+    const f = fi < 0 ? [...P(r.th0), 1] : r.frames[fi];
+    if (f[2] === 1) { ctx.strokeStyle = '#8a6d3b'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(r.px, r.py); ctx.lineTo(f[0], f[1]); ctx.stroke(); }
+    ctx.font = '22px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('✂️', cx + Math.cos(r.thc) * 22 * (r.thc >= 0 ? 1 : -1), cy - 8);
+    label(cx, cy + 30, 'cut here', C['ink-2']);
+    if (phase !== 'aim') trail(r.frames, fi, C.coral);
+    floorMark(fy);
+    if (phase === 'result') {
+      const x = r.impactX, y = r.impactY;
+      ctx.strokeStyle = C.coral; ctx.lineWidth = 2; for (const rr of [16, 26]) { ctx.globalAlpha = rr === 16 ? 0.6 : 0.3; ctx.beginPath(); ctx.ellipse(x, y, rr, rr * 0.3, 0, Math.PI, 0); ctx.stroke(); }
+      ctx.globalAlpha = 1; label(x, fy + 40, 'landed ' + (x / 4).toFixed(0), C.coral);
+    }
+    drawSkin(ctx, f[0], f[1], 10, skin, fi > 0 ? fi * 0.2 : 0);
+  }
+  const SWING_FLOOR = 556;
+
+  /* ---------- Spring shot ---------- */
+  function springPath(r, pull) {
+    const v = r.k * pull, ca = Math.cos(r.ang), sa = Math.sin(r.ang); const G = 980, dt = 1 / 600, pts = [];
+    let x = r.lx, y = r.ly, vx = v * ca, vy = -v * sa, into = false, crossed = false;
+    for (let s = 0; s < 600 * 6; s++) {
+      vy += G * dt; x += vx * dt; y += vy * dt;
+      if (!crossed && vy > 0 && y >= r.ty) { crossed = true; if (Math.abs(x - r.tx) <= r.bw / 2 - 9) into = true; }
+      const ground = into ? r.ty + 40 - 9 : (r.platform && x >= r.platform.x0 && x <= r.platform.x1 && crossed && y < r.ty + 50 ? r.ty + 40 : 556 - 9);
+      if (y >= ground) { y = ground; pts.push([x, y]); break; }
+      if (s % 10 === 0) pts.push([x, y]);
+      if (x > 430) break;
+    }
+    for (let k = 0; k < 20; k++) pts.push(pts[pts.length - 1]);
+    return { pts, into };
+  }
+  function aimSpring(r, x, y) {
+    const ux = Math.cos(r.ang), uy = -Math.sin(r.ang), d = (r.lx - x) * ux + (r.ly - y) * uy;
+    mark = Math.round(Math.max(4, Math.min(70, d)) * 2) / 2; return true;
+  }
+  function drawSpring(r) {
+    ctx.fillStyle = C.paper; ctx.fillRect(0, 556, W, H - 556); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, 556); ctx.lineTo(W, 556); ctx.stroke();
+    // cubo sobre su pilar
+    const bx0 = r.tx - r.bw / 2, by = r.ty;
+    ctx.fillStyle = C.ink; ctx.fillRect(bx0 - 10, by + 40, r.bw + 20, 556 - by - 40);
+    ctx.fillStyle = '#e9cf9a'; ctx.strokeStyle = C.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(bx0 - 4, by); ctx.lineTo(bx0 + 3, by + 40); ctx.lineTo(bx0 + r.bw - 3, by + 40); ctx.lineTo(bx0 + r.bw + 4, by); ctx.stroke();
+    ctx.fillStyle = 'rgba(233,207,154,.6)'; ctx.fill();
+    // tiro de prueba
+    const T = springPath(r, r.test);
+    ctx.save(); ctx.setLineDash([3, 5]); ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 1.5; ctx.beginPath(); T.pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); ctx.restore();
+    const tl = T.pts[T.pts.length - 1]; ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tl[0] - 6, tl[1] - 6); ctx.lineTo(tl[0] + 6, tl[1] + 6); ctx.moveTo(tl[0] + 6, tl[1] - 6); ctx.lineTo(tl[0] - 6, tl[1] + 6); ctx.stroke();
+    label(tl[0], tl[1] - 22, 'test shot: ' + (r.test / 2).toFixed(1) + ' cm pull', C['ink-2']);
+    // lanzador
+    const pull = phase === 'aim' ? (mark ?? 0) : (anim && anim.t < 0.12 ? mark * (1 - anim.t / 0.12) : 0);
+    ctx.save(); ctx.translate(r.lx, r.ly); ctx.rotate(-r.ang);
+    ctx.fillStyle = '#c9d1d9'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; roundRect(-92, -14, 100, 28, 6); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = C.violeta; ctx.lineWidth = 2.4; ctx.beginPath(); const sx0 = -88, sx1 = -12 - pull, coils = 9;
+    for (let k = 0; k <= coils * 2; k++) { const xx = sx0 + (sx1 - sx0) * k / (coils * 2), yy = k % 2 ? -9 : 9; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.fillRect(sx1 - 3, -11, 5, 22);
+    if (phase === 'aim') { ctx.fillStyle = C.ink; for (let c = 0; c <= 35; c += 5) ctx.fillRect(-12 - c * 2 - 0.5, 14, 1, c % 10 ? 4 : 7); }
+    ctx.restore();
+    // soporte del lanzador
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    const mx = r.lx - Math.cos(r.ang) * 50, my = r.ly + Math.sin(r.ang) * 50;
+    ctx.beginPath(); ctx.moveTo(mx, my + 10); ctx.lineTo(mx - 18, 556); ctx.moveTo(mx, my + 10); ctx.lineTo(mx + 22, 556); ctx.stroke();
+    let bxp, byp;
+    if (phase === 'aim') { bxp = r.lx - Math.cos(r.ang) * (pull + 1); byp = r.ly + Math.sin(r.ang) * (pull + 1); }
+    else { const S = r.sim || (r.sim = springPath(r, mark)), i = frameAt(S.pts); [bxp, byp] = S.pts[i]; trail(S.pts, i, C.coral); }
+    if (mark != null && phase !== 'playing') label(r.lx + 10, r.ly - 120, 'pull ' + (mark / 2).toFixed(1) + ' cm', C.azul);
+    if (phase === 'aim' && mark == null) label(r.lx + 40, r.ly - 120, 'drag the ball back ↙', C['ink-2']);
+    if (phase === 'result') label(r.tx, r.ty - 26, 'perfect: ' + (r.answer / 2).toFixed(1) + ' cm', C.coral);
+    drawSkin(ctx, bxp, byp, 9, skin, 0);
   }
 
   window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME, setSkin: (look) => { skin = look || skin; draw(); }, drawMarble: (g, x, y, r, look, ang) => { readColors(); drawSkin(g, x, y, r, look, ang); } };

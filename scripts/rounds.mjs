@@ -351,6 +351,7 @@ export function genPool(seed, level) {
 
 /* ---------- Tipo 5: ¿Aguanta? (torre de bloques sueltos, motor de sólidos rígidos) ---------- */
 const TFLOOR = 540, BH = 42;
+export const TOWER_MAT = { wood: 1, stone: 2, steel: 4, gold: 6 };
 function simulateTower(blocks, dur = 4) {
   const { Engine, Bodies, Composite } = Matter;
   const engine = Engine.create({ positionIterations: 30, velocityIterations: 20 });
@@ -378,8 +379,12 @@ export function genTower(seed, level) {
     for (let i = 0; i < n; i++) {
       const w = 70 + Math.round(rand() * 90);
       if (i > 0) { const prev = blocks[i - 1]; cx = prev.x + prev.w / 2 + (rand() - 0.5) * (prev.w * 0.95 + w * 0.3); }
-      const heavy = level >= 2 && rand() < 0.3;
-      const b = { x: Math.round(cx - w / 2), w, y: TFLOOR - (i + 1) * BH, h: BH, d: heavy ? 3 : 1 };
+      // Materiales: madera ×1, piedra ×2, acero ×4 y oro ×6 (peso relativo para el mismo tamaño)
+      const roll = rand();
+      const mat = level === 1 ? (roll < 0.25 ? 'stone' : 'wood')
+        : level === 2 ? (roll < 0.45 ? 'wood' : roll < 0.75 ? 'stone' : 'steel')
+        : (roll < 0.35 ? 'wood' : roll < 0.6 ? 'stone' : roll < 0.85 ? 'steel' : 'gold');
+      const b = { x: Math.round(cx - w / 2), w, y: TFLOOR - (i + 1) * BH, h: BH, d: TOWER_MAT[mat], mat };
       if (b.x < 24 || b.x + b.w > 376) break;
       blocks.push(b);
     }

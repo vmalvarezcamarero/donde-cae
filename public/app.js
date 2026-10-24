@@ -216,7 +216,7 @@ async function showEnd(r) {
   const isDemo = !!r.attempt.demo;
   if (!isDemo) { const played = store.get('played', {}); played[r.day.date] = Math.max(played[r.day.date] || 0, r.total); store.set('played', played); }
   $('endLabel').textContent = 'Gravle #' + r.day.n + ' · attempt ' + (r.attempt.index || r.attempt.num);
-  $('total').firstChild.textContent = r.total;
+  $('total').firstChild.textContent = r.total; $('total').lastChild.textContent = ' / ' + r.scores.length * 100;
   $('endNote').textContent = r.total >= 420 ? 'You think like a physicist.' : r.total >= 300 ? 'Good eye. Can you beat it?' : 'Physics shows no mercy. Time for a rematch.';
   const rows = $('rows'); rows.innerHTML = '';
   r.scores.forEach((s, i) => {
@@ -234,7 +234,7 @@ async function showEnd(r) {
     $('endLabel').textContent = 'Demo · ' + LEVEL[r.day.level] + ' · new experiments';
     if ($('endJoin')) $('endJoin').hidden = true;
     $('again').hidden = false; $('again').textContent = 'Play again (new maps)';
-    $('share').textContent = 'Gravle · new experiments demo  ' + r.total + '/500\n' + squares(r.scores) + '\n' + SITE + '/?demo';
+    $('share').textContent = 'Gravle · new experiments demo  ' + r.total + '/' + r.scores.length * 100 + '\n' + squares(r.scores) + '\n' + SITE + '/?demo';
     return;
   }
   await refresh();
@@ -361,6 +361,12 @@ const HOW = {
   pool: { title: 'Bank shot', steps: ['The arrow shows the direction and the bar shows the power.', 'The ball bounces off the cushions and the cloth slows it down.', 'Tap where you think it stops, then tap Release.'], pts: 'The closer to where it stops, the more points.' },
   loop: { title: 'Loop the loop', steps: ['Drag the marble up or down the ramp to choose its starting height.', 'It must keep enough speed to stay on the track upside down at the top of the loop. Carpet slows it down.', 'Find the lowest height that still makes it, then tap Release.'], pts: 'The closer to the minimum height, the more points. Too low and it falls; too high wastes points too.' },
   laser: { title: 'Laser', steps: ['The laser fires along the dotted line.', 'Every mirror reflects it like a pool ball off a cushion: the angle in equals the angle out. Dark blocks absorb it.', 'Tap the wall where you think the beam ends, then tap Release.'], pts: 'The closer to where it hits the wall, the more points.' },
+  orbit: { title: 'Orbit', steps: ['A comet flies in along the yellow arrow.', 'Every planet pulls it: bigger planets pull harder, and the pull is much stronger up close.', 'Tap the planet you think it crashes into, or the edge where it flies out.'], pts: 'Right planet: 100. If it escapes, the closer your mark to where it leaves, the more points.' },
+  magnet: { title: 'Magnets', steps: ['A steel ball sits still on the table.', 'Every magnet pulls it: ×3 magnets are stronger, but the pull drops fast with distance (strength ÷ distance²).', 'Tap the magnet you think grabs it.'], pts: 'Right magnet: 100.' },
+  pour: { title: 'Which glass fills first?', steps: ['The tap pours into glass A.', 'Water rises until it reaches the lowest open pipe, then everything flows down that pipe. Two pipes at the same height share the water. Pipes with ✕ are blocked.', 'Tap the glass you think is full first.'], pts: 'Right glass: 100.' },
+  pulley: { title: 'Pulleys', steps: ['Two weights hang from the same rope.', 'Count the ropes holding each weight: the pull of each side is its weight ÷ the number of ropes.', 'Pick which side goes down, or if it stays balanced.'], pts: 'Right answer: 100.' },
+  swing: { title: 'Cut the rope', steps: ['The ball swings from where it starts.', 'At the scissors the rope is cut and the ball flies off in the direction it was moving.', 'Tap the floor where you think it lands.'], pts: 'The closer your mark, the more points.' },
+  spring: { title: 'Spring shot', steps: ['Drag the ball back to pull the spring.', 'The dotted line is a test shot with a known pull. Pulling twice as far launches twice as fast, and it flies much more than twice as far.', 'Find the pull that lands the ball in the bucket.'], pts: 'Bucket centre: 100. In the bucket: 50 or more. A miss: up to 30 if it was close.' },
   bridge: { title: 'Bridge', steps: ['Drag up to grow the plank standing on the edge.', 'When you release, it tips over onto the other side and the marble rolls to the end of it. If the far side is lower, the plank needs to reach diagonally.', 'If the tip lands on the far platform the marble makes it. The red mark is the perfect spot.'], pts: 'Landing on the red mark: 100. Anywhere on the platform: 50 or more. Falling: up to 30 if it was close.' },
   domino: { title: 'Dominoes', steps: ['The first domino gets a push.', 'A falling domino only knocks the next one if it can reach it, and a light domino struggles to topple a heavy one (dark = 3× heavier).', 'Tap the last domino you think will fall, then tap Release.'], pts: 'Exactly right: 100. One off: 45. Two off: 15.' },
   float: { title: 'Float or sink?', steps: ['Look at each object and the water: fresh or very salty.', 'Things lighter than water for their size float; denser ones sink. Salty water is denser, so it holds more up.', 'Tap the ones that float, then tap Release to drop them all in.'], pts: 'Points for every object you get right; all of them gets 100.' },
@@ -556,7 +562,7 @@ async function startDemo() {
     submit: async (i, pred) => {
       if (!validPrediction(full[i], pred, demoData.W)) throw new Error('Invalid prediction.');
       const pts = scorePoints(full[i], pred); total += pts;
-      return { pts, round: JSON.parse(JSON.stringify(full[i])), total, finished: i === 4, coins: null };
+      return { pts, round: JSON.parse(JSON.stringify(full[i])), total, finished: i === full.length - 1, coins: null };
     },
     error: (msg) => toast(msg),
     done: showEnd,

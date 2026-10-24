@@ -15,6 +15,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { W, H, FLOOR, R, hashStr, mulberry32, genBalance, genDrop, genRace, genPool, genTower } from './rounds.mjs';
 import { genLoop, genLaser, genBridge, genFloat, genGears } from './rounds2.mjs';
+import { genOrbit, genMagnets, genPour, genPulley, genSwing, genSpring } from './rounds3.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'));
@@ -39,8 +40,11 @@ const RACE_FORMATS = ['curvas', 'objetos', 'terrenos'];
 // el reto A (el del primer intento, igual para todos) y el reto B son los otros 5:
 // así el segundo intento es de verdad distinto. Como mucho 2 de cada grupo en el
 // reto A, para mezclar formas de jugar.
-export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'float', 'gears'];
-const GROUP = { drop: 'tap', pool: 'tap', laser: 'tap', balance: 'slide', loop: 'slide', bridge: 'slide', race: 'pick', tower: 'pick', float: 'pick', gears: 'pick' };
+// 15 experimentos. "Float or sink?" queda fuera de la rotación (no gustó en la beta).
+export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'gears', 'orbit', 'magnet', 'pour', 'pulley', 'swing', 'spring'];
+const GROUP = { drop: 'tap', pool: 'tap', laser: 'tap', swing: 'tap', orbit: 'tap',
+  balance: 'slide', loop: 'slide', bridge: 'slide', spring: 'slide',
+  race: 'pick', tower: 'pick', gears: 'pick', magnet: 'pick', pour: 'pick', pulley: 'pick' };
 
 // Plan de la semana (de lunes a domingo): reparte los juegos para que cada uno
 // salga 3 o 4 veces en el reto A y ninguno desaparezca varios días seguidos.
@@ -49,12 +53,19 @@ const mondayOf = (iso) => { const d = new Date(iso + 'T12:00:00Z'); return new D
 const planCache = new Map();
 export function weekPlan(monday) {
   if (planCache.has(monday)) return planCache.get(monday);
-  const rand = mulberry32(hashStr('gravle:week:' + monday));
+  const rand = mulberry32(hashStr('gravle:week15:' + monday));
   const shuffle = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  // Se prueban semanas al azar hasta dar con una que cumpla las reglas:
-  //  · cada juego sale 3 o 4 veces en el reto A,
-  //  · como mucho 2 juegos de cada grupo por día,
-  //  · de un día al siguiente se repiten entre 1 y 3 juegos (ni todo igual ni todo distinto).
+  const pick5 = (pool, count, cap) => {
+    const order = shuffle(pool).sort((x, y) => (count ? count[x] - count[y] : 0) + (rand() - 0.5) * 1.2);
+    const p = [], per = {};
+    for (const g of order) { if (p.length === 5) break; if ((per[GROUP[g]] || 0) >= 2 || (cap && count[g] >= cap)) continue; p.push(g); per[GROUP[g]] = (per[GROUP[g]] || 0) + 1; }
+    return p.length === 5 ? p : null;
+  };
+  // Reglas del reto A de la semana:
+  //  · cada juego sale 2 o 3 veces (35 huecos para 15 juegos),
+  //  · como mucho 2 juegos del mismo tipo de respuesta por día,
+  //  · de un día al siguiente se repiten como mucho 2.
+  // El reto B (segundo intento) son 5 de los 10 que no salen en el A, con la misma regla de tipos.
   let best = null;
   for (let tryN = 0; tryN < 4000 && !best; tryN++) {
     const count = Object.fromEntries(GAMES.map(g => [g, 0])), days = [];
@@ -62,20 +73,18 @@ export function weekPlan(monday) {
     for (let d = 0; d < 7 && ok; d++) {
       let pick = null;
       for (let k = 0; k < 60 && !pick; k++) {
-        const order = shuffle(GAMES).sort((x, y) => count[x] - count[y] + (rand() - 0.5) * 1.2);
-        const p = [], per = {};
-        for (const g of order) { if (p.length === 5) break; if ((per[GROUP[g]] || 0) >= 2 || count[g] >= 4) continue; p.push(g); per[GROUP[g]] = (per[GROUP[g]] || 0) + 1; }
-        if (p.length < 5) continue;
-        if (d > 0) { const same = p.filter(g => days[d - 1].includes(g)).length; if (same < 1 || same > 3) continue; }
+        const p = pick5(GAMES, count, 3);
+        if (!p) continue;
+        if (d > 0 && p.filter(g => days[d - 1].includes(g)).length > 2) continue;
         pick = p;
       }
       if (!pick) { ok = false; break; }
       pick.forEach(g => count[g]++); days.push(pick);
     }
-    if (ok && GAMES.every(g => count[g] >= 3)) best = days;
+    if (ok && GAMES.every(g => count[g] >= 2)) best = days;
   }
   if (!best) throw new Error('No se pudo planificar la semana ' + monday);
-  const plan = best.map(pick => ({ A: shuffle(pick), B: shuffle(GAMES.filter(g => !pick.includes(g))) }));
+  const plan = best.map(A => { let B = null; for (let k = 0; k < 100 && !B; k++) B = pick5(GAMES.filter(g => !A.includes(g)), null, 0); return { A: shuffle(A), B: shuffle(B) }; });
   planCache.set(monday, plan);
   return plan;
 }
@@ -98,6 +107,12 @@ function buildSet(date, setId, n, lvl, games) {
     bridge: () => genBridge(seed + 8, lvl),
     float: () => genFloat(seed + 9, lvl),
     gears: () => genGears(seed + 10, lvl),
+    orbit: () => genOrbit(seed + 11, lvl),
+    magnet: () => genMagnets(seed + 12, lvl),
+    pour: () => genPour(seed + 13, lvl),
+    pulley: () => genPulley(seed + 14, lvl),
+    swing: () => genSwing(seed + 15, lvl),
+    spring: () => genSpring(seed + 16, lvl),
   };
   return games.map(g => make[g]());
 }

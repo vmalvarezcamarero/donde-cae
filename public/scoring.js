@@ -16,6 +16,12 @@ export function publicRound(r) {
     case 'domino': return { type: r.type, level: r.level, dominoes: r.dominoes, platform: r.platform };
     case 'float': return { type: r.type, level: r.level, items: r.items, water: r.water, salty: r.salty };
     case 'bridge': return { type: r.type, level: r.level, xa: r.xa, ya: r.ya, xb: r.xb, xc: r.xc, yb: r.yb };
+    case 'orbit': return { type: r.type, level: r.level, planets: r.planets, start: r.start, vel: r.vel };
+    case 'magnet': return { type: r.type, level: r.level, mags: r.mags, start: r.start };
+    case 'pour': return { type: r.type, level: r.level, glasses: r.glasses, pipes: r.pipes };
+    case 'pulley': return { type: r.type, level: r.level, left: r.left, right: r.right };
+    case 'swing': return { type: r.type, level: r.level, px: r.px, py: r.py, L: r.L, th0: r.th0, thc: r.thc, step: r.step };
+    case 'spring': return { type: r.type, level: r.level, lx: r.lx, ly: r.ly, ang: r.ang, k: r.k, tx: r.tx, ty: r.ty, bw: r.bw, test: r.test, testX: r.testX, platform: r.platform };
     case 'gears': return { type: r.type, level: r.level, parts: r.parts, links: r.links };
   }
   throw new Error('tipo de ronda desconocido');
@@ -35,6 +41,12 @@ export function validPrediction(r, p, W = 400) {
     case 'float': return Array.isArray(p) && p.length <= r.items.length && new Set(p).size === p.length && p.every(i => Number.isInteger(i) && i >= 0 && i < r.items.length);
     case 'gears': return Number.isInteger(p) && p >= 0 && p <= 3;
     case 'bridge': return num(p) && p >= 0 && p <= 600;
+    case 'orbit': return Array.isArray(p) && ((p.length === 1 && Number.isInteger(p[0]) && p[0] >= 0 && p[0] < r.planets.length) || (p.length === 2 && p.every(num)));
+    case 'magnet': return Number.isInteger(p) && p >= 0 && p < r.mags.length;
+    case 'pour': return Number.isInteger(p) && p >= 0 && p < r.glasses.length;
+    case 'pulley': return p === -1 || p === 0 || p === 1;
+    case 'swing': return num(p) && p >= 0 && p <= W;
+    case 'spring': return num(p) && p >= 0 && p <= 80;
     case 'race': {
       const n = r.tracks.length;
       return Array.isArray(p) && p.length === n && new Set(p).size === n && p.every(i => Number.isInteger(i) && i >= 0 && i < n);
@@ -78,6 +90,20 @@ export function scorePoints(r, p) {
       return d <= 6 ? 100 : Math.round(100 * Math.exp(-(d - 6) / 40));
     }
     case 'domino': return [100, 45, 15][Math.abs(p - r.answer)] ?? 0;
+    case 'orbit': {
+      if (r.crash >= 0) return p.length === 1 && p[0] === r.crash ? 100 : 0;
+      if (p.length !== 2) return 0;
+      let d = Math.abs(perimPos(p) - perimPos(r.end)); d = Math.min(d, perimLen() - d);
+      return d <= 10 ? 100 : Math.round(100 * Math.exp(-(d - 10) / 45));
+    }
+    case 'magnet': return p === r.win ? 100 : 0;
+    case 'pour': return p === r.first ? 100 : 0;
+    case 'pulley': return p === r.answer ? 100 : 0;
+    case 'swing': {
+      const err = Math.abs(p - r.impactX) / 4;
+      return err <= 2 ? 100 : Math.round(100 * Math.exp(-(err - 2) / 20));
+    }
+    case 'spring':
     case 'bridge': {
       if (p >= r.lo && p <= r.hi) {                                // llega: 50–100 según lo cerca del centro
         const off = Math.abs(p - r.answer), half = Math.max(r.answer - r.lo, r.hi - r.answer);
