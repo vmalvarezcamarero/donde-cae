@@ -211,6 +211,21 @@ async function startAttempt() {
   });
 }
 let lastResult = null;
+// Juice de la pantalla final: total que rueda, filas que entran una a una y
+// celebración según la nota (fanfarria y confeti triple solo con 500/500).
+function endFx(r) {
+  const J = window.Juice; if (!J) return;
+  const max = r.scores.length * 100, t = r.total, num = $('totalN');
+  if (!J.reduce) [...$('rows').children].forEach((d, i) => d.animate([{ opacity: 0, transform: 'translateX(-14px)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: 200 + i * 110, easing: 'cubic-bezier(.3,1.3,.5,1)', fill: 'backwards' }));
+  J.roll(num, t, { ms: 1100 }).then(() => {
+    const b = num.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
+    if (t >= max) {
+      J.sfx.fanfare(); J.buzz([30, 40, 30, 40, 60]);
+      [0, 300, 600].forEach((d, i) => setTimeout(() => J.confetti(innerWidth * (0.2 + 0.3 * i), innerHeight * 0.75, { n: 120, power: 1.25 }), d));
+    } else if (t >= max * 0.84) { J.sfx.good(5, true); J.confetti(x, y, { n: 110 }); }
+    else if (t >= max * 0.6) { J.sfx.ok(); J.confetti(x, y, { n: 40, power: 0.7 }); }
+  });
+}
 async function showEnd(r) {
   show('end'); lastResult = r;
   const isDemo = !!r.attempt.demo;
@@ -225,6 +240,7 @@ async function showEnd(r) {
     d.children[1].textContent = (i + 1) + '. ' + window.PhysleGame.TYPE_NAME[r.types[i]] + (r.details[i] ? ' · ' + r.details[i] : '');
     rows.appendChild(d);
   });
+  endFx(r);
   const earned = $('earned');
   if (r.coins) { earned.hidden = false; earned.innerHTML = '<span class="coin" aria-hidden="true"></span><span></span>'; earned.lastChild.textContent = '+' + r.coins.earned + ' coins · you now have ' + r.coins.balance; }
   else earned.hidden = true;
