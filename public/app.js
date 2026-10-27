@@ -4,7 +4,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
 import { SKINS, NAME_COLORS, WELCOME_COINS } from './shop.js';
 import { publicRound, validPrediction, scorePoints } from './scoring.js';
-import { makeCard } from './card.js?v=20261027d';
+import { makeCard } from './card.js?v=20261027e';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -29,7 +29,26 @@ function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.hidden = false;
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3800);
 }
-function show(id) { for (const s of ['home', 'demoHome', 'play', 'end', 'rank', 'shop']) $(s).hidden = s !== id; window.scrollTo({ top: 0 }); }
+// Cambiar de pantalla como quien pasa la hoja del cuaderno: hacia delante entra por la
+// derecha (portada → partida → resultado → ranking) y al volver, por la izquierda.
+const PAGE = { home: 0, demoHome: 0, play: 1, end: 2, rank: 3, shop: 3 };
+let curPage = 'home', homeEnter = true;
+function show(id) {
+  const prev = curPage; curPage = id;
+  for (const s of ['home', 'demoHome', 'play', 'end', 'rank', 'shop']) $(s).hidden = s !== id;
+  window.scrollTo({ top: 0 });
+  if (id === 'home') homeEnter = true;
+  const J = window.Juice;
+  if (!J || J.reduce || prev === id) return;
+  const back = PAGE[id] < PAGE[prev], dx = back ? -34 : 34;
+  $(id).animate([{ transform: 'translateX(' + dx + 'px) rotate(' + (back ? -0.8 : 0.8) + 'deg)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 340, easing: 'cubic-bezier(.2,.9,.3,1.1)' });
+  J.sfx.page();
+}
+// Los iconos de los experimentos entran uno a uno al llegar a la portada.
+function enterHome() {
+  const J = window.Juice; if (!J || J.reduce) return;
+  document.querySelectorAll('#homeExps li').forEach((li, i) => li.animate([{ transform: 'translateY(12px) scale(.75)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 420, delay: 120 + i * 70, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' }));
+}
 document.querySelectorAll('dialog [data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 
 /* ---------- cuentas (Firebase Auth) ---------- */
@@ -159,6 +178,7 @@ function renderHome() {
   $('noteLogin')?.addEventListener('click', openAuth);
   $('noteProfile')?.addEventListener('click', () => openProfile(true));
   renderHomeStreak();
+  if (homeEnter && !$('home').hidden) { homeEnter = false; enterHome(); }
   // La tienda aparece después de la primera partida: al entrar, lo único importante es jugar.
   const hasPlayed = Object.keys(store.get('played', {})).length > 0 || list.some(a => a.finished);
   $('shopBtn').hidden = !hasPlayed;
@@ -245,6 +265,30 @@ async function startAttempt() {
 }
 let lastResult = null;
 const starLine = (k) => k ? '  ' + '⭐'.repeat(k) : '';
+// Sello de día perfecto: «PERFECT» con la puntuación máxima, «FLAWLESS» si las cinco rondas son verdes (≥80).
+function stampOf(r) {
+  const max = r.scores.length * 100;
+  if (r.total >= max) return { stamp: 'PERFECT', stampSub: max + ' / ' + max };
+  if (r.scores.every(s => s >= 80)) return { stamp: 'FLAWLESS', stampSub: 'ALL ' + r.scores.length + ' GREEN' };
+  return { stamp: '', stampSub: '' };
+}
+function placeStamp(st) {
+  const el = document.createElement('div'); el.className = 'stamp' + (st.stamp === 'PERFECT' ? ' gold' : '');
+  el.setAttribute('role', 'img'); el.setAttribute('aria-label', st.stamp + ' stamp');
+  el.innerHTML = '<b></b><small></small>'; el.firstChild.textContent = st.stamp; el.lastChild.textContent = st.stampSub;
+  $('end').appendChild(el); return el;
+}
+// El sello cae sobre la hoja: golpe seco, temblor, salpicadura de tinta y confeti de papel.
+function stampFx(st) {
+  const J = window.Juice, el = placeStamp(st);
+  el.animate([{ transform: 'rotate(-11deg) scale(2.8)', opacity: 0 }, { transform: 'rotate(-11deg) scale(.94)', opacity: 1, offset: 0.6 }, { transform: 'rotate(-11deg) scale(1)', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.55,0,.75,.2)' });
+  setTimeout(() => {
+    J.sfx.stamp(); J.buzz(40); J.shake($('end'), 6, 320);
+    const b = el.getBoundingClientRect(), ink = getComputedStyle(el).color;
+    J.dust(b.left + b.width / 2, b.bottom - 4, { colors: [ink], n: 26, power: 0.8, ring: ink });
+    J.confetti(b.left + b.width / 2, b.top + b.height / 2, { n: 60, power: 0.8 });
+  }, 230);
+}
 // Juice de la pantalla final: total que rueda, filas que entran una a una y
 // celebración según la nota (fanfarria y confeti triple solo con 500/500).
 // Orden: total que rueda → estrellas una a una → celebración según la nota → racha.
@@ -255,7 +299,7 @@ function endFx(r, st) {
   const calm = !J || J.reduce;
   const wait = (ms) => new Promise(res => setTimeout(res, calm ? 0 : ms));
   const alive = () => run === endRun && !$('end').hidden;
-  if (calm) { num.textContent = t; stars.forEach((s, i) => s.classList.toggle('on', i < st.stars)); paintStreak(st, st.n); return; }
+  if (calm) { num.textContent = t; stars.forEach((s, i) => s.classList.toggle('on', i < st.stars)); paintStreak(st, st.n); if (st.stamp) placeStamp(st); return; }
   [...$('rows').children].forEach((d, i) => d.animate([{ opacity: 0, transform: 'translateX(-14px)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: 200 + i * 110, easing: 'cubic-bezier(.3,1.3,.5,1)', fill: 'backwards' }));
   J.roll(num, t, { ms: 1100 }).then(async () => {
     for (let i = 0; i < st.stars; i++) {
@@ -272,8 +316,9 @@ function endFx(r, st) {
       [0, 300, 600].forEach((d, i) => setTimeout(() => J.confetti(innerWidth * (0.2 + 0.3 * i), innerHeight * 0.75, { n: 120, power: 1.25 }), d));
     } else if (st.stars === 3) { J.sfx.good(5, true); J.confetti(x, y, { n: 110 }); }
     else if (st.stars === 2) { J.sfx.ok(); J.confetti(x, y, { n: 40, power: 0.7 }); }
+    if (st.stamp) { await wait(t >= max ? 650 : 300); if (!alive()) return; stampFx(st); }
     if (!st.show) return;
-    await wait(t >= max ? 1100 : 550); if (!alive()) return;
+    await wait(t >= max ? 1100 : 650); if (!alive()) return;
     streakFx(st);
   });
 }
@@ -310,7 +355,8 @@ async function showEnd(r) {
   const firstToday = !isDemo && !store.get('played', {})[r.day.date];
   if (!isDemo) { const played = store.get('played', {}); played[r.day.date] = Math.max(played[r.day.date] || 0, r.total); store.set('played', played); }
   const max = r.scores.length * 100, nStars = starsOf(r.total, max), sn = isDemo ? 0 : streakCount(r.day.date);
-  const st = { show: !isDemo, n: sn, firstToday, stars: nStars, milestone: firstToday && MILESTONES.includes(sn) };
+  const st = { show: !isDemo, n: sn, firstToday, stars: nStars, milestone: firstToday && MILESTONES.includes(sn), ...stampOf(r) };
+  $('end').querySelector('.stamp')?.remove();
   $('stars').innerHTML = STAR_SVG.repeat(3); $('stars').setAttribute('aria-label', nStars + ' of 3 stars');
   $('streakBox').hidden = isDemo; $('streakBox').querySelector('.milestone')?.remove(); $('streakBox').classList.remove('has-milestone');
   if (!isDemo) { paintStreak({ ...st, milestone: false }, firstToday ? Math.max(0, sn - 1) : sn); clockPrev = ''; tick(); }
@@ -362,7 +408,7 @@ $('shareImg').addEventListener('click', async () => {
       sub: fmtDay.format(new Date(r.day.date + 'T12:00:00')) + ' · ' + LEVEL[r.day.level],
       total: r.total, scores: r.scores, names: r.types.map(t => window.PhysleGame.TYPE_NAME[t]),
       icons: r.types.map(t => (ICONS[t] || '').replace(/<\/svg>[\s\S]*$/, '</svg>')),
-      streak: r.attempt.demo ? '' : streakText(), host, stars: starsOf(r.total, r.scores.length * 100),
+      streak: r.attempt.demo ? '' : streakText(), host, stars: starsOf(r.total, r.scores.length * 100), ...stampOf(r),
     });
     const file = new File([blob], 'gravle-' + (r.day.n || 'demo') + '.png', { type: 'image/png' });
     const text = $('share').textContent;

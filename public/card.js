@@ -43,6 +43,14 @@ export async function makeCard(res) {
   g.fillStyle = P.ink2; g.font = '600 34px ' + MONO; g.fillText(res.title.toUpperCase(), px + 56, py + 82);
   if (res.sub) { g.font = '500 30px ' + MONO; g.fillText(res.sub.toUpperCase(), px + 56, py + 126); }
   if (res.stars != null) for (let k = 0; k < 3; k++) star(g, px + pw - 266 + k * 90, py + 92, 38, k < res.stars);
+  if (res.stamp) {                                          // sello de día perfecto
+    const col = res.stamp === 'PERFECT' ? P.mostaza : P.coral;
+    g.save(); g.translate(px + pw - 150, py + 282); g.scale(0.8, 0.8); g.rotate(-0.19); g.strokeStyle = col; g.fillStyle = col; g.globalAlpha = 0.92;
+    g.lineWidth = 7; rr(g, -150, -62, 300, 124, 14); g.stroke(); g.lineWidth = 3; rr(g, -137, -49, 274, 98, 9); g.stroke();
+    g.font = '800 60px ' + DISPLAY; const fs = Math.min(60, 60 * 250 / g.measureText(res.stamp).width);
+    g.font = '800 ' + fs + 'px ' + DISPLAY; g.textAlign = 'center'; g.fillText(res.stamp, 0, 14);
+    g.font = '700 22px ' + MONO; g.fillText(res.stampSub || '', 0, 42); g.restore(); g.textAlign = 'left';
+  }
   g.fillStyle = P.ink; g.font = '800 200px ' + DISPLAY; g.fillText(String(res.total), px + 50, py + 320);
   const tw = g.measureText(String(res.total)).width; g.fillStyle = P.ink2; g.font = '700 64px ' + DISPLAY; g.fillText('/ ' + res.scores.length * 100, px + 70 + tw, py + 320);
   // rondas

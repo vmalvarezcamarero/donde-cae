@@ -62,6 +62,8 @@
     star(i) { tone(659 * semi(i * 5), 0.22, 'triangle', 0.12); tone(1318 * semi(i * 5), 0.12, 'sine', 0.04, 0.02); },
     fanfare() { [0, 4, 7, 12, 16, 19, 24].forEach((n, i) => tone(392 * semi(n), 0.3, 'triangle', 0.1, i * 0.085)); },
     wipe() { hiss(0.32, 0.05, 1700); },
+    page() { hiss(0.16, 0.045, 5200); hiss(0.1, 0.03, 2400, 0.07); },
+    stamp() { tone(140, 0.2, 'sine', 0.45, 0, 55); hiss(0.12, 0.28, 1300); tone(900, 0.03, 'square', 0.04); },
     boom() { tone(95, 0.4, 'sine', 0.45, 0, 38); hiss(0.45, 0.3, 900); tone(190, 0.12, 'square', 0.05); },
     streak() { hiss(0.45, 0.07, 3200); tone(240, 0.35, 'triangle', 0.08, 0, 720); tone(960, 0.18, 'triangle', 0.08, 0.3); tone(1280, 0.22, 'triangle', 0.07, 0.38); },
   };
@@ -86,6 +88,7 @@
   document.addEventListener('click', (ev) => {
     const t = ev.target.closest && ev.target.closest('.btn, .chip, .exp, .tabs [role="tab"]');
     if (t && !t.disabled && t.id !== 'go') sfx.tap();
+    if (t && !t.disabled && t.matches('.btn:not(.ghost)')) { const b = t.getBoundingClientRect(); sparks(b.left + b.width / 2, b.top + b.height / 2); }
   }, true);
 
   /* ---------- partículas (capa encima de todo) ---------- */
@@ -104,13 +107,13 @@
     const drag = Math.pow(0.18, dt);
     parts = parts.filter(p => {
       p.life += dt;
-      if (p.kind === 'dust') { p.vy += 700 * dt; p.vx *= Math.pow(0.3, dt); }
+      if (p.kind === 'dust' || p.kind === 'spark') { p.vy += (p.kind === 'spark' ? 320 : 700) * dt; p.vx *= Math.pow(p.kind === 'spark' ? 0.15 : 0.3, dt); }
       else { p.vx *= drag; p.vy = p.vy * drag + 1500 * dt; p.r += p.vr * dt; }
       p.x += p.vx * dt; p.y += p.vy * dt;
       const a = p.life > p.max - 0.5 ? Math.max(0, (p.max - p.life) / 0.5) : 1;
       if (a <= 0 || p.y > innerHeight + 40) return false;
       fctx.save(); fctx.globalAlpha = a; fctx.fillStyle = p.c; fctx.translate(p.x, p.y);
-      if (p.kind === 'dust') { fctx.beginPath(); fctx.arc(0, 0, p.w, 0, Math.PI * 2); fctx.fill(); }
+      if (p.kind === 'dust' || p.kind === 'spark') { fctx.beginPath(); fctx.arc(0, 0, p.w, 0, Math.PI * 2); fctx.fill(); }
       else {
         fctx.rotate(p.r); fctx.scale(1, Math.cos(p.life * 9 + p.ph));
         if (p.round) { fctx.beginPath(); fctx.arc(0, 0, p.w * 0.45, 0, Math.PI * 2); fctx.fill(); }
@@ -145,6 +148,17 @@
       parts.push({ kind: 'dust', x: x + (Math.random() - 0.5) * 10, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, w: 1.2 + Math.random() * 2.4, c: colors[i % colors.length], life: 0, max: 0.55 + Math.random() * 0.4 });
     }
     rings.push({ x, y, t: 0, c: opts.ring || css('ink'), size: 46 * power });
+    kick();
+  }
+
+  // Chispas que salen en todas direcciones (botones principales)
+  function sparks(x, y, opts = {}) {
+    if (reduce) return;
+    const colors = opts.colors || [css('mostaza'), css('coral'), css('azul')], n = opts.n || 16;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 140 + Math.random() * 230;
+      parts.push({ kind: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, w: 1.6 + Math.random() * 1.8, c: colors[i % colors.length], life: 0, max: 0.45 + Math.random() * 0.25 });
+    }
     kick();
   }
 
@@ -227,5 +241,5 @@
     };
   }
 
-  window.Juice = { reduce, sfx, buzz, confetti, dust, shake, flash, slam, clearSlam, roll, pop, wipe, palette, get sound() { return soundOn; } };
+  window.Juice = { reduce, sfx, buzz, confetti, dust, sparks, shake, flash, slam, clearSlam, roll, pop, wipe, palette, get sound() { return soundOn; } };
 })();
