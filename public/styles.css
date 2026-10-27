@@ -352,3 +352,41 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 @keyframes flick { 0% { transform: rotate(-45deg) scale(1); } 50% { transform: rotate(-41deg) scale(1.06, .95); } 100% { transform: rotate(-48deg) scale(.95, 1.05); } }
 .metaline .streak, #streak { display: inline-flex; align-items: center; gap: 7px; }
 @media (prefers-reduced-motion: reduce) { .flame { animation: none; } }
+
+/* ---------- Lab Notebook: hojas con margen, botones que se hunden, logo que bota, sello ---------- */
+.panel { position: relative; box-shadow: 5px 5px 0 var(--ink); }
+.panel::before {                                   /* línea de margen del cuaderno */
+  content: ""; position: absolute; left: 8px; top: 0; bottom: 0; width: 1.5px;
+  background: var(--coral); opacity: 0.3; pointer-events: none;
+}
+.stage { box-shadow: 4px 4px 0 var(--ink); }
+.btn { box-shadow: 4px 4px 0 var(--coral); }
+.btn:not(:disabled):hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--coral); }
+.btn:not(:disabled):active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--coral); }
+.btn.ghost { box-shadow: 3px 3px 0 var(--line); }
+.btn.ghost:not(:disabled):hover { box-shadow: 4px 4px 0 var(--ink-2); }
+.btn.ghost:not(:disabled):active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--line); }
+.exp svg { transition: transform 0.25s cubic-bezier(.3, 1.6, .5, 1); }
+.exp:hover svg { transform: translateY(-3px) rotate(-5deg); }
+.exp:active svg { transform: scale(0.9); }
+.logo .lball { transform-box: fill-box; transform-origin: 50% 100%; animation: lbounce 4.5s ease-in-out infinite; }
+@keyframes lbounce {
+  0%, 60%, 100% { transform: none; }
+  68% { transform: translateY(-4px); }
+  75% { transform: translateY(5px) scale(1.14, .84); }
+  81% { transform: translateY(-2px); }
+  87% { transform: none; }
+}
+.logo:hover .lball { animation-duration: 1.2s; }
+
+.end { position: relative; }
+.stamp {
+  position: absolute; top: 90px; right: 18px; z-index: 2; pointer-events: none;
+  display: grid; justify-items: center; gap: 3px; padding: 6px 11px 5px;
+  color: var(--coral); border: 3px solid currentColor; outline: 1.5px solid currentColor; outline-offset: 3px; border-radius: 6px;
+  transform: rotate(-11deg); opacity: 0.92;
+}
+.stamp.gold { color: var(--mostaza); }
+.stamp b { font: 800 23px/1 var(--font-display); letter-spacing: 0.05em; }
+.stamp small { font: 700 9.5px var(--font-mono); letter-spacing: 0.14em; }
+@media (prefers-reduced-motion: reduce) { .logo .lball { animation: none; } .exp svg { transition: none; } }
