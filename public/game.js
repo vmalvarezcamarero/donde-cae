@@ -31,7 +31,7 @@
   /* ---------- estado ---------- */
   // mark: drop → x mundo; balance → posición en unidades; pool → [x,y]; tower → índice de bloque o -1 (aguanta); race → usa order
   let day, roundIdx, phase, scores, details, mark, order, anim;
-  let hooks = null, attempt = null, serverPts = 0, sending = false, lastCoins = null;
+  let hooks = null, attempt = null, serverPts = 0, sending = false, lastCoins = null, lastCrowd = null, lastRank = null;
 
   /* ---------- juice: cámara lenta, zoom, impacto (ver juice.js) ---------- */
   const JU = () => window.Juice;
@@ -134,7 +134,7 @@
   }
   const DKEY = (id) => 'physle:detalles:' + id;
   function play(payload, h) {
-    hooks = h; attempt = payload.attempt;
+    hooks = h; attempt = payload.attempt; lastRank = null;
     day = { ...payload.day, rounds: payload.rounds };
     ({ W, H, FLOOR, R } = day);
     roundIdx = attempt.round; scores = attempt.scores.slice();
@@ -335,7 +335,7 @@
     try { res = await hooks.submit(roundIdx, predictionOf(round())); }
     catch (e) { sending = false; $('go').classList.remove('busy'); $('go').textContent = 'Release'; ready(); hooks.error(e.message); return; }
     sending = false; $('go').classList.remove('busy'); $('go').textContent = 'Watch…';
-    day.rounds[roundIdx] = res.round; serverPts = res.pts; lastCoins = res.coins;   // ahora sí: la ronda completa con su resultado
+    day.rounds[roundIdx] = res.round; serverPts = res.pts; lastCoins = res.coins; lastCrowd = res.crowd || null; if (res.rank) lastRank = res.rank;   // ahora sí: la ronda completa con su resultado
     const r = round(); phase = 'playing';
     const speed = r.type === 'race' ? 0.5 : 1;
     // Torre que aguanta: no se mueve nada, así que se avisa y se acorta la espera.
@@ -481,6 +481,22 @@
         l2: 'It turns ' + dir + ' at ' + sp.toFixed(2) + '× the speed of the first gear', d: dir[0].toUpperCase() + dir.slice(1) + ', ' + sp.toFixed(2) + '×' };
     }
   }
+  // Lo que hizo la gente en esta misma ronda (lo calcula el servidor; la demo no lo tiene).
+  function renderCrowd(c) {
+    const el = $('rCrowd');
+    if (!c || c.n == null) { el.hidden = true; return; }
+    el.hidden = false; el.innerHTML = '';
+    if (c.n < 3) { el.innerHTML = '<p class="cfirst">You’re one of the first players on this one today.</p>'; return; }
+    const rows = [['You beat', c.beat, 'you'], ['Nailed it', c.nailed, 'ok']];
+    if (c.same != null) rows.push(['Same pick', c.same, 'same']);
+    for (const [txt, v, cls] of rows) {
+      const d = document.createElement('div'); d.className = 'crow ' + cls;
+      d.innerHTML = '<span></span><span class="cbar"><i></i></span><b></b>';
+      d.children[0].textContent = txt; d.querySelector('i').style.setProperty('--w', v + '%'); d.children[2].textContent = v + '%';
+      el.appendChild(d);
+    }
+    const f = document.createElement('small'); f.textContent = c.n + ' other players so far'; el.appendChild(f);
+  }
   function finishRound() {
     const r = round(); phase = 'result';
     const s = scoreRound(r) || scoreNew(r); s.pts = serverPts;              // los puntos que valen son los del servidor
@@ -491,6 +507,7 @@
     $('result').hidden = false; $('prompt').hidden = true; $('chips').hidden = true;
     $('go').disabled = false; $('go').textContent = roundIdx < lastN() ? 'Next round' : 'See result';
     renderPips(); try { draw(); } catch (e) { console.error('Gravle draw:', e); }
+    try { renderCrowd(lastCrowd, s.pts); } catch (e) { console.error('Gravle crowd:', e); }
     try { resultFx(s); } catch (e) { console.error('Gravle juice:', e); }
     $('go').focus({ preventScroll: true });
     // En pantallas bajas el resultado y el botón pueden quedar fuera: se baja hasta ellos.
@@ -506,7 +523,7 @@
       return;
     }
     $('play').hidden = true;
-    hooks.done({ attempt, day, scores, details, total: scores.reduce((a, b) => a + b, 0), types: day.rounds.map(r => r.type), coins: lastCoins });
+    hooks.done({ attempt, day, scores, details, total: scores.reduce((a, b) => a + b, 0), types: day.rounds.map(r => r.type), coins: lastCoins, rank: lastRank });
   }
 
   /* ---------- dibujo: utilidades ---------- */

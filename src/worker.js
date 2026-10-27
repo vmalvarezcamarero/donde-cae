@@ -263,7 +263,64 @@ async function playRound(req, env, id) {
       coins = { earned, balance: res.coins };
     }
   }
-  return json({ pts, round: r, total, finished: !!finished, coins });
+  // Lo que hizo la gente en esta ronda y, al terminar, tu puesto del día. Si algo falla
+  // aquí no se rompe la partida: simplemente no se muestra.
+  let crowd = null, rank = null;
+  try { crowd = await crowdStats(env, a, body.round, pts, body.prediction, r.type); } catch (e) { console.error('crowd', e); }
+  if (finished) try { rank = await rankStats(env, who, a, id, total); } catch (e) { console.error('rank', e); }
+  return json({ pts, round: r, total, finished: !!finished, coins, crowd, rank });
+}
+
+/* ---------------- lo que hizo la gente ---------------- */
+// Clave de la opción elegida en los experimentos de elegir (null en los de posición libre).
+function choiceKey(type, p) {
+  if (['magnet', 'pour', 'pulley', 'flip', 'jump', 'tower', 'domino', 'gears'].includes(type)) return String(p);
+  if (type === 'race') return Array.isArray(p) ? String(p[0]) : null;          // el ganador que elegiste
+  if (type === 'orbit') return Array.isArray(p) ? (p.length === 1 ? 'k' + p[0] : 'escape') : null;
+  return null;
+}
+const MIN_CROWD = 3;
+// Compara tu ronda con la misma ronda del mismo reto (mismo día y mismo set) de los demás.
+async function crowdStats(env, a, idx, pts, pred, type) {
+  const path = '$[' + idx + ']';
+  const { results } = await env.DB.prepare(
+    'SELECT json_extract(predictions, ?1) AS p, json_extract(scores, ?1) AS s FROM attempts WHERE date = ?2 AND set_id = ?3 AND round > ?4 AND id != ?5 AND player != ?6'
+  ).bind(path, a.date, a.set_id, idx, a.id, a.player).all();
+  const rows = results.filter(x => typeof x.s === 'number');
+  const n = rows.length;
+  if (n < MIN_CROWD) return { n };
+  const pct = (k) => Math.round(100 * k / n);
+  const below = rows.filter(x => x.s < pts).length, ties = rows.filter(x => x.s === pts).length;
+  const out = { n, nailed: pct(rows.filter(x => x.s >= 80).length), beat: pct(below + ties / 2) };
+  const mine = choiceKey(type, pred);
+  if (mine != null) {
+    const same = rows.filter(x => { let p = x.p; if (typeof p === 'string') try { p = JSON.parse(p); } catch (e) {} return choiceKey(type, p) === mine; }).length;
+    out.same = pct(same);
+  }
+  return out;
+}
+// Al terminar: percentil del día entre todos los jugadores (con y sin cuenta, su mejor
+// intento) y, para cuentas con perfil, puesto en el ranking y a cuántos has adelantado.
+async function rankStats(env, who, a, id, total) {
+  const all = await env.DB.prepare(
+    `SELECT COUNT(*) AS n, SUM(best < ?2) AS below, SUM(best = ?2) AS ties
+     FROM (SELECT player, MAX(total) AS best FROM attempts WHERE date = ?1 AND finished = 1 GROUP BY player) WHERE player != ?3`
+  ).bind(a.date, total, a.player).first();
+  const n = all.n || 0;
+  const out = { players: n + 1, top: n >= MIN_CROWD ? Math.max(1, Math.round(100 * (n - (all.below || 0) - (all.ties || 0) / 2) / (n + 1))) : null };
+  if (!a.uid || !(await profileOf(env, a.uid))) return out;
+  // Tu mejor marca de hoy antes de este intento y ahora.
+  const prev = await env.DB.prepare('SELECT MAX(total) AS best FROM attempts WHERE date = ? AND uid = ? AND finished = 1 AND id != ?').bind(a.date, a.uid, id).first();
+  const old = prev && prev.best != null ? prev.best : null, best = Math.max(total, old ?? -1);
+  const ranked = `SELECT b.uid, b.best FROM (${BEST_SQL}) b JOIN users u ON u.uid = b.uid WHERE b.uid != ?3`;
+  const r = await env.DB.prepare(
+    `SELECT COUNT(*) AS n, SUM(best > ?4) AS above, SUM(best < ?4 AND (?5 IS NULL OR best >= ?5)) AS passed FROM (${ranked})`
+  ).bind(a.date, a.date, a.uid, best, total > (old ?? -1) ? old : best).first();
+  out.pos = (r.above || 0) + 1;
+  out.ranked = (r.n || 0) + 1;
+  out.passed = total > (old ?? -1) ? (r.passed || 0) : 0;
+  out.improved = old != null && total > old;
+  return out;
 }
 
 /* ---------------- rankings ---------------- */
