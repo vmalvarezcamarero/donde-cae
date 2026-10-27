@@ -355,7 +355,7 @@ async function leaderboard(req, env, url) {
   }
   if (country && !COUNTRY_SET.has(country)) throw new HttpError(400, 'Invalid country.');
   const filter = country ? 'WHERE u.country = ?3' : '';
-  const ranked = `SELECT u.uid, u.nickname, u.country, u.name_color, x.score, x.days,
+  const ranked = `SELECT u.uid, u.nickname, u.country, u.name_color, u.skin, x.score, x.days,
                   RANK() OVER (ORDER BY x.score DESC) AS pos, x.t
                   FROM (${totals}) x JOIN users u ON u.uid = x.uid ${filter}`;
   const args = country ? [f, t, country] : [f, t];
@@ -363,7 +363,7 @@ async function leaderboard(req, env, url) {
   let me = null;
   if (who.uid) me = await env.DB.prepare(`SELECT * FROM (${ranked}) WHERE uid = ?${args.length + 1}`).bind(...args, who.uid).first();
   const count = await env.DB.prepare(`SELECT COUNT(*) AS n FROM (${ranked})`).bind(...args).first();
-  const strip = (r) => r && ({ pos: r.pos, nickname: r.nickname, country: r.country, color: r.name_color, score: r.score, days: r.days, me: r.uid === who.uid });
+  const strip = (r) => r && ({ pos: r.pos, nickname: r.nickname, country: r.country, color: r.name_color, skin: r.skin, score: r.score, days: r.days, me: r.uid === who.uid });
   return json({ scope, from: f, to: t, country: country || null, players: count.n, rows: results.map(strip), me: strip(me) });
 }
 
