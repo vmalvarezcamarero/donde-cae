@@ -4,7 +4,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
 import { SKINS, NAME_COLORS, WELCOME_COINS } from './shop.js';
 import { publicRound, validPrediction, scorePoints } from './scoring.js';
-import { makeCard } from './card.js';
+import { makeCard } from './card.js?v=20261027c';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -158,28 +158,61 @@ function renderHome() {
   if (p && note.querySelector('b')) note.querySelector('b').textContent = p.nickname;
   $('noteLogin')?.addEventListener('click', openAuth);
   $('noteProfile')?.addEventListener('click', () => openProfile(true));
-  $('streak').textContent = streakText();
+  renderHomeStreak();
   // La tienda aparece después de la primera partida: al entrar, lo único importante es jugar.
   const hasPlayed = Object.keys(store.get('played', {})).length > 0 || list.some(a => a.finished);
   $('shopBtn').hidden = !hasPlayed;
 }
+// Cuenta atrás hasta el próximo Gravle: se mueve cada segundo en la portada y en
+// la pantalla final (allí con dígitos que giran al cambiar).
+const hms = (s) => [Math.floor(s / 3600), Math.floor(s % 3600 / 60), s % 60].map(v => String(v).padStart(2, '0'));
 function tick() {
   if (!resetAt) return;
   const s = Math.max(0, Math.round((resetAt - Date.now()) / 1000));
   if (s === 0) { resetAt = 0; refresh(); return; }
-  const h = Math.floor(s / 3600), m = Math.ceil((s % 3600) / 60);
-  $('next').textContent = 'Next challenge in ' + (h ? h + ' h ' : '') + m + ' min';
+  const p = hms(s);
+  $('next').textContent = 'Next challenge in ' + p.join(':');
+  if (!$('end').hidden && !$('streakBox').hidden) paintClock(p.join(''));
 }
-setInterval(tick, 20000);
+setInterval(tick, 1000);
+let clockPrev = '';
+function paintClock(str) {
+  const el = $('endClock');
+  if (el.children.length !== 8) { el.innerHTML = '<i></i><i></i><u>:</u><i></i><i></i><u>:</u><i></i><i></i>'; clockPrev = ''; }
+  const ds = el.querySelectorAll('i'), J = window.Juice;
+  for (let k = 0; k < 6; k++) if (str[k] !== clockPrev[k]) {
+    ds[k].textContent = str[k];
+    if (clockPrev && J && !J.reduce) ds[k].animate([{ transform: 'rotateX(90deg)', opacity: 0.3 }, { transform: 'none', opacity: 1 }], { duration: 260, easing: 'ease-out' });
+  }
+  clockPrev = str;
+}
 
 // Racha: días seguidos con al menos un intento terminado (guardada en este dispositivo).
-function streakText() {
+// Si hoy aún no has jugado, cuenta hasta ayer: la racha sigue viva pero en peligro.
+function streakCount(date = today.day.date) {
   const played = store.get('played', {});
-  let n = 0, t = Date.parse(today.day.date + 'T12:00:00Z');
-  if (!played[today.day.date]) t -= 864e5;
+  let n = 0, t = Date.parse(date + 'T12:00:00Z');
+  if (!played[date]) t -= 864e5;
   while (played[new Date(t).toISOString().slice(0, 10)]) { n++; t -= 864e5; }
-  return n ? '🔥 ' + n + '-day streak' : '';
+  return n;
 }
+function streakText() { const n = streakCount(); return n ? '🔥 ' + n + '-day streak' : ''; }
+// Hitos: solo en estos días hay celebración grande, para que no se gaste.
+const MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365];
+const nextMilestone = (n) => MILESTONES.find(m => m > n) || (Math.floor(n / 100) + 1) * 100;
+// La llama crece con la racha y cambia de color: naranja, más grande a partir de 7, azul-violeta desde 30.
+const flameTier = (n) => n >= 30 ? 3 : n >= 7 ? 2 : 1;
+function renderHomeStreak() {
+  const el = $('streak'), n = streakCount(), atRisk = n > 0 && !store.get('played', {})[today.day.date];
+  el.innerHTML = '';
+  if (!n) return;
+  const f = document.createElement('span'); f.className = 'flame sm' + (atRisk ? ' risk' : ''); f.dataset.tier = flameTier(n); f.setAttribute('aria-hidden', 'true');
+  const t = document.createElement('span'); t.textContent = n + '-day streak' + (atRisk ? ' · play today to keep it' : '');
+  el.append(f, t);
+}
+// Estrellas: 1 con el 30 %, 2 con el 60 % y 3 con el 84 % de los puntos (150 / 300 / 420 de 500).
+const starsOf = (total, max) => [0.3, 0.6, 0.84].filter(k => total >= k * max).length;
+const STAR_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.85 5.95 6.55.85-4.8 4.55 1.2 6.5L12 17.3l-5.8 3.15 1.2-6.5L2.6 9.4l6.55-.85z" stroke-linejoin="round"/></svg>';
 
 /* ---------- jugar ---------- */
 $('playBtn').addEventListener('click', maybeGate);
@@ -211,25 +244,76 @@ async function startAttempt() {
   });
 }
 let lastResult = null;
+const starLine = (k) => k ? '  ' + '⭐'.repeat(k) : '';
 // Juice de la pantalla final: total que rueda, filas que entran una a una y
 // celebración según la nota (fanfarria y confeti triple solo con 500/500).
-function endFx(r) {
-  const J = window.Juice; if (!J) return;
-  const max = r.scores.length * 100, t = r.total, num = $('totalN');
-  if (!J.reduce) [...$('rows').children].forEach((d, i) => d.animate([{ opacity: 0, transform: 'translateX(-14px)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: 200 + i * 110, easing: 'cubic-bezier(.3,1.3,.5,1)', fill: 'backwards' }));
-  J.roll(num, t, { ms: 1100 }).then(() => {
+// Orden: total que rueda → estrellas una a una → celebración según la nota → racha.
+let endRun = 0;
+function endFx(r, st) {
+  const J = window.Juice, run = ++endRun;
+  const max = r.scores.length * 100, t = r.total, num = $('totalN'), stars = [...$('stars').children];
+  const calm = !J || J.reduce;
+  const wait = (ms) => new Promise(res => setTimeout(res, calm ? 0 : ms));
+  const alive = () => run === endRun && !$('end').hidden;
+  if (calm) { num.textContent = t; stars.forEach((s, i) => s.classList.toggle('on', i < st.stars)); paintStreak(st, st.n); return; }
+  [...$('rows').children].forEach((d, i) => d.animate([{ opacity: 0, transform: 'translateX(-14px)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: 200 + i * 110, easing: 'cubic-bezier(.3,1.3,.5,1)', fill: 'backwards' }));
+  J.roll(num, t, { ms: 1100 }).then(async () => {
+    for (let i = 0; i < st.stars; i++) {
+      await wait(i ? 320 : 150); if (!alive()) return;
+      const s = stars[i]; s.classList.add('on'); J.sfx.star(i); J.buzz(12);
+      s.animate([{ transform: 'scale(2.6) rotate(-35deg)', opacity: 0 }, { transform: 'scale(.85) rotate(8deg)', opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 460, easing: 'cubic-bezier(.3,1.4,.5,1)' });
+      const b = s.getBoundingClientRect();
+      J.confetti(b.left + b.width / 2, b.top + b.height / 2, { n: 22, power: 0.5, colors: [J.palette()[2], J.palette()[0]] });
+    }
+    await wait(st.stars ? 350 : 100); if (!alive()) return;
     const b = num.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
     if (t >= max) {
       J.sfx.fanfare(); J.buzz([30, 40, 30, 40, 60]);
       [0, 300, 600].forEach((d, i) => setTimeout(() => J.confetti(innerWidth * (0.2 + 0.3 * i), innerHeight * 0.75, { n: 120, power: 1.25 }), d));
-    } else if (t >= max * 0.84) { J.sfx.good(5, true); J.confetti(x, y, { n: 110 }); }
-    else if (t >= max * 0.6) { J.sfx.ok(); J.confetti(x, y, { n: 40, power: 0.7 }); }
+    } else if (st.stars === 3) { J.sfx.good(5, true); J.confetti(x, y, { n: 110 }); }
+    else if (st.stars === 2) { J.sfx.ok(); J.confetti(x, y, { n: 40, power: 0.7 }); }
+    if (!st.show) return;
+    await wait(t >= max ? 1100 : 550); if (!alive()) return;
+    streakFx(st);
   });
+}
+// Pinta el bloque de racha con el número indicado (antes y después de sumar el día de hoy).
+function paintStreak(st, n) {
+  $('streakN').textContent = n;
+  const f = $('flame'); f.dataset.tier = flameTier(n); f.classList.toggle('off', n === 0);
+  const sub = $('streakSub');
+  if (n === 0) sub.textContent = 'Finish today to start one';
+  else if (!st.firstToday) sub.textContent = 'Come back tomorrow to keep it going';
+  else if (st.milestone) sub.textContent = 'Next goal: ' + nextMilestone(n) + ' days';
+  else if (n === 1) sub.textContent = 'Streak started. Come back tomorrow!';
+  else sub.textContent = 'Next goal: ' + nextMilestone(n) + ' days';
+}
+function streakFx(st) {
+  const J = window.Juice, box = $('streakBox'), wrap = $('flameWrap');
+  if (!st.firstToday) return;
+  J.roll($('streakN'), st.n, { from: st.n - 1, ms: 450, ticks: false }).then(() => paintStreak(st, st.n));
+  wrap.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.9) translateY(-6px)', offset: 0.35 }, { transform: 'scale(.9)', offset: 0.7 }, { transform: 'scale(1)' }], { duration: 700, easing: 'cubic-bezier(.3,1.4,.5,1)' });
+  setTimeout(() => { $('flame').dataset.tier = flameTier(st.n); }, 250);
+  J.sfx.streak(); J.buzz(st.milestone ? [20, 30, 20, 30, 50] : 20);
+  const b = wrap.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2, pal = J.palette();
+  J.confetti(x, y, { n: st.milestone ? 80 : 26, power: st.milestone ? 0.9 : 0.55, colors: st.n >= 30 ? [pal[1], pal[3], pal[2]] : [pal[0], pal[2]] });
+  if (st.milestone) {
+    setTimeout(() => (st.n >= 7 ? J.sfx.fanfare() : J.sfx.good(3, true)), 250);
+    const m = document.createElement('div'); m.className = 'milestone'; m.textContent = st.n + '-DAY MILESTONE';
+    box.querySelector('.milestone')?.remove(); box.appendChild(m); box.classList.add('has-milestone');
+    m.animate([{ transform: 'translate(-50%, 0) scale(2.4) rotate(-10deg)', opacity: 0 }, { transform: 'translate(-50%, 0) scale(.92) rotate(-3deg)', opacity: 1, offset: 0.6 }, { transform: 'translate(-50%, 0) rotate(-4deg)', opacity: 1 }], { duration: 560, easing: 'cubic-bezier(.2,.9,.3,1)', fill: 'both' });
+  }
 }
 async function showEnd(r) {
   show('end'); lastResult = r;
   const isDemo = !!r.attempt.demo;
+  const firstToday = !isDemo && !store.get('played', {})[r.day.date];
   if (!isDemo) { const played = store.get('played', {}); played[r.day.date] = Math.max(played[r.day.date] || 0, r.total); store.set('played', played); }
+  const max = r.scores.length * 100, nStars = starsOf(r.total, max), sn = isDemo ? 0 : streakCount(r.day.date);
+  const st = { show: !isDemo, n: sn, firstToday, stars: nStars, milestone: firstToday && MILESTONES.includes(sn) };
+  $('stars').innerHTML = STAR_SVG.repeat(3); $('stars').setAttribute('aria-label', nStars + ' of 3 stars');
+  $('streakBox').hidden = isDemo; $('streakBox').querySelector('.milestone')?.remove(); $('streakBox').classList.remove('has-milestone');
+  if (!isDemo) { paintStreak({ ...st, milestone: false }, firstToday ? Math.max(0, sn - 1) : sn); clockPrev = ''; tick(); }
   $('endLabel').textContent = 'Gravle #' + r.day.n + ' · attempt ' + (r.attempt.index || r.attempt.num);
   $('total').firstChild.textContent = r.total; $('total').lastChild.textContent = ' / ' + r.scores.length * 100;
   $('endNote').textContent = r.total >= 420 ? 'You think like a physicist.' : r.total >= 300 ? 'Good eye. Can you beat it?' : 'Physics shows no mercy. Time for a rematch.';
@@ -240,7 +324,7 @@ async function showEnd(r) {
     d.children[1].textContent = (i + 1) + '. ' + window.PhysleGame.TYPE_NAME[r.types[i]] + (r.details[i] ? ' · ' + r.details[i] : '');
     rows.appendChild(d);
   });
-  endFx(r);
+  endFx(r, st);
   const earned = $('earned');
   if (r.coins) { earned.hidden = false; earned.innerHTML = '<span class="coin" aria-hidden="true"></span><span></span>'; earned.lastChild.textContent = '+' + r.coins.earned + ' coins · you now have ' + r.coins.balance; }
   else earned.hidden = true;
@@ -250,7 +334,7 @@ async function showEnd(r) {
     $('endLabel').textContent = 'Demo · ' + LEVEL[r.day.level] + ' · new experiments';
     if ($('endJoin')) $('endJoin').hidden = true;
     $('again').hidden = false; $('again').textContent = 'Play again (new maps)';
-    $('share').textContent = 'Gravle · new experiments demo  ' + r.total + '/' + r.scores.length * 100 + '\n' + squares(r.scores) + '\n' + SITE + '/?demo';
+    $('share').textContent = 'Gravle · new experiments demo  ' + r.total + '/' + r.scores.length * 100 + starLine(nStars) + '\n' + squares(r.scores) + '\n' + SITE + '/?demo';
     return;
   }
   await refresh();
@@ -258,7 +342,7 @@ async function showEnd(r) {
   $('again').hidden = left <= 0;
   $('again').textContent = left > 0 ? 'Second attempt' : '';
   const streak = streakText();
-  $('share').textContent = 'Gravle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' (attempt ' + (r.attempt.index || r.attempt.num) + ')' : '') + '  ' + r.total + '/500\n' + squares(r.scores) + (streak ? '\n' + streak : '') + '\n' + SITE;
+  $('share').textContent = 'Gravle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' (attempt ' + (r.attempt.index || r.attempt.num) + ')' : '') + '  ' + r.total + '/500' + starLine(nStars) + '\n' + squares(r.scores) + (streak ? '\n' + streak : '') + '\n' + SITE;
 }
 $('copy').addEventListener('click', () => {
   const txt = $('share').textContent, btn = $('copy');
@@ -278,7 +362,7 @@ $('shareImg').addEventListener('click', async () => {
       sub: fmtDay.format(new Date(r.day.date + 'T12:00:00')) + ' · ' + LEVEL[r.day.level],
       total: r.total, scores: r.scores, names: r.types.map(t => window.PhysleGame.TYPE_NAME[t]),
       icons: r.types.map(t => (ICONS[t] || '').replace(/<\/svg>[\s\S]*$/, '</svg>')),
-      streak: r.attempt.demo ? '' : streakText(), host,
+      streak: r.attempt.demo ? '' : streakText(), host, stars: starsOf(r.total, r.scores.length * 100),
     });
     const file = new File([blob], 'gravle-' + (r.day.n || 'demo') + '.png', { type: 'image/png' });
     const text = $('share').textContent;

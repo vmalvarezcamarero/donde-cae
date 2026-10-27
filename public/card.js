@@ -12,7 +12,14 @@ function svgImage(svg) {
 }
 function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
-// res: { title, sub, total, scores[5], names[5], icons[5] (svg), streak, host }
+// res: { title, sub, total, scores[5], names[5], icons[5] (svg), streak, host, stars (0-3) }
+function star(g, cx, cy, R, on) {
+  g.beginPath();
+  for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rad = k % 2 ? R * 0.48 : R; g.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad); }
+  g.closePath(); g.lineJoin = 'round';
+  g.fillStyle = on ? P.mostaza : 'rgba(24,38,58,.08)'; g.fill();
+  g.strokeStyle = on ? P.ink : 'rgba(24,38,58,.25)'; g.lineWidth = 5; g.stroke();
+}
 export async function makeCard(res) {
   if (document.fonts?.ready) await document.fonts.ready;
   const W = 1080, H = 1350, c = document.createElement('canvas'); c.width = W; c.height = H;
@@ -35,6 +42,7 @@ export async function makeCard(res) {
   g.fillStyle = P.plate; rr(g, px, py, pw, ph, 28); g.fill(); g.strokeStyle = P.ink; g.lineWidth = 5; g.stroke();
   g.fillStyle = P.ink2; g.font = '600 34px ' + MONO; g.fillText(res.title.toUpperCase(), px + 56, py + 82);
   if (res.sub) { g.font = '500 30px ' + MONO; g.fillText(res.sub.toUpperCase(), px + 56, py + 126); }
+  if (res.stars != null) for (let k = 0; k < 3; k++) star(g, px + pw - 266 + k * 90, py + 92, 38, k < res.stars);
   g.fillStyle = P.ink; g.font = '800 200px ' + DISPLAY; g.fillText(String(res.total), px + 50, py + 320);
   const tw = g.measureText(String(res.total)).width; g.fillStyle = P.ink2; g.font = '700 64px ' + DISPLAY; g.fillText('/ ' + res.scores.length * 100, px + 70 + tw, py + 320);
   // rondas

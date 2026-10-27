@@ -21,7 +21,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261027a">
+<link rel="stylesheet" href="styles.css?v=20261027c">
 </head>
 <body>
 <div class="app" id="app">
@@ -121,7 +121,13 @@
     <div>
       <div class="dayhead"><span id="endLabel"></span></div>
       <div class="total" id="total"><b id="totalN">0</b><span> / 500</span></div>
+      <div class="stars" id="stars" role="img" aria-label="0 of 3 stars"></div>
       <p class="note" id="endNote" style="margin-top:6px"></p>
+    </div>
+    <div class="streakbox" id="streakBox" hidden>
+      <span class="flamewrap" id="flameWrap"><span class="flame" id="flame" data-tier="1" aria-hidden="true"></span></span>
+      <div class="sbtext"><div class="sbnum"><b id="streakN">0</b><span>-day streak</span></div><small id="streakSub"></small></div>
+      <div class="nextbox"><small>Next Gravle in</small><span class="clock" id="endClock" role="timer" aria-live="off"></span></div>
     </div>
     <div class="rows" id="rows"></div>
     <p class="earned" id="earned" hidden></p>
@@ -252,8 +258,8 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="juice.js?v=20261027a"></script>
-<script src="game.js?v=20261027b"></script>
-<script type="module" src="app.js?v=20261027a"></script>
+<script src="juice.js?v=20261027c"></script>
+<script src="game.js?v=20261027c"></script>
+<script type="module" src="app.js?v=20261027c"></script>
 </body>
 </html>
