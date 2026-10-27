@@ -21,7 +21,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261027g">
+<link rel="stylesheet" href="styles.css?v=20261027h">
 </head>
 <body>
 <div class="app" id="app">
@@ -170,9 +170,24 @@
   <!-- Shop -->
   <section id="shop" class="panel" hidden>
     <div class="dayhead"><span>Shop</span><button class="link" id="shopBack" type="button">Back</button></div>
-    <div class="wallet"><span class="coin big" aria-hidden="true"></span><div><b id="walletN">0</b> coins<small id="walletHint">Earn 1 coin per 10 points, plus 5 for every perfect round.</small></div></div>
-    <div class="tabs two" role="tablist">
+    <div class="wallet"><span class="coin big" id="walletCoin" aria-hidden="true"></span><div><b id="walletN">0</b> coins<small id="walletHint">Earn 1 coin per 10 points, plus 5 for every perfect round.</small></div></div>
+    <div class="hero" id="shopHero">
+      <canvas id="heroCv" aria-hidden="true"></canvas>
+      <div class="heroinfo">
+        <span class="rar" id="heroRar"></span>
+        <b class="hname" id="heroName"></b>
+        <span class="hnick" id="heroNick"></span>
+        <button class="btn" id="heroBtn" type="button"></button>
+      </div>
+    </div>
+    <button class="deal" id="shopDeal" type="button" hidden>
+      <canvas id="dealCv" aria-hidden="true"></canvas>
+      <span class="dtxt"><small>Daily deal · −40%</small><b id="dealName"></b><span class="dpr"><s id="dealWas"></s> <span class="coin" aria-hidden="true"></span><b id="dealPrice"></b></span></span>
+      <span class="dclock" id="dealClock"></span>
+    </button>
+    <div class="tabs" role="tablist">
       <button type="button" role="tab" id="tabSkins" aria-selected="true">Marbles</button>
+      <button type="button" role="tab" id="tabTrails" aria-selected="false">Trails</button>
       <button type="button" role="tab" id="tabColors" aria-selected="false">Name colors</button>
     </div>
     <p class="note" id="shopNote"></p>
@@ -260,9 +275,9 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="juice.js?v=20261027g"></script>
-<script src="game.js?v=20261027g"></script>
-<script type="module" src="app.js?v=20261027g"></script>
+<script src="juice.js?v=20261027h"></script>
+<script src="game.js?v=20261027h"></script>
+<script type="module" src="app.js?v=20261027h"></script>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "17666b232ffe4c9c89b2ac10bd2f422c"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, NAME_COLORS, WELCOME_COINS } from './shop.js';
-import { publicRound, validPrediction, scorePoints } from './scoring.js';
-import { makeCard } from './card.js?v=20261027f';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261027h';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261027h';
+import { makeCard } from './card.js?v=20261027h';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -125,15 +125,18 @@ async function refresh() {
 }
 const skinOf = (id) => (SKINS.find(x => x.id === id) || SKINS[0]).look;
 const colorOf = (id) => NAME_COLORS.find(x => x.id === id) || NAME_COLORS[0];
+const trailOf = (id) => (TRAILS.find(x => x.id === id) || TRAILS[0]).look;
 function paintName(el, colorId) {
   const c = colorOf(colorId);
-  el.classList.toggle('rainbow', c.css === 'rainbow');
-  el.style.cssText = c.css && c.css !== 'rainbow' ? c.css : '';
+  el.classList.remove('rainbow', 'nc-fire', 'nc-ice');
+  if (c.css === 'rainbow') el.classList.add('rainbow');
+  else if (c.css.startsWith('class:')) el.classList.add(c.css.slice(6));
+  el.style.cssText = c.css && c.css !== 'rainbow' && !c.css.startsWith('class:') ? c.css : '';
 }
 function renderAccount() {
   const p = today?.user?.profile;
   $('coinsBtn').hidden = !p; if (p) $('coinsN').textContent = p.coins;
-  window.PhysleGame.setSkin(skinOf(p?.skin));
+  window.PhysleGame.setSkin(skinOf(p?.skin)); window.PhysleGame.setTrail(trailOf(p?.trail));
   $('acctAv').textContent = p ? flag(p.country) || p.nickname[0] : user ? (user.email || '?')[0].toUpperCase() : '?';
   $('acctName').textContent = p ? p.nickname : user ? 'Finish your profile' : accountsOn ? 'Sign up' : 'Sign in';
   const guest = accountsOn && !user;
@@ -659,61 +662,163 @@ $('deleteYes').addEventListener('click', async () => {
 });
 
 /* ---------- tienda ---------- */
-let shopTab = 'skin';
+// Arriba, una vista previa animada de lo que eliges (pruébalo antes de comprarlo); debajo,
+// la oferta del día y las tarjetas. Al comprar, las monedas vuelan de tu cartera al artículo.
+const SHOP = { skin: SKINS, trail: TRAILS, color: NAME_COLORS };
+let shopTab = 'skin', shopSel = null, shopRaf = 0, shopCards = [];
 $('shopBtn').addEventListener('click', () => openShop('skin'));
 $('coinsBtn').addEventListener('click', () => openShop('skin'));
 $('shopBack').addEventListener('click', () => { show('home'); refresh(); });
 $('tabSkins').addEventListener('click', () => openShop('skin'));
+$('tabTrails').addEventListener('click', () => openShop('trail'));
 $('tabColors').addEventListener('click', () => openShop('color'));
-function openShop(tab) {
+$('heroBtn').addEventListener('click', () => { if (shopSel) heroAction(); });
+$('shopDeal').addEventListener('click', () => { const d = dailyDeal(today.day.date); openShop(d.kind, d.id); });
+const equippedId = (kind, p) => kind === 'skin' ? (p?.skin || 'classic') : kind === 'trail' ? (p?.trail || 'classic') : (p?.name_color || 'default');
+const ownsIt = (kind, it, p) => it.price === 0 || !!p?.owned.includes(kind + ':' + it.id);
+function openShop(tab, selId) {
   shopTab = tab; show('shop');
-  $('tabSkins').setAttribute('aria-selected', String(tab === 'skin')); $('tabColors').setAttribute('aria-selected', String(tab === 'color'));
+  [['skin', 'tabSkins'], ['trail', 'tabTrails'], ['color', 'tabColors']].forEach(([k, id]) => $(id).setAttribute('aria-selected', String(k === tab)));
+  shopSel = SHOP[tab].find(x => x.id === (selId || equippedId(tab, today?.user?.profile))) || SHOP[tab][0];
   renderShop();
+  if (!shopRaf) shopRaf = requestAnimationFrame(shopLoop);
 }
+// Dibuja cada fotograma la vista grande, las tarjetas y la oferta mientras la tienda está abierta.
+function shopLoop(now) {
+  if ($('shop').hidden) { shopRaf = 0; return; }
+  const t = window.Juice?.reduce ? 1.2 : now / 1000, p = today?.user?.profile, G = window.PhysleGame;
+  const look = shopTab === 'skin' && shopSel ? shopSel.look : skinOf(p?.skin), tl = shopTab === 'trail' && shopSel ? shopSel.look : trailOf(p?.trail);
+  const hc = $('heroCv'), hg = fitCanvas(hc); if (hg) G.preview(hg, hc.clientWidth, hc.clientHeight, look, tl, t, false);
+  for (const c of shopCards) {
+    const g = fitCanvas(c.cv); if (!g) continue;
+    if (c.kind === 'skin') { g.clearRect(0, 0, 64, 64); G.drawMarble(g, 32, 32, 22, c.it.look, t * 0.8 + c.i); }
+    else if (c.kind === 'trail') G.preview(g, 64, 64, skinOf(p?.skin), c.it.look, t + c.i * 0.3, true);
+  }
+  const d = today?.day && dailyDeal(today.day.date), dc = $('dealCv'), dg = !$('shopDeal').hidden && fitCanvas(dc);
+  if (dg && d) {
+    const it = SHOP[d.kind].find(x => x.id === d.id);
+    if (d.kind === 'skin') { dg.clearRect(0, 0, 44, 44); G.drawMarble(dg, 22, 22, 16, it.look, t); }
+    else if (d.kind === 'trail') G.preview(dg, 44, 44, skinOf(p?.skin), it.look, t, true);
+    else { dg.clearRect(0, 0, 44, 44); dg.font = '800 22px "Bricolage Grotesque", system-ui, sans-serif'; dg.textAlign = 'center'; dg.fillStyle = '#e3b341'; dg.fillText('Aa', 22, 30); }
+  }
+  shopRaf = requestAnimationFrame(shopLoop);
+}
+function fitCanvas(cv) {
+  const w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return null;
+  const dpr = Math.min(devicePixelRatio || 1, 2), W2 = Math.round(w * dpr), H2 = Math.round(h * dpr);
+  if (cv.width !== W2 || cv.height !== H2) { cv.width = W2; cv.height = H2; }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); return g;
+}
+function priceNow(kind, it) { return today?.day ? priceOf(kind, it, today.day.date) : it.price; }
 function renderShop() {
   const p = today?.user?.profile, note = $('shopNote');
   $('walletN').textContent = p ? p.coins : 0;
   if (!accountsOn) note.textContent = 'The shop opens together with accounts, very soon.';
   else if (!user) note.innerHTML = 'Coins are saved to your account. <button class="link" type="button" id="shopLogin">Sign in or sign up</button> to start earning ' + WELCOME_COINS + ' as a welcome gift.';
   else if (!p) note.innerHTML = 'Finish your profile to unlock the shop. <button class="link" type="button" id="shopProfile">Do it now</button>';
-  else note.textContent = shopTab === 'skin' ? 'Your marble in Landing, Bank shot, Loop and Bridge.' : 'How your name looks on the leaderboards.';
+  else note.textContent = { skin: 'Your marble in every marble game. Tap one to try it.', trail: 'The trail your marble leaves behind. Tap one to try it.', color: 'How your name looks on the leaderboards.' }[shopTab];
   $('shopLogin')?.addEventListener('click', openAuth);
   $('shopProfile')?.addEventListener('click', () => openProfile(true));
-  const box = $('items'); box.innerHTML = '';
-  const list = shopTab === 'skin' ? SKINS : NAME_COLORS;
-  const equipped = shopTab === 'skin' ? (p?.skin || 'classic') : (p?.name_color || 'default');
-  for (const it of list) {
-    const key = shopTab + ':' + it.id, owned = it.price === 0 || p?.owned.includes(key), on = equipped === it.id;
-    const card = document.createElement('div'); card.className = 'item' + (on ? ' on' : '');
-    if (shopTab === 'skin') {
-      const c = document.createElement('canvas'), dpr = Math.min(devicePixelRatio || 1, 3);
-      c.width = c.height = 64 * dpr; card.appendChild(c);
-      const g = c.getContext('2d'); g.scale(dpr, dpr); window.PhysleGame.drawMarble(g, 32, 32, 26, it.look, 0.5);
-    } else {
+  // oferta del día
+  const d = today?.day && dailyDeal(today.day.date), dealIt = d && SHOP[d.kind].find(x => x.id === d.id);
+  $('shopDeal').hidden = !dealIt || ownsIt(d.kind, dealIt, p);
+  if (dealIt) { $('dealName').textContent = dealIt.name + ' · ' + ({ skin: 'marble', trail: 'trail', color: 'name color' })[d.kind]; $('dealWas').textContent = d.was; $('dealPrice').textContent = d.price; }
+  // tarjetas
+  const box = $('items'); box.innerHTML = ''; shopCards = [];
+  const eq = equippedId(shopTab, p);
+  SHOP[shopTab].forEach((it, i) => {
+    const owned = ownsIt(shopTab, it, p), on = eq === it.id, rar = rarityOf(it.price), price = priceNow(shopTab, it);
+    const card = document.createElement('button'); card.type = 'button';
+    card.className = 'item' + (on ? ' on' : '') + (shopSel === it ? ' sel' : '') + (rar ? ' r-' + rar.id : '') + (owned ? ' owned' : '');
+    card.setAttribute('aria-pressed', String(shopSel === it));
+    if (shopTab === 'color') {
       const sw = document.createElement('div'); sw.className = 'sw';
       const nm = document.createElement('span'); nm.textContent = p?.nickname || 'Your name'; paintName(nm, it.id); sw.appendChild(nm); card.appendChild(sw);
-    }
+    } else { const cv = document.createElement('canvas'); cv.setAttribute('aria-hidden', 'true'); card.appendChild(cv); shopCards.push({ cv, it, kind: shopTab, i }); }
     const name = document.createElement('div'); name.className = 'in'; name.textContent = it.name; card.appendChild(name);
-    const pr = document.createElement('div'); pr.className = 'pr';
-    pr.innerHTML = it.price ? '<span class="coin" aria-hidden="true"></span>' + it.price : 'Free'; card.appendChild(pr);
-    const b = document.createElement('button'); b.type = 'button';
-    if (on) { b.textContent = 'Equipped'; b.disabled = true; }
-    else if (owned) { b.textContent = 'Equip'; b.className = 'sec'; b.disabled = !p; b.addEventListener('click', () => shopAction('equip', it)); }
-    else { b.textContent = p && p.coins < it.price ? 'Need ' + (it.price - p.coins) + ' more' : 'Buy'; b.disabled = !p || p.coins < it.price; b.addEventListener('click', () => shopAction('buy', it)); }
-    card.appendChild(b); box.appendChild(card);
-  }
+    const st = document.createElement('div'); st.className = 'pr';
+    if (on) st.innerHTML = '<span class="tick">✓</span> Equipped';
+    else if (owned) st.textContent = 'Owned';
+    else {
+      st.innerHTML = '<span class="coin" aria-hidden="true"></span>' + (price < it.price ? '<s>' + it.price + '</s> ' : '') + price;
+      if (p && p.coins < price) { const bar = document.createElement('span'); bar.className = 'need'; bar.innerHTML = '<i></i>'; bar.firstChild.style.width = Math.round(100 * p.coins / price) + '%'; card.appendChild(st); card.appendChild(bar); }
+    }
+    if (!card.contains(st)) card.appendChild(st);
+    if (rar) { const b = document.createElement('span'); b.className = 'rtag'; b.textContent = rar.name; card.appendChild(b); }
+    card.addEventListener('click', () => { shopSel = it; window.Juice?.sfx.tap(); renderShop(); const J = window.Juice; if (J && !J.reduce) $('heroCv').animate([{ transform: 'scale(.96)' }, { transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.3,1.6,.5,1)' }); });
+    box.appendChild(card);
+  });
+  renderHero();
 }
-async function shopAction(action, it) {
+function renderHero() {
+  const p = today?.user?.profile, it = shopSel, kind = shopTab; if (!it) return;
+  const rar = rarityOf(it.price), owned = ownsIt(kind, it, p), on = equippedId(kind, p) === it.id, price = priceNow(kind, it), btn = $('heroBtn');
+  $('heroRar').textContent = rar ? rar.name : 'Free'; $('heroRar').className = 'rar' + (rar ? ' r-' + rar.id : '');
+  $('heroName').textContent = it.name;
+  const nick = $('heroNick'); nick.hidden = kind !== 'color';
+  if (kind === 'color') { nick.textContent = p?.nickname || 'Your name'; paintName(nick, it.id); }
+  $('shopHero').className = 'hero' + (rar ? ' r-' + rar.id : '');
+  btn.disabled = false; btn.classList.remove('ghost');
+  if (on) { btn.textContent = 'Equipped ✓'; btn.disabled = true; }
+  else if (owned) { btn.textContent = 'Equip'; btn.disabled = !p; }
+  else if (!p) { btn.textContent = 'Sign in to buy'; btn.disabled = !accountsOn; }
+  else if (p.coins < price) { btn.textContent = 'Need ' + (price - p.coins) + ' more coins'; btn.disabled = true; }
+  else btn.innerHTML = 'Buy for <span class="coin" aria-hidden="true"></span> ' + price;
+}
+async function heroAction() {
+  const p = today?.user?.profile, it = shopSel, kind = shopTab;
+  if (!p) { openAuth(); return; }
+  const owned = ownsIt(kind, it, p);
+  $('heroBtn').disabled = true;
   try {
-    const res = await api('/api/shop/' + action, { method: 'POST', body: { kind: shopTab, id: it.id } });
-    today.user.profile = res.profile;
-    if (action === 'buy') {   // al comprar, se equipa directamente
-      const eq = await api('/api/shop/equip', { method: 'POST', body: { kind: shopTab, id: it.id } });
-      today.user.profile = eq.profile; toast('Unlocked: ' + it.name + '!');
-    } else toast(it.name + ' equipped.');
+    if (!owned) {
+      const before = p.coins, res = await api('/api/shop/buy', { method: 'POST', body: { kind, id: it.id } });
+      today.user.profile = res.profile;
+      await buyFx(it, before, res.profile.coins);
+    }
+    const eq = await api('/api/shop/equip', { method: 'POST', body: { kind, id: it.id } });
+    today.user.profile = eq.profile;
+    if (owned) equipFx(it);
     renderAccount(); renderShop();
-  } catch (e) { toast(e.message); }
+  } catch (e) { toast(e.message); renderHero(); }
 }
+// Compra: las monedas vuelan de la cartera al artículo, el saldo baja rodando y el artículo se desbloquea.
+function buyFx(it, from, to) {
+  const J = window.Juice;
+  if (!J || J.reduce) { $('walletN').textContent = to; toast('Unlocked: ' + it.name + '!'); return Promise.resolve(); }
+  const a = $('walletCoin').getBoundingClientRect(), b = $('heroCv').getBoundingClientRect();
+  const x0 = a.left + a.width / 2, y0 = a.top + a.height / 2, x1 = b.left + b.width / 2, y1 = b.top + b.height / 2, n = 12;
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('span'); c.className = 'coin flycoin'; c.style.left = x0 + 'px'; c.style.top = y0 + 'px'; document.body.appendChild(c);
+    const mx = (x0 + x1) / 2 + (Math.random() - 0.5) * 120, my = Math.min(y0, y1) - 40 - Math.random() * 60;
+    const an = c.animate([{ transform: 'translate(-50%,-50%) scale(1)' }, { transform: `translate(calc(-50% + ${mx - x0}px), calc(-50% + ${my - y0}px)) scale(1.2)`, offset: 0.5 }, { transform: `translate(calc(-50% + ${x1 - x0}px), calc(-50% + ${y1 - y0}px)) scale(.6)`, opacity: 0.4 }],
+      { duration: 520, delay: i * 45, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'backwards' });
+    an.onfinish = () => { c.remove(); J.sfx.tick(); };
+  }
+  J.roll($('walletN'), to, { from, ms: 600 + n * 45, ticks: false });
+  return new Promise(res => setTimeout(() => {
+    const rar = rarityOf(it.price)?.id, big = rar === 'epic' || rar === 'legendary';
+    big ? J.sfx.fanfare() : J.sfx.good(4, true); J.buzz([20, 30, 40]);
+    const hero = $('shopHero');
+    hero.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.05)', offset: 0.3 }, { transform: 'scale(.98)', offset: 0.6 }, { transform: 'none' }], { duration: 520, easing: 'ease-out' });
+    const fl = document.createElement('div'); fl.className = 'hflash'; hero.appendChild(fl);
+    fl.animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: 450, easing: 'ease-out' }).onfinish = () => fl.remove();
+    const pal = { common: ['#22a37a', '#e3b341'], rare: ['#2c7be5', '#7fd8ff'], epic: ['#8b5cd6', '#ff4fd8'], legendary: ['#e3b341', '#ff8a1f', '#fff2b0'] }[rar] || undefined;
+    J.confetti(x1, y1, { n: big ? 140 : 70, power: big ? 1.1 : 0.8, colors: pal });
+    const st = document.createElement('div'); st.className = 'ustamp'; st.textContent = 'UNLOCKED'; hero.appendChild(st);
+    st.animate([{ transform: 'translate(-50%,-50%) rotate(-12deg) scale(2.6)', opacity: 0 }, { transform: 'translate(-50%,-50%) rotate(-12deg) scale(.95)', opacity: 1, offset: 0.6 }, { transform: 'translate(-50%,-50%) rotate(-12deg) scale(1)', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.55,0,.75,.2)', fill: 'both' });
+    setTimeout(() => st.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' }).onfinish = () => st.remove(), 1500);
+    res();
+  }, 520 + n * 45));
+}
+function equipFx(it) {
+  const J = window.Juice; if (!J) return;
+  J.sfx.pick(); J.buzz(12);
+  if (!J.reduce) $('shopHero').animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-6px)', offset: 0.35 }, { transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+  toast(it.name + ' equipped.');
+}
+// cuenta atrás de la oferta del día
+setInterval(() => { if ($('shop').hidden || $('shopDeal').hidden || !resetAt) return; const s = Math.max(0, Math.round((resetAt - Date.now()) / 1000)); $('dealClock').textContent = 'ends in ' + hms(s).join(':'); }, 1000);
 
 /* ---------- demo de experimentos nuevos (/?demo) ---------- */
 const DEMO = new URLSearchParams(location.search).has('demo');
