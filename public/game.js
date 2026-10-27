@@ -17,6 +17,97 @@
   const num = (x, d = 1) => x.toFixed(d);
   const side = (u) => Math.abs(u) < 0.05 ? 'center' : num(Math.abs(u)) + (u < 0 ? ' left' : ' right');
 
+  /* ---------- Vida: goma, golpes y un detalle propio en cada experimento ----------
+     Todo es solo dibujo: no cambia la física ni la puntuación. */
+  const nowS = () => performance.now() / 1000;
+  let wfx = [], wlast = 0, wraf = 0, vida = { hits: {}, seen: {}, until: 0 };
+  function vidaReset() { wfx = []; vida = { hits: {}, seen: {}, until: 0 }; }
+  function keepAlive(sec) { vida.until = Math.max(vida.until, nowS() + sec); if (!wraf) wraf = requestAnimationFrame(wloop); }
+  // Sigue redibujando mientras haya partículas o algo vibrando, aunque la animación haya terminado.
+  function wloop() { wraf = 0; if (!wfx.length && nowS() >= vida.until) return; if (phase !== 'playing') { try { draw(); } catch (e) {} } wraf = requestAnimationFrame(wloop); }
+  function hit(key, sec = 0.8) { vida.hits[key] = nowS(); keepAlive(sec); }
+  const since = (key) => vida.hits[key] == null ? 99 : nowS() - vida.hits[key];
+  function once(key) { if (vida.seen[key]) return false; vida.seen[key] = 1; return true; }
+  function wspawn(p) { if (reduce) return; p.t = 0; wfx.push(p); keepAlive(0); }
+  // Partículas en coordenadas del mundo (se dibujan dentro de la cámara, así que el zoom les afecta).
+  function wdraw() {
+    const now = performance.now(), dt = wlast ? Math.min(0.05, (now - wlast) / 1000) : 0; wlast = now;
+    wfx = wfx.filter(p => {
+      p.t += dt; const k = p.t / p.life; if (k >= 1) return false;
+      ctx.save(); ctx.globalAlpha = (p.a ?? 1) * (1 - k);
+      if (p.kind === 'ring') { const rr = 4 + k * p.size; ctx.strokeStyle = p.col; ctx.lineWidth = (p.w || 2.4) * (1 - k) + 0.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, rr, rr * (p.flat ?? 0.32), p.ang || 0, 0, Math.PI * 2); ctx.stroke(); }
+      else if (p.kind === 'flash') { const rr = p.size * (0.35 + k); const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr); g.addColorStop(0, p.col); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.fill(); }
+      else { p.vy += (p.g ?? 600) * dt; p.vx *= Math.pow(0.3, dt); p.x += p.vx * dt; p.y += p.vy * dt; ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 - k * 0.5), 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore(); return true;
+    });
+  }
+  function burst(x, y, nx, ny, o = {}) {
+    const n = o.n ?? 7, sp = o.sp ?? 120, cols = o.cols || [C.ink, C['ink-2']];
+    for (let i = 0; i < n; i++) {
+      const a = Math.atan2(ny, nx) + (Math.random() - 0.5) * (o.spread ?? 2.2), v = sp * (0.4 + Math.random() * 0.8);
+      wspawn({ kind: 'dot', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: (o.size ?? 1.6) * (0.6 + Math.random() * 0.8), col: cols[i % cols.length], life: 0.35 + Math.random() * 0.3, g: o.g ?? 600 });
+    }
+    if (o.ring !== false) wspawn({ kind: 'ring', x, y, size: o.ringSize ?? 18, ang: Math.atan2(ny, nx) + Math.PI / 2, col: o.ringCol || C.ink, life: 0.4, w: 2.4 });
+  }
+  // Golpes de una trayectoria a 60 fotogramas por segundo: cambios bruscos de velocidad o de dirección.
+  function impactsOf(r, key, n, get) {
+    const c = r['_imp' + key]; if (c && c.n === n) return c.list;
+    const list = [];
+    for (let k = 2; k < n; k++) {
+      const a = get(k - 2), b = get(k - 1), q = get(k);
+      const v0x = b[0] - a[0], v0y = b[1] - a[1], v1x = q[0] - b[0], v1y = q[1] - b[1];
+      const dx = v1x - v0x, dy = v1y - v0y, j = Math.hypot(dx, dy), s0 = Math.hypot(v0x, v0y), s1 = Math.hypot(v1x, v1y);
+      if (j < 1.8 || s0 < 0.8) continue;
+      const turn = s1 > 0.2 ? Math.acos(Math.max(-1, Math.min(1, (v0x * v1x + v0y * v1y) / (s0 * s1)))) : Math.PI;
+      if (turn < 0.35 && s1 > 0.6 * s0) continue;
+      const prev = list[list.length - 1];
+      if (prev && k - prev.k < 4) { if (j > prev.j) list[list.length - 1] = { k, j, nx: dx / j, ny: dy / j }; continue; }
+      list.push({ k, j, nx: dx / j, ny: dy / j });
+    }
+    r['_imp' + key] = { n, list }; return list;
+  }
+  // Goma: se aplasta contra lo que golpea (con rebote) y se estira cuando va rápida.
+  function rubberAt(imps, get, n, fi) {
+    if (phase !== 'playing' || reduce) return null;
+    let best = null;
+    for (const im of imps) {
+      const age = fi - im.k; if (age < 0 || age > 10) continue;
+      const sq = Math.min(0.42, im.j * 0.06) * Math.exp(-age / 3) * Math.cos(age * 0.8);
+      if (!best || Math.abs(sq) > Math.abs(best.s)) best = { s: sq, ax: Math.atan2(im.ny, im.nx) };
+    }
+    if (best && Math.abs(best.s) > 0.015) return { ax: best.ax, sx: 1 - best.s, sy: 1 + best.s * 0.7, push: best.s };
+    if (fi >= 1 && fi < n) {
+      const a = get(fi - 1), b = get(fi), vx = b[0] - a[0], vy = b[1] - a[1], sp = Math.hypot(vx, vy);
+      const st = Math.min(0.24, Math.max(0, sp - 2.5) * 0.03);
+      if (st > 0.01) return { ax: Math.atan2(vy, vx), sx: 1 + st, sy: 1 - st * 0.5, push: 0 };
+    }
+    return null;
+  }
+  // Polvo, onda y «toc» cada vez que la animación pasa por un golpe (una sola vez por golpe).
+  function vidaTrack(key, imps, get, fi, rad, onHit, o = {}) {
+    if (phase !== 'playing' || !anim) return;
+    const lf = vida.seen['f' + key] ?? -1; vida.seen['f' + key] = fi;
+    for (const im of imps) if (im.k > lf && im.k <= fi) {
+      const [x, y] = get(im.k), cx = x - im.nx * rad, cy = y - im.ny * rad, pw = Math.min(1.4, im.j / 5);
+      burst(cx, cy, im.nx, im.ny, { n: (o.n ?? 4) + Math.round(pw * 6), sp: 60 + pw * 120, ringSize: (o.ring ?? 10) + pw * 18, cols: o.cols, size: o.size });
+      if (o.sound === 'thud') JU()?.sfx.thud(pw); else if (o.sound !== false) JU()?.sfx.tock(pw);
+      if (onHit) onHit(cx, cy, im, pw);
+    }
+  }
+  function applyDef(g, def, rad) {
+    if (!def) return;
+    const c = Math.cos(def.ax), s = Math.sin(def.ax);
+    if (def.push) g.translate(-c * def.push * rad, -s * def.push * rad);
+    g.rotate(def.ax); g.scale(def.sx, def.sy); g.rotate(-def.ax);
+  }
+  // Canica de goma siguiendo unos fotogramas: dibuja, deforma y lanza los golpes.
+  function rubberBall(r, key, n, get, fi, rad, ang, onHit, o) {
+    const imps = impactsOf(r, key, n, get);
+    vidaTrack(key, imps, get, fi, rad, onHit, o);
+    const [x, y] = get(fi);
+    drawSkin(ctx, x, y, rad, skin, ang, rubberAt(imps, get, n, fi));
+  }
+
   /* ---------- colores desde los tokens ---------- */
   let C = {};
   function readColors() {
@@ -179,7 +270,7 @@
   function startRound() {
     cancelAnimationFrame(anim && anim.raf);
     anim = null; phase = 'aim'; mark = null; order = [];
-    cancelAnimationFrame(camRaf); cam = { z: 1, x: W / 2, y: H / 2 }; slowActive = false;
+    cancelAnimationFrame(camRaf); cam = { z: 1, x: W / 2, y: H / 2 }; slowActive = false; vidaReset();
     if (JU()) JU().clearSlam(stageEl());
     const r = round();
     $('tag').textContent = 'Round ' + (roundIdx + 1) + ' · ' + TYPE_NAME[r.type];
@@ -355,7 +446,9 @@
     const slowOn = fxOn && SLOW.has(r.type) && !stands && iT > 0.7;
     anim.focus = slowOn ? focusOf(r) : null;
     let hitDone = !(fxOn && SLOW.has(r.type) && !stands), freezeUntil = 0, tPrev = performance.now();
+    vidaReset();
     if (fxOn) JU().sfx.release();
+    if (fxOn && r.type === 'pool') JU().sfx.tock(1.4);
     if (fxOn && r.type === 'spring' && r.target) { JU().sfx.boom(); JU().buzz(30); JU().shake(stageEl(), 3, 220); }
     let ended = false;
     const end = () => { if (ended) return; ended = true; cancelAnimationFrame(anim.raf); clearTimeout(watchdog); anim.t = dur; slowActive = false; try { finishRound(); } catch (e) { console.error('Gravle result:', e); } };
@@ -544,6 +637,7 @@
     const r = round(); if (!r) return;
     if (phase === 'playing' && !anim) return;
     ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge, orbit: drawOrbit, magnet: drawMagnet, pour: drawPour, pulley: drawPulley, flip: drawFlip, jump: drawJump, swing: drawSwing, spring: drawSpring })[r.type](r);
+    wdraw();
     // viñeta de cámara lenta, fija a la pantalla
     if (slowActive) {
       ctx.setTransform(s, 0, 0, s, 0, 0);
@@ -561,9 +655,9 @@
   /* ---------- skins de la canica (las compra el jugador en la tienda) ---------- */
   let skin = { kind: 'solid', base: 'var:coral' };
   const col = (v) => (v || '').startsWith('var:') ? C[v.slice(4)] : v;
-  function drawSkin(g, x, y, rad, look, ang) {
+  function drawSkin(g, x, y, rad, look, ang, def) {
     const base = col(look.base), alt = col(look.alt);
-    g.save(); g.translate(x, y);
+    g.save(); g.translate(x, y); applyDef(g, def, rad);
     g.beginPath(); g.arc(0, 0, rad, 0, Math.PI * 2); g.closePath();
     if (look.kind === 'metal') {
       const gr = g.createRadialGradient(-rad * 0.35, -rad * 0.4, rad * 0.1, 0, 0, rad);
@@ -644,11 +738,20 @@
       if (big && u > 0 && u < 100) ctx.fillText(String(u), x, FLOOR + 25);
     }
     ctx.lineCap = 'round';
-    for (const p of r.planks) plank(p);
-    for (const c of r.pegs) {
+    r.planks.forEach((p, i) => {
+      const t = since('pk' + i);
+      if (t < 0.7) {                                    // la tabla vibra al recibir el golpe
+        const L = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) || 1, nx = -(p.y2 - p.y1) / L, ny = (p.x2 - p.x1) / L;
+        const amp = (p.kind === 'muelle' ? 6 : p.kind === 'esponja' ? 2 : 3) * Math.exp(-7 * t) * Math.sin(45 * t);
+        ctx.save(); ctx.translate(nx * amp, ny * amp); plank(p); ctx.restore();
+      } else plank(p);
+    });
+    r.pegs.forEach((c, i) => {
       ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = C.plate; ctx.beginPath(); ctx.arc(c.x, c.y, 2.2, 0, Math.PI * 2); ctx.fill();
-    }
+      const t = since('pg' + i);
+      if (t < 0.5) { ctx.save(); ctx.globalAlpha = 1 - t / 0.5; ctx.strokeStyle = C.mostaza; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(c.x, c.y, c.r + 3 + 16 * t, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+    });
     { const x = r.startX, y1 = r.startY - 4;
       ctx.fillStyle = C.paper; ctx.fillRect(x - 15, 16, 30, y1 - 16);
       ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.lineCap = 'round';
@@ -673,7 +776,17 @@
       ctx.globalAlpha = 1;
       label(x, FLOOR + 40, 'landed ' + (x / 4).toFixed(0), C.coral);
     }
-    drawSkin(ctx, r.frames[fi][0], r.frames[fi][1], R, skin, r.frames[fi][2]);
+    rubberBall(r, 'd', r.frames.length, (k) => r.frames[k], fi, R, r.frames[fi][2], (x, y) => dropHit(r, x, y));
+  }
+  // Qué ha golpeado la canica: la tabla o el clavo más cercano al punto de contacto.
+  function dropHit(r, x, y) {
+    let bi = -1, bd = R + 9;
+    r.planks.forEach((p, i) => {
+      const dx = p.x2 - p.x1, dy = p.y2 - p.y1, L2 = dx * dx + dy * dy || 1, u = Math.max(0, Math.min(1, ((x - p.x1) * dx + (y - p.y1) * dy) / L2));
+      const d = Math.hypot(x - (p.x1 + dx * u), y - (p.y1 + dy * u)); if (d < bd) { bd = d; bi = i; }
+    });
+    if (bi >= 0) { hit('pk' + bi, 0.7); if (r.planks[bi].kind === 'muelle') JU()?.sfx.boing(); return; }
+    r.pegs.forEach((c, i) => { if (Math.hypot(x - c.x, y - c.y) < c.r + 8) { hit('pg' + i, 0.5); JU()?.sfx.ping(i % 5); } });
   }
   function plank(p) {
     const dx = p.x2 - p.x1, dy = p.y2 - p.y1, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
@@ -785,7 +898,17 @@
       if (!t.cum) { t.cum = [0]; for (let j = 1; j < t.pts.length; j++) t.cum.push(t.cum[j - 1] + Math.hypot(t.pts[j][0] - t.pts[j - 1][0], t.pts[j][1] - t.pts[j - 1][1])); }
       const sd = t.cum[k] + Math.hypot(x - t.pts[k][0], y - t.pts[k][1]);
       drawObject(t, x, y, nx, ny, sd / (OBJ_R[t.obj || 'canica']), Math.atan2(b[1] - a[1], b[0] - a[0]));
-      if (t.times && time >= t.times.at(-1)) arrived.push(i);
+      if (phase === 'playing' && t.times && time < t.times.at(-1) && (t.sand || []).some(([i0, i1]) => k >= i0 && k <= i1) && Math.random() < 0.6)
+        wspawn({ kind: 'dot', x: x - (b[0] - a[0]) * 0.5, y: y - 2, vx: (Math.random() - 0.5) * 50 - (b[0] - a[0]) * 6, vy: -30 - Math.random() * 50, r: 1.6, col: C.wood, life: 0.5, g: 300 });
+      if (t.times && time >= t.times.at(-1)) {
+        arrived.push(i);
+        if (phase === 'playing' && once('fin' + i)) {             // foto finish al cruzar la meta
+          const first = arrived.length === 1, [ex, ey] = t.pts.at(-1);
+          wspawn({ kind: 'flash', x: ex, y: ey, size: first ? 60 : 30, col: first ? 'rgba(255,255,255,.95)' : 'rgba(255,255,255,.6)', life: first ? 0.5 : 0.3 });
+          burst(ex, ey, 0, -1, { n: first ? 12 : 5, sp: first ? 150 : 80, cols: [C[t.color], C.ink], ring: first, ringCol: C[t.color], g: 300 });
+          if (first) JU()?.sfx.ding(); else JU()?.sfx.tock(0.5);
+        }
+      }
     });
     if (anim || phase === 'result') {
       r.order.filter(i => arrived.includes(i)).forEach((i, k) => {
@@ -820,7 +943,15 @@
       if (u % 2 === 0 && u !== 0) { ctx.fillStyle = C['ink-2']; ctx.fillText(String(Math.abs(u)), u * unit, 26); }
     }
     for (const w of r.weights) weightBox(w.p * unit, w.m, C.ink, C.plate);
-    if (mark != null) weightBox(mark * unit, r.M, C.azul, '#fff');
+    if (mark != null) {
+      const tw = phase === 'playing' && anim && !reduce ? anim.t : 9, T0 = 0.2;
+      if (tw < T0) { const dy = -42 * (1 - (tw / T0) ** 2); ctx.save(); ctx.translate(0, dy); weightBox(mark * unit, r.M, C.azul, '#fff'); ctx.restore(); }
+      else {
+        const a = tw - T0, sq = a < 0.6 ? 0.22 * Math.exp(-a * 9) * Math.cos(a * 28) : 0;
+        ctx.save(); ctx.translate(mark * unit, -4); ctx.scale(1 + sq, 1 - sq); ctx.translate(-mark * unit, 4); weightBox(mark * unit, r.M, C.azul, '#fff'); ctx.restore();
+        if (tw < 9 && once('bw')) { JU()?.sfx.thud(0.8); const ca = Math.cos(ang), sa = Math.sin(ang), wx = cx + mark * unit * ca, wy = y + mark * unit * sa - 4; burst(wx, wy, 0, -1, { n: 8, sp: 80, ringSize: 20 }); }
+      }
+    }
     if (phase === 'result') {
       ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = C.coral; ctx.lineWidth = 2;
       const s = boxSize(r.M); ctx.strokeRect(r.answer * unit - s / 2, -4 - s, s, s); ctx.restore();
@@ -887,8 +1018,28 @@
       if (mark) { ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(mark[0], mark[1]); ctx.lineTo(r.stop[0], r.stop[1]); ctx.stroke(); ctx.restore(); }
       label(r.stop[0], r.stop[1] - 22, 'stopped here', C.coral);
     }
+    // bandas que se iluminan al rebotar
+    for (let sd = 0; sd < 4; sd++) {
+      const tt = since('cu' + sd); if (tt >= 0.4) continue;
+      ctx.save(); ctx.globalAlpha = 0.85 * (1 - tt / 0.4); ctx.fillStyle = C.mostaza;
+      if (sd === 0) ctx.fillRect(t.x0, t.y0 - b, t.x1 - t.x0, b); else if (sd === 1) ctx.fillRect(t.x1, t.y0, b, t.y1 - t.y0);
+      else if (sd === 2) ctx.fillRect(t.x0, t.y1, t.x1 - t.x0, b); else ctx.fillRect(t.x0 - b, t.y0, b, t.y1 - t.y0);
+      ctx.restore();
+    }
+    // el taco golpea la bola al soltar y se retira
+    if (phase === 'playing' && anim && anim.t < 0.45 && !reduce) {
+      const ux = -r.v[0] / v, uy = -r.v[1] / v, d0 = r.br + 2 + Math.max(0, anim.t - 0.04) * 110, [bx0, by0] = r.frames[0];
+      ctx.save(); ctx.globalAlpha = Math.min(1, (0.45 - anim.t) / 0.2); ctx.lineCap = 'round';
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(bx0 + ux * d0, by0 + uy * d0); ctx.lineTo(bx0 + ux * (d0 + 170), by0 + uy * (d0 + 170)); ctx.stroke();
+      ctx.strokeStyle = C.wood; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(bx0 + ux * (d0 + 6), by0 + uy * (d0 + 6)); ctx.lineTo(bx0 + ux * (d0 + 170), by0 + uy * (d0 + 170)); ctx.stroke();
+      ctx.strokeStyle = C.azul; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(bx0 + ux * d0, by0 + uy * d0); ctx.lineTo(bx0 + ux * (d0 + 5), by0 + uy * (d0 + 5)); ctx.stroke();
+      ctx.restore();
+    }
     let dist = 0; for (let k = 1; k <= fi; k++) dist += Math.hypot(r.frames[k][0] - r.frames[k - 1][0], r.frames[k][1] - r.frames[k - 1][1]);
-    drawSkin(ctx, r.frames[fi][0], r.frames[fi][1], r.br, skin, dist / r.br);
+    rubberBall(r, 'p', r.frames.length, (k) => r.frames[k], fi, r.br, dist / r.br, (x, y) => {
+      const ds = [Math.abs(y - t.y0), Math.abs(x - t.x1), Math.abs(y - t.y1), Math.abs(x - t.x0)], m = Math.min(...ds);
+      if (m < r.br + 8) hit('cu' + ds.indexOf(m), 0.4);
+    }, { cols: [C.ink, C.felt] });
   }
 
   /* ---------- ¿Aguanta? ---------- */
@@ -915,6 +1066,13 @@
     let fr = null;
     if (r.frames && phase !== 'aim') fr = r.frames[phase === 'result' ? r.frames.length - 1 : Math.min(r.frames.length - 1, Math.floor(anim.t * 60))];
     const wob = !r.frames && anim && phase === 'playing' ? Math.sin(anim.t * 14) * 0.012 * Math.exp(-anim.t * 3) : 0;
+    if (r.frames && phase === 'playing') {
+      const fiT = Math.min(r.frames.length - 1, Math.floor(anim.t * 60));
+      r.blocks.forEach((b, i) => {
+        const get = (k) => r.frames[k][i];
+        vidaTrack('t' + i, impactsOf(r, 't' + i, r.frames.length, get), get, fiT, b.h / 2, null, { sound: 'thud', n: 8, ring: 20, cols: [C.ink, C['ink-2'], C.wood] });
+      });
+    }
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, floorY); ctx.clip();
     r.blocks.forEach((b, i) => {
       ctx.save();
@@ -1085,7 +1243,14 @@
       const F = r.sim || (r.sim = loopFrames(r, mark));
       const fi = phase === 'result' || !anim ? F.length - 1 : Math.max(0, Math.min(F.length - 1, Math.floor(anim.t * 60) || 0));
       trail(F, fi, C.coral);
-      const f = F[fi]; drawSkin(ctx, Math.min(f[0], W - rb), f[1], rb, skin, f[2]);
+      const get = (k) => [Math.min(F[k][0], W - rb), F[k][1]];
+      if (r._top == null) { let best = -1, by = Infinity; F.forEach((q, k) => { if (Math.abs(q[0] - P.cx) < P.rho * 0.35 && q[1] < P.cy && q[1] < by) { by = q[1]; best = k; } }); r._top = by < P.cy - P.rho * 0.8 ? best : -1; }
+      if (phase === 'playing' && r._top >= 0 && fi >= r._top && once('top')) {
+        const [tx, ty] = get(r._top); JU()?.sfx.ding();
+        wspawn({ kind: 'flash', x: tx, y: ty, size: 40, col: 'rgba(255,214,90,.9)', life: 0.5 });
+        burst(tx, ty, 0, -1, { n: 10, sp: 140, cols: [C.mostaza, C.coral], ring: false, g: 200 });
+      }
+      rubberBall(r, 'l' + mark, F.length, get, fi, rb, F[fi][2], null);
     }
   }
 
@@ -1146,7 +1311,18 @@
       ctx.save(); ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(255,90,74,.8)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(sx + Math.cos(r.ang) * 12, sy + Math.sin(r.ang) * 12); ctx.lineTo(sx + Math.cos(r.ang) * 44, sy + Math.sin(r.ang) * 44); ctx.stroke(); ctx.restore();
     } else {
-      const tip = beam(r.path, phase === 'result' ? Infinity : anim.t * LASER_SPEED);
+      const reach = phase === 'result' ? Infinity : anim.t * LASER_SPEED;
+      const tip = beam(r.path, reach);
+      // cada espejo destella cuando le llega el rayo
+      if (!r._cum) { r._cum = [0]; for (let k = 1; k < r.path.length; k++) r._cum.push(r._cum[k - 1] + Math.hypot(r.path[k][0] - r.path[k - 1][0], r.path[k][1] - r.path[k - 1][1])); }
+      for (let k = 1; k < r.path.length; k++) {
+        if (reach < r._cum[k]) break;
+        const last = k === r.path.length - 1, [px, py] = r.path[k];
+        if (phase === 'playing' && once('mir' + k)) {
+          if (last) { burst(px, py, (LROOM.x0 + LROOM.x1) / 2 - px, (LROOM.y0 + LROOM.y1) / 2 - py, { n: 14, sp: 160, cols: ['#ffd2c8', '#ff6a55', '#fff'], ring: false, g: 0, size: 1.4 }); }
+          else { JU()?.sfx.ping(k); wspawn({ kind: 'flash', x: px, y: py, size: 34, col: 'rgba(255,240,235,.95)', life: 0.45 }); }
+        }
+      }
       if (tip && (phase === 'result' || anim.t * LASER_SPEED >= r.len)) {
         const [ex, ey] = r.end;
         ctx.save(); ctx.shadowColor = '#ff3b30'; ctx.shadowBlur = 18; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, ey, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
@@ -1389,6 +1565,17 @@
     r.links.filter(l => l.kind === 'belt').forEach(l => belt(r.parts[l.a], r.parts[l.b], l.crossed, angOf(l.a) * r.parts[l.a].r));
     r.links.filter(l => l.kind === 'belt').forEach(l => { gearShape(r.parts[l.a], angOf(l.a)); gearShape(r.parts[l.b], angOf(l.b)); });
     order.filter(i => r.parts[i].front).forEach(i => gearShape(r.parts[i], angOf(i), fillOf(i)));
+    if (phase === 'playing' && anim && !reduce) {
+      // estelas de giro alrededor de cada rueda
+      ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 2;
+      r.parts.forEach((p, i) => { if (!w[i]) return; const a = angOf(i), sg = Math.sign(w[i]), len = Math.min(0.9, 0.35 * Math.abs(w[i]) + 0.2);
+        for (const q of [0, Math.PI]) { ctx.globalAlpha = 0.35; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 6, a + q - sg * len, a + q, sg < 0); ctx.stroke(); } });
+      ctx.restore();
+      // chispas donde engranan dos ruedas dentadas
+      r.links.forEach(l => { if (l.kind === 'belt' || Math.random() > 0.25) return; const A = r.parts[l.a], B = r.parts[l.b], d = Math.hypot(B.x - A.x, B.y - A.y) || 1;
+        const cx = A.x + (B.x - A.x) * A.r / d, cy = A.y + (B.y - A.y) * A.r / d;
+        const [sx, sy] = scr(cx, cy); wspawn({ kind: 'dot', x: sx, y: sy, vx: (Math.random() - 0.5) * 80, vy: -40 - Math.random() * 60, r: 1.4, col: C.mostaza, life: 0.35, g: 400 }); });
+    }
     // flecha del primero
     const p0 = r.parts[0];
     ctx.strokeStyle = C.azul; ctx.lineWidth = 3; ctx.lineCap = 'round'; const R0 = p0.r + 12;
@@ -1398,7 +1585,13 @@
     // bandera del último
     const pl = r.parts[last];
     ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pl.x, pl.y); ctx.lineTo(pl.x, pl.y - pl.r - 26); ctx.stroke();
-    ctx.fillStyle = C.coral; ctx.beginPath(); ctx.moveTo(pl.x, pl.y - pl.r - 26); ctx.lineTo(pl.x + 20, pl.y - pl.r - 20); ctx.lineTo(pl.x, pl.y - pl.r - 14); ctx.closePath(); ctx.fill();
+    { // bandera: ondea mientras giran
+      const fy = pl.y - pl.r - 26, wv = phase === 'playing' && anim && !reduce ? anim.t : 0;
+      ctx.fillStyle = C.coral; ctx.beginPath(); ctx.moveTo(pl.x, fy);
+      for (let q = 1; q <= 6; q++) { const x = pl.x + q * 3.6, y = fy + q * 1 + (wv ? Math.sin(wv * 12 - q * 0.9) * q * 0.45 : 0); ctx.lineTo(x, y); }
+      for (let q = 6; q >= 1; q--) { const x = pl.x + q * 3.6, y = fy + 12 - q * 1 + (wv ? Math.sin(wv * 12 - q * 0.9) * q * 0.45 : 0); ctx.lineTo(x, y); }
+      ctx.lineTo(pl.x, fy + 12); ctx.closePath(); ctx.fill();
+    }
     // marca giratoria en el último para ver el sentido
     ctx.save(); ctx.translate(pl.x, pl.y); ctx.rotate(angOf(last)); ctx.fillStyle = '#fff'; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(pl.r * 0.55, 0, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
     // dientes de cada engranaje
@@ -1482,10 +1675,18 @@
       ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = C.coral; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(r.xa, r.ya); ctx.lineTo(r.xa + r.answer * Math.sin(ti), r.ya - r.answer * Math.cos(ti)); ctx.stroke(); ctx.restore();
       label(Math.min(W - 70, cx + 10), r.yb + 40, 'perfect ' + cm(r.answer) + ' cm', C.coral);
     }
-    // tabla
+    // tabla (rebota al terminar de caer)
     const L = mark ?? 0;
+    let wob = 0;
+    if (S) {
+      if (r._kf == null) r._kf = S.frames.findIndex(q => Math.abs(q[0] - S.th) < 1e-9);
+      if (r._kf >= 0 && fi >= r._kf) {
+        const age = (fi - r._kf) / 60; if (phase === 'playing') wob = 0.07 * Math.exp(-7 * age) * Math.sin(30 * age);
+        if (phase === 'playing' && once('slam')) { const tx = r.xa + L * Math.sin(S.th), ty = r.ya - L * Math.cos(S.th); JU()?.sfx.thud(0.7); burst(tx, ty, 0, -1, { n: 8, sp: 90, cols: [C.wood, C.ink] }); }
+      }
+    }
     if (L > 0 || phase !== 'aim') {
-      const th = f ? f[0] : 0;
+      const th = (f ? f[0] : 0) + wob;
       ctx.save(); ctx.translate(r.xa, r.ya); ctx.rotate(th);
       ctx.fillStyle = C.wood; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; roundRect(-6, -L, 6, L, 2); ctx.fill(); ctx.stroke();
       ctx.strokeStyle = C.ink; ctx.globalAlpha = 0.2; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-3, -L + 4); ctx.lineTo(-3, -4); ctx.stroke(); ctx.globalAlpha = 1;
@@ -1498,7 +1699,7 @@
         ctx.font = mono(11); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'left'; ctx.fillText('drag up to grow the plank', Math.max(8, r.xa - 60), r.ya - 104);
       }
       drawSkin(ctx, r.xa - 34, r.ya - rb, rb, skin, 0);
-    } else drawSkin(ctx, f[1], f[2], rb, skin, f[3]);
+    } else rubberBall(r, 'b' + mark, S.frames.length, (k) => [S.frames[k][1], S.frames[k][2]], fi, rb, f[3], null);
     if (phase === 'result' && mark != null) label(Math.max(60, r.xa - 10), r.ya - 30, 'you ' + cm(mark) + ' cm', C.azul);
   }
 
@@ -1572,10 +1773,18 @@
     ctx.fillStyle = C.ink; roundRect(T.x0 - 10, T.y0 - 10, T.x1 - T.x0 + 20, T.y1 - T.y0 + 20, 12); ctx.fill();
     ctx.fillStyle = '#e8e2d4'; ctx.fillRect(T.x0, T.y0, T.x1 - T.x0, T.y1 - T.y0);
     ctx.font = mono(10); ctx.fillStyle = C['ink-2']; ctx.textAlign = 'center'; ctx.fillText('pull = strength ÷ distance²', W / 2, T.y1 + 32);
+    const ft = phase === 'playing' && anim ? anim.t : 0;
     r.mags.forEach((m, i) => {
-      ctx.strokeStyle = 'rgba(200,40,40,.16)'; ctx.lineWidth = 1.5;
-      for (let k = 1; k <= m.s + 1; k++) { ctx.beginPath(); ctx.arc(m.x, m.y, m.r + k * 14, 0, Math.PI * 2); ctx.stroke(); }
-      ctx.save(); ctx.translate(m.x, m.y);
+      // ondas de campo: en la partida fluyen hacia el imán, más rápido cuanto más fuerte
+      const span = (m.s + 1) * 14;
+      ctx.lineWidth = 1.5;
+      for (let k = 1; k <= m.s + 1; k++) {
+        const o = ((k * 14 - ft * 22 * m.s) % span + span) % span, rr = m.r + 6 + o;
+        ctx.strokeStyle = 'rgba(200,40,40,' + (0.24 * (1 - o / span) + 0.05).toFixed(3) + ')';
+        ctx.beginPath(); ctx.arc(m.x, m.y, rr, 0, Math.PI * 2); ctx.stroke();
+      }
+      const tw = since('mg' + i), shk = tw < 0.5 ? Math.sin(55 * tw) * 3 * Math.exp(-8 * tw) : 0;
+      ctx.save(); ctx.translate(m.x + shk, m.y);
       ctx.fillStyle = '#d62828'; ctx.beginPath(); ctx.arc(0, 0, m.r, Math.PI / 2, Math.PI * 1.5); ctx.fill();
       ctx.fillStyle = '#2c68d0'; ctx.beginPath(); ctx.arc(0, 0, m.r, -Math.PI / 2, Math.PI / 2); ctx.fill();
       ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, m.r, 0, Math.PI * 2); ctx.stroke();
@@ -1587,8 +1796,16 @@
     const fi = phase === 'aim' ? 0 : frameAt(r.frames);
     const [bx, by] = phase === 'aim' ? r.start : r.frames[fi];
     if (phase !== 'aim') { ctx.save(); ctx.setLineDash([2, 5]); ctx.strokeStyle = C.ink; ctx.globalAlpha = 0.35; ctx.lineWidth = 1.5; ctx.beginPath(); r.frames.slice(0, fi + 1).forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); ctx.restore(); }
+    let def = null;
+    if (phase !== 'aim') {
+      const get = (k) => r.frames[k], imps = impactsOf(r, 'm', r.frames.length, get);
+      vidaTrack('m', imps, get, fi, 9, () => { hit('mg' + r.win, 0.5); JU()?.sfx.clank(); }, { sound: false, cols: [C.mostaza, '#9aa6b2'] });
+      def = rubberAt(imps, get, r.frames.length, fi);
+    }
+    ctx.save(); ctx.translate(bx, by); applyDef(ctx, def, 9); ctx.translate(-bx, -by);
     const g = ctx.createRadialGradient(bx - 3, by - 3, 1, bx, by, 9); g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#9aa6b2'); g.addColorStop(1, '#3c4652');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, 9, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
     if (phase === 'aim') label(bx, by - 22, 'steel ball', C['ink-2']);
   }
 
@@ -1642,7 +1859,10 @@
     });
   }
   function drawPulley(r) {
-    const t = phase === 'result' ? 1 : phase === 'playing' && anim ? Math.min(1, anim.t / 1.6) : 0, e = t * t * (3 - 2 * t);
+    const t = phase === 'result' ? 1 : phase === 'playing' && anim ? Math.min(1, anim.t / 1.6) : 0;
+    // llegan con un rebote, como si colgaran de un muelle
+    const tp = phase === 'playing' && anim ? anim.t : 9, e = phase === 'aim' ? 0 : reduce ? 1 : 1 - Math.exp(-3.4 * tp) * (Math.cos(6.5 * tp) + 0.52 * Math.sin(6.5 * tp));
+    const sway = phase === 'playing' && !reduce ? Math.sin(tp * 6) * 0.07 * Math.exp(-1.8 * tp) : 0;
     const dir = phase === 'aim' ? 0 : r.answer, travel = 70;
     ctx.fillStyle = C.ink; ctx.fillRect(30, 84, 340, 12);
     for (let x = 36; x < 370; x += 14) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, 84); ctx.lineTo(x - 8, 76); ctx.stroke(); }
@@ -1667,13 +1887,19 @@
       // gancho y peso
       ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x, blockY + 6); ctx.lineTo(x, blockY + 22); ctx.stroke();
       const bs = 36 + s.m * 3.2;
+      ctx.save(); ctx.translate(x, blockY + 22); ctx.rotate(sway * sgn); ctx.translate(-x, -(blockY + 22));
       ctx.fillStyle = C['ink-2']; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; roundRect(x - bs / 2, blockY + 22, bs, bs, 6); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '800 ' + Math.round(14 + s.m) + 'px "Bricolage Grotesque", system-ui, sans-serif'; ctx.fillText(s.m + ' kg', x, blockY + 22 + bs / 2 + 6);
+      ctx.restore();
       if (a === 1) label(x + sgn * 40, 240 + down / 2, '1 rope', C.azul);
     };
     // polea central
     side(r.left, -1); side(r.right, 1);
     ctx.fillStyle = '#c9d1d9'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(pc[0], pc[1], pr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    { // radios que giran con la cuerda
+      const rot = dir * travel * e / pr * 0.5; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6;
+      for (let q = 0; q < 3; q++) { const a = rot + q * Math.PI * 2 / 3; ctx.beginPath(); ctx.moveTo(pc[0], pc[1]); ctx.lineTo(pc[0] + Math.cos(a) * (pr - 3), pc[1] + Math.sin(a) * (pr - 3)); ctx.stroke(); }
+    }
     ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(pc[0], pc[1], 4, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = C.paper; ctx.fillRect(0, 556, W, H - 556); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, 556); ctx.lineTo(W, 556); ctx.stroke();
     if (phase === 'result') label(200, 520, r.answer === 0 ? 'balanced: it doesn’t move' : (r.answer < 0 ? 'left' : 'right') + ' side goes down', C.coral);
@@ -1695,7 +1921,18 @@
     const fi = phase === 'aim' ? -1 : frameAt(r.frames);
     const f = fi < 0 ? [...P(r.th0), 1] : r.frames[fi];
     if (f[2] === 1) { ctx.strokeStyle = '#8a6d3b'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(r.px, r.py); ctx.lineTo(f[0], f[1]); ctx.stroke(); }
-    ctx.font = '22px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('✂️', cx + Math.cos(r.thc) * 22 * (r.thc >= 0 ? 1 : -1), cy - 8);
+    let snipAge = 9;
+    if (fi >= 0 && f[2] !== 1) {
+      // el trozo de cuerda que queda colgando se balancea hasta pararse
+      const ci = r.cutIdx ?? r.frames.findIndex(q => q[2] !== 1), age = Math.max(0, (fi - ci) / 60); snipAge = age;
+      const th = r.thc * Math.exp(-2.2 * age) * Math.cos(7 * age), Ls = r.L * 0.55, ex = r.px + Ls * Math.sin(th), ey = r.py + Ls * Math.cos(th);
+      ctx.strokeStyle = '#8a6d3b'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(r.px, r.py); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.lineWidth = 1.2; for (const o of [-3, 0, 3]) { ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex + o + Math.sin(th) * 4, ey + 5); ctx.stroke(); }
+      if (phase === 'playing' && once('cut')) { JU()?.sfx.snip(); burst(cx, cy, 0, -1, { n: 8, sp: 90, cols: [C.mostaza, '#8a6d3b'], ring: false, g: 300 }); }
+    }
+    const sc = 1 + 0.5 * Math.exp(-9 * snipAge);
+    ctx.save(); ctx.translate(cx + Math.cos(r.thc) * 22 * (r.thc >= 0 ? 1 : -1), cy - 8); ctx.scale(sc, sc);
+    ctx.font = '22px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('✂️', 0, 0); ctx.restore();
     label(cx, cy + 30, 'cut here', C['ink-2']);
     if (phase !== 'aim') trail(r.frames, fi, C.coral);
     floorMark(fy);
@@ -1704,7 +1941,8 @@
       ctx.strokeStyle = C.coral; ctx.lineWidth = 2; for (const rr of [16, 26]) { ctx.globalAlpha = rr === 16 ? 0.6 : 0.3; ctx.beginPath(); ctx.ellipse(x, y, rr, rr * 0.3, 0, Math.PI, 0); ctx.stroke(); }
       ctx.globalAlpha = 1; label(x, fy + 40, 'landed ' + (x / 4).toFixed(0), C.coral);
     }
-    drawSkin(ctx, f[0], f[1], 10, skin, fi > 0 ? fi * 0.2 : 0);
+    if (fi < 0) drawSkin(ctx, f[0], f[1], 10, skin, 0);
+    else rubberBall(r, 's', r.frames.length, (k) => r.frames[k], fi, 10, fi * 0.2, null);
   }
   const SWING_FLOOR = 556;
 
@@ -1783,7 +2021,7 @@
     ctx.lineWidth = 1.6; for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx + Math.cos(a) * wr, wy + Math.sin(a) * wr); ctx.stroke(); }
     ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(wx, wy, 3.5, 0, Math.PI * 2); ctx.fill();
     // la bola: dentro del cañón al apuntar, en vuelo después
-    if (phase !== 'aim') { const S = r.sim || (r.sim = springPath(r, mark)), i = frameAt(S.pts); trail(S.pts, i, C.coral); drawSkin(ctx, S.pts[i][0], S.pts[i][1], CN.rb, skin, i * 0.25); }
+    if (phase !== 'aim') { const S = r.sim || (r.sim = springPath(r, mark)), i = frameAt(S.pts); trail(S.pts, i, C.coral); rubberBall(r, 'c' + mark, S.pts.length, (k) => S.pts[k], i, CN.rb, i * 0.25, null); }
     // fogonazo y humo
     if (t >= 0 && t < 1.1) {
       if (t < 0.13) { const k = 1 - t / 0.13, fx = mx + ca * 12, fy = my - sa * 12;
@@ -1894,7 +2132,9 @@
     const plan = T >= 0 ? flipPlan(r) : null;
     // estado de cada compuerta en el instante T (con el giro animado)
     const FLIPT = 0.2, st = r.rows.map(row => row.map(p => p.d)), prog = r.rows.map(row => row.map(() => 1));
-    if (plan) plan.flips.forEach(e => { if (e.t <= T) { st[e.k][e.j] *= -1; const p = (T - e.t) / FLIPT; if (p < 1) prog[e.k][e.j] = p; } });
+    if (plan) plan.flips.forEach((e, q) => { if (e.t <= T) { st[e.k][e.j] *= -1; const p = (T - e.t) / FLIPT; if (p < 1) prog[e.k][e.j] = p; if (phase === 'playing' && once('gt' + q)) JU()?.sfx.tock(0.25); } });
+    // canicas que acaban de caer en su cubo: el cubo se tambalea
+    if (plan && phase === 'playing') plan.ms.forEach((M, m) => { if (T >= M.end && once('cup' + m)) { hit('cup' + M.path[D], 0.6); JU()?.sfx.tock(0.7); } });
     const tube = (pts, w) => {
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.strokeStyle = C.ink; ctx.lineWidth = w + 5; ctx.beginPath(); pts.forEach((q, i) => i ? ctx.lineTo(...q) : ctx.moveTo(...q)); ctx.stroke();
@@ -1912,9 +2152,12 @@
     for (let k = 0; k < D; k++) for (let j = 0; j <= k; j++) { const [x, y] = P(k, j); ctx.fillStyle = C.paper; ctx.beginPath(); ctx.arc(x, y, 10.5, 0, Math.PI * 2); ctx.fill(); }
     // cubos
     for (let j = 0; j <= D; j++) {
-      const [cx, cy] = P(D, j), x0 = cx - g.cupW / 2;
+      const [cx, cy] = P(D, j), x0 = cx - g.cupW / 2, tw = since('cup' + j);
+      ctx.save();
+      if (tw < 0.6) { ctx.translate(cx, cy + g.cupH); ctx.rotate(0.07 * Math.exp(-7 * tw) * Math.sin(32 * tw)); ctx.translate(-cx, -(cy + g.cupH)); }
       ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(x0, cy, g.cupW, g.cupH);
       ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x0 + 3, cy + g.cupH); ctx.lineTo(x0 + g.cupW - 3, cy + g.cupH); ctx.lineTo(x0 + g.cupW, cy); ctx.stroke();
+      ctx.restore();
       ctx.fillStyle = C.ink; ctx.font = '800 16px "Bricolage Grotesque", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(GL(j), cx, cy + g.cupH + 20);
       if (mark === j && phase !== 'playing') { ctx.strokeStyle = C.azul; ctx.lineWidth = 3; roundRect(x0 - 6, cy - 6, g.cupW + 12, g.cupH + 34, 7); ctx.stroke(); if (phase === 'aim') label(cx, cy - 16, 'you', C.azul); }
       if (phase === 'result' && r.answer === j) { ctx.strokeStyle = C.coral; ctx.lineWidth = 3.5; roundRect(x0 - 10, cy - 10, g.cupW + 20, g.cupH + 42, 9); ctx.stroke(); label(cx, cy - 20, 'marble #' + r.n, C.coral); }
@@ -1939,7 +2182,7 @@
       const [x, y] = P(k, j), d = st[k][j], fixed = r.rows[k][j].t === 'r';
       const angTo = (dj) => { const [x2, y2] = P(k + 1, j + dj); return Math.atan2(y2 - y, x2 - x); };
       const openA = angTo(d > 0 ? 1 : 0), closedA = angTo(d > 0 ? 0 : 1), oldClosed = angTo(d > 0 ? 1 : 0);
-      const p = prog[k][j], e = p * p * (3 - 2 * p), ga = oldClosed + (closedA - oldClosed) * e;
+      const p = prog[k][j], e = p >= 1 ? 1 : 1 + 2.70158 * (p - 1) ** 3 + 1.70158 * (p - 1) ** 2, ga = oldClosed + (closedA - oldClosed) * e;   // con rebote al final
       if (p >= 1) { const [x2, y2] = P(k + 1, j + (d > 0 ? 1 : 0)); chevron(x + (x2 - x) * 0.42, y + (y2 - y) * 0.42, openA, C.good); }
       gate(x, y, ga, fixed);
     }

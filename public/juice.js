@@ -45,7 +45,7 @@
     s.connect(f); f.connect(g); g.connect(c.destination); s.start(t); s.stop(t + dur);
   }
   const semi = (n) => Math.pow(2, n / 12);
-  let lastTick = 0;
+  let lastTick = 0, lastTock = 0;
   const sfx = {
     tap() { tone(700, 0.05, 'square', 0.035); },
     pick() { tone(520, 0.08, 'triangle', 0.1); tone(780, 0.09, 'triangle', 0.07, 0.05); },
@@ -64,6 +64,13 @@
     wipe() { hiss(0.32, 0.05, 1700); },
     page() { hiss(0.16, 0.045, 5200); hiss(0.1, 0.03, 2400, 0.07); },
     stamp() { tone(140, 0.2, 'sine', 0.45, 0, 55); hiss(0.12, 0.28, 1300); tone(900, 0.03, 'square', 0.04); },
+    tock(p = 1) { const now = performance.now(); if (now - lastTock < 40) return; lastTock = now; tone(360 + p * 140, 0.07, 'triangle', 0.04 + 0.05 * Math.min(1, p), 0, 190); hiss(0.05, 0.04 * Math.min(1.4, p), 1800); },
+    thud(p = 1) { tone(115, 0.2, 'sine', 0.22 * Math.min(1.3, p), 0, 48); hiss(0.11, 0.12 * Math.min(1.3, p), 650); },
+    boing() { tone(200, 0.32, 'sine', 0.12, 0, 560); tone(400, 0.2, 'triangle', 0.03, 0.02, 900); },
+    snip() { tone(2300, 0.03, 'square', 0.035); tone(1900, 0.03, 'square', 0.035, 0.055); hiss(0.05, 0.05, 6500); },
+    ping(k = 0) { tone(1180 * Math.pow(2, k * 2 / 12), 0.2, 'sine', 0.07); tone(2360 * Math.pow(2, k * 2 / 12), 0.08, 'sine', 0.02); },
+    ding() { tone(1568, 0.4, 'triangle', 0.09); tone(2093, 0.32, 'sine', 0.05, 0.05); },
+    clank() { tone(520, 0.12, 'square', 0.045, 0, 300); tone(1450, 0.28, 'triangle', 0.05); hiss(0.06, 0.1, 3200); },
     boom() { tone(95, 0.4, 'sine', 0.45, 0, 38); hiss(0.45, 0.3, 900); tone(190, 0.12, 'square', 0.05); },
     streak() { hiss(0.45, 0.07, 3200); tone(240, 0.35, 'triangle', 0.08, 0, 720); tone(960, 0.18, 'triangle', 0.08, 0.3); tone(1280, 0.22, 'triangle', 0.07, 0.38); },
   };
