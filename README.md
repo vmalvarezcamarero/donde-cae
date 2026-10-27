@@ -7,7 +7,7 @@ Juego diario de física, en inglés. Hay **10 experimentos**: Balance, Where wil
 - **Dos retos por día.** El intento 1 es el reto común (A) con 5 experimentos; el intento 2 (B) trae los otros 5. En el ranking cuenta tu mejor intento del día.
 - **Rotación semanal** (`scripts/generate.mjs`): cada experimento sale 3 o 4 veces por semana en el reto A, como mucho 2 del mismo tipo de respuesta por día (tocar un punto, deslizar o elegir), y de un día a otro se repiten entre 1 y 3.
 - **Física de los experimentos:** los cinco primeros en `scripts/rounds.mjs`, los cinco nuevos en `scripts/rounds2.mjs`.
-- **Demo:** `/?demo` deja probar los cinco nuevos sin que cuente (`node scripts/demo.mjs` regenera `public/demo.json`).
+- **Laboratorio:** `/?lab` (o `/?demo`) deja jugar todos los experimentos (los 14 de la rotación y los 4 retirados), en cualquier nivel y tantas veces como quieras, y probar todas las canicas y estelas de la tienda. No cuenta para ranking, racha ni monedas. `node scripts/lab.mjs` regenera `public/lab/1.json`, `2.json` y `3.json` (semillas propias, sin relación con los retos diarios).
 - **El servidor puntúa.** Los retos con sus respuestas están en `public/days/`, pero el servidor bloquea su descarga. El navegador solo recibe la escena; envía su predicción y recibe el resultado y la animación.
 - **Sin cuenta se puede jugar**, pero esas partidas no entran en el ranking. Los intentos se cuentan por cuenta **y** por dispositivo, para que nadie practique sin cuenta y luego juegue con ventaja.
 - **Ranking:** diario (mejor intento del día), semanal (suma de lunes a domingo) y por países (media de sus jugadores). Se puede filtrar por país.

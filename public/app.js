@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261027i';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261027i';
-import { makeCard } from './card.js?v=20261027i';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261027j';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261027j';
+import { makeCard } from './card.js?v=20261027j';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -404,10 +404,10 @@ async function showEnd(r) {
   if ($('endJoin')) $('endJoin').hidden = !(accountsOn && !user);
   lastEndDemo = isDemo;
   if (isDemo) {
-    $('endLabel').textContent = 'Demo · ' + LEVEL[r.day.level] + ' · new experiments';
+    $('endLabel').textContent = 'Lab · ' + LEVEL[r.day.level] + ' · ' + r.scores.length + (r.scores.length === 1 ? ' experiment' : ' experiments');
     if ($('endJoin')) $('endJoin').hidden = true;
     $('again').hidden = false; $('again').textContent = 'Play again (new maps)';
-    $('share').textContent = 'Gravle · new experiments demo  ' + r.total + '/' + r.scores.length * 100 + starLine(nStars) + '\n' + squares(r.scores) + '\n' + SITE + '/?demo';
+    $('share').textContent = 'Gravle · lab  ' + r.total + '/' + r.scores.length * 100 + starLine(nStars) + '\n' + squares(r.scores) + '\n' + SITE + '/?lab';
     return;
   }
   await refresh();
@@ -431,7 +431,7 @@ $('shareImg').addEventListener('click', async () => {
   try {
     const host = SITE;
     const blob = await makeCard({
-      title: r.attempt.demo ? 'Gravle · demo' : 'Gravle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' · attempt ' + (r.attempt.index || r.attempt.num) : ''),
+      title: r.attempt.demo ? 'Gravle · lab' : 'Gravle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' · attempt ' + (r.attempt.index || r.attempt.num) : ''),
       sub: fmtDay.format(new Date(r.day.date + 'T12:00:00')) + ' · ' + LEVEL[r.day.level],
       total: r.total, scores: r.scores, names: r.types.map(t => window.PhysleGame.TYPE_NAME[t]),
       icons: r.types.map(t => (ICONS[t] || '').replace(/<\/svg>[\s\S]*$/, '</svg>')),
@@ -448,7 +448,7 @@ $('shareImg').addEventListener('click', async () => {
   } catch (e) { console.error(e); toast('Couldn’t create the image. Try “Copy result” instead.'); }
   btn.disabled = false; btn.textContent = 'Share image';
 });
-$('endHome').addEventListener('click', () => { if (lastEndDemo) { show('demoHome'); return; } show('home'); refresh(); });
+$('endHome').addEventListener('click', () => { if (lastEndDemo) { show('demoHome'); labLooks(); return; } show('home'); refresh(); });
 
 /* ---------- ranking ---------- */
 let rankScope = 'day';
@@ -903,24 +903,77 @@ function equipFx(it) {
 // cuenta atrás de la oferta del día
 setInterval(() => { if ($('shop').hidden || $('shopDeal').hidden || !resetAt) return; const s = Math.max(0, Math.round((resetAt - Date.now()) / 1000)); $('dealClock').textContent = 'ends in ' + hms(s).join(':'); }, 1000);
 
-/* ---------- demo de experimentos nuevos (/?demo) ---------- */
-const DEMO = new URLSearchParams(location.search).has('demo');
-let demoData = null, demoLevel = 2, demoRun = 0;
-document.querySelectorAll('#demoLevels [data-level]').forEach(b => b.addEventListener('click', () => {
-  demoLevel = Number(b.dataset.level);
-  document.querySelectorAll('#demoLevels [data-level]').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
-}));
+/* ---------- laboratorio (/?lab, antes /?demo): todos los experimentos, sin límite ---------- */
+const QS = new URLSearchParams(location.search), DEMO = QS.has('lab') || QS.has('demo');
+const LAB_DAILY = ['drop', 'pool', 'laser', 'swing', 'balance', 'loop', 'bridge', 'spring', 'race', 'tower', 'gears', 'magnet', 'flip', 'pulley'];
+const LAB_OLD = ['float', 'orbit', 'pour', 'jump'];
+const labData = {}, labPick = new Set(LAB_DAILY);
+let demoLevel = 2, demoRun = 0, labShuffle = false, labSkin = null, labTrail = null;
+function labPaint() {
+  document.querySelectorAll('[data-lab]').forEach(b => b.setAttribute('aria-pressed', labPick.has(b.dataset.lab) ? 'true' : 'false'));
+  const n = labPick.size;
+  $('demoPlay').textContent = n ? 'Play ' + n + (n === 1 ? ' experiment' : ' experiments') : 'Pick at least one';
+  $('demoPlay').disabled = !n;
+}
+function labBuild() {
+  for (const [id, list] of [['labDaily', LAB_DAILY], ['labOld', LAB_OLD]]) {
+    const ul = $(id); ul.innerHTML = '';
+    for (const g of list) { if (!ICONS[g]) continue; const li = document.createElement('li'); li.innerHTML = '<button class="exp" type="button" data-lab="' + g + '">' + ICONS[g] + '</button>'; ul.appendChild(li); }
+  }
+  // canicas de la tienda para probarlas aquí sin comprarlas
+  const sk = $('labSkins'); sk.innerHTML = '';
+  for (const it of SKINS) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'labskin'; b.dataset.skin = it.id; b.title = it.name; b.setAttribute('aria-label', it.name);
+    b.innerHTML = '<canvas aria-hidden="true"></canvas>'; sk.appendChild(b);
+  }
+  const tr = $('labTrails'); tr.innerHTML = '';
+  for (const it of TRAILS) { const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.trail = it.id; b.textContent = it.name; tr.appendChild(b); }
+  labPaint(); labLooks();
+}
+function labLooks() {
+  const me = today?.user?.profile;
+  const skin = labSkin || me?.skin || 'classic', trail = labTrail || me?.trail || 'classic';
+  document.querySelectorAll('#labSkins [data-skin]').forEach(b => {
+    b.setAttribute('aria-pressed', b.dataset.skin === skin ? 'true' : 'false');
+    const g = fitCanvas(b.querySelector('canvas')); if (!g) return;
+    const w = b.querySelector('canvas').clientWidth; g.clearRect(0, 0, w, w);
+    window.PhysleGame.drawMarble(g, w / 2, w / 2, w / 2 - 3, skinOf(b.dataset.skin), 0.6);
+  });
+  document.querySelectorAll('#labTrails [data-trail]').forEach(b => b.setAttribute('aria-pressed', b.dataset.trail === trail ? 'true' : 'false'));
+  window.PhysleGame.setSkin(skinOf(skin)); window.PhysleGame.setTrail(trailOf(trail));
+}
+$('demoHome').addEventListener('click', (ev) => {
+  const t = ev.target.closest('button'); if (!t) return;
+  const J = window.Juice;
+  if (t.dataset.lab) { labPick.has(t.dataset.lab) ? labPick.delete(t.dataset.lab) : labPick.add(t.dataset.lab); J?.sfx.tap(); labPaint(); }
+  else if (t.id === 'labAll') { LAB_DAILY.forEach(g => labPick.add(g)); J?.sfx.tap(); labPaint(); }
+  else if (t.id === 'labNone') { labPick.clear(); J?.sfx.tap(); labPaint(); }
+  else if (t.dataset.level) {
+    demoLevel = Number(t.dataset.level); J?.sfx.tap();
+    document.querySelectorAll('#demoLevels [data-level]').forEach(x => x.setAttribute('aria-pressed', x === t ? 'true' : 'false'));
+  } else if (t.dataset.order) {
+    labShuffle = t.dataset.order === 'shuffle'; J?.sfx.tap();
+    document.querySelectorAll('#labOrder [data-order]').forEach(x => x.setAttribute('aria-pressed', x === t ? 'true' : 'false'));
+  } else if (t.dataset.skin) { labSkin = t.dataset.skin; J?.sfx.pick(); labLooks(); t.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.25)' }, { transform: 'scale(1)' }], { duration: 260, easing: 'cubic-bezier(.3,1.6,.5,1)' }); }
+  else if (t.dataset.trail) { labTrail = t.dataset.trail; J?.sfx.pick(); labLooks(); }
+});
 async function startDemo() {
-  try { demoData = demoData || await (await fetch('demo.json?v=' + Date.now())).json(); } catch (e) { toast('Couldn’t load the demo.'); return; }
-  const variants = demoData.levels[demoLevel], full = variants[demoRun++ % variants.length].map(r => JSON.parse(JSON.stringify(r)));
-  const dayMeta = { n: 0, date: new Date().toISOString().slice(0, 10), level: demoLevel, W: demoData.W, H: demoData.H, FLOOR: demoData.FLOOR, R: demoData.R };
-  const st = { day: dayMeta, attempt: { id: 'demo' + Date.now(), num: 1, index: 1, round: 0, scores: [], demo: true }, rounds: full.map(publicRound) };
-  $('playLabel').textContent = 'Demo · ' + LEVEL[demoLevel] + ' · doesn’t count';
+  if (!labPick.size) return;
+  let data = labData[demoLevel];
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261027j')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  let games = [...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
+  if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
+  const run = demoRun++;
+  const full = games.map(g => { const vs = data.games[g]; return JSON.parse(JSON.stringify(vs[(run + Math.floor(Math.random() * vs.length)) % vs.length])); });
+  const dayMeta = { n: 0, date: new Date().toISOString().slice(0, 10), level: demoLevel, W: data.W, H: data.H, FLOOR: data.FLOOR, R: data.R };
+  const st = { day: dayMeta, attempt: { id: 'lab' + Date.now(), num: 1, index: 1, round: 0, scores: [], demo: true }, rounds: full.map(publicRound) };
+  $('playLabel').textContent = 'Lab · ' + LEVEL[demoLevel];
+  labLooks();
   show('play');
   let total = 0;
   window.PhysleGame.play(st, {
     submit: async (i, pred) => {
-      if (!validPrediction(full[i], pred, demoData.W)) throw new Error('Invalid prediction.');
+      if (!validPrediction(full[i], pred, data.W)) throw new Error('Invalid prediction.');
       const pts = scorePoints(full[i], pred); total += pts;
       return { pts, round: JSON.parse(JSON.stringify(full[i])), total, finished: i === full.length - 1, coins: null };
     },
@@ -934,5 +987,5 @@ $('demoPlay').addEventListener('click', startDemo);
 (async () => {
   try { await initAuth(); } catch (e) { console.error(e); }
   await refresh();
-  if (DEMO) show('demoHome');
+  if (DEMO) { show('demoHome'); labBuild(); }
 })();

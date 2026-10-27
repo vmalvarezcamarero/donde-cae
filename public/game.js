@@ -287,7 +287,7 @@
     renderPips(); ready(); draw();
   }
   function renderPips() {
-    const p = $('pips'); p.innerHTML = '';
+    const p = $('pips'); p.innerHTML = ''; p.classList.toggle('many', day.rounds.length > 6);
     for (let i = 0; i < day.rounds.length; i++) {
       const d = document.createElement('span'); d.className = 'pip';
       if (i < scores.length) d.classList.add(band(scores[i]));

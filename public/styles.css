@@ -69,8 +69,9 @@ body {
 .acct { display: inline-flex; align-items: center; gap: 8px; background: var(--plate); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px; padding: 6px 12px 6px 6px; font: 600 14px var(--font-body); cursor: pointer; max-width: 55%; }
 .acct .av { width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: var(--plate); display: grid; place-items: center; font: 700 12px var(--font-mono); flex: none; }
 .acct .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pips { display: flex; gap: 6px; }
-.pip { width: 22px; height: 8px; border-radius: 4px; background: var(--line); }
+.pips { display: flex; gap: 6px; min-width: 0; flex: 0 1 auto; }
+.pips.many { gap: 3px; flex: 1; justify-content: flex-end; }
+.pip { flex: 0 1 22px; min-width: 6px; width: 22px; height: 8px; border-radius: 4px; background: var(--line); }
 .pip.now { background: var(--ink); }
 .pip.g { background: var(--good); } .pip.y { background: var(--warn); } .pip.r { background: var(--bad); }
 
@@ -506,3 +507,26 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .pod.none .step { background: var(--paper); border-style: dashed; }
 .pod.none .pscore { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .crown, .p1 .step::after { animation: none; } }
+
+/* ---------- laboratorio (/?lab) ---------- */
+.dayhead:has(.pips.many) #playLabel { white-space: nowrap; flex: none; }
+.lab .labbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.lab .labbar .chips { gap: 6px; }
+.lab .labbar .chip { padding: 5px 11px; font-size: 13px; }
+.labsub { font: 600 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.labsub small { font: 400 12px var(--font-body); text-transform: none; letter-spacing: 0; }
+.labexps .exp { border: 1.5px solid var(--line); background: var(--plate); min-height: 74px; justify-content: flex-start; position: relative;
+  transition: opacity 0.18s, transform 0.18s cubic-bezier(.3,1.6,.5,1), border-color 0.18s; }
+.labexps .exp[aria-pressed="false"] { opacity: 0.38; border-style: dashed; background: transparent; filter: grayscale(0.7); }
+.labexps .exp[aria-pressed="true"] { border-color: var(--ink); box-shadow: 2px 2px 0 var(--ink); }
+.labexps .exp[aria-pressed="true"]::after { content: ''; position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+.labexps .exp:active { transform: scale(0.94); }
+.labexps svg { width: 34px; height: 34px; }
+.labskins { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 6px; }
+.labskin { aspect-ratio: 1; padding: 0; border: 1.5px solid transparent; border-radius: 50%; background: transparent; cursor: pointer; }
+.labskin canvas { width: 100%; height: 100%; display: block; }
+.labskin[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 2px var(--plate), 0 0 0 4px var(--coral); }
+.labskin:focus-visible { outline: 3px solid var(--azul); outline-offset: 2px; }
+.labtrails { gap: 6px; }
+.labtrails .chip { padding: 5px 11px; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .labexps .exp { transition: none; } }
