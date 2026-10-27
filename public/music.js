@@ -1,35 +1,32 @@
-// Música original de Gravle: lo-fi de estudio pero con chispa (90 BPM), sintetizada
-// en directo con Web Audio, sin archivos. Piano eléctrico, bajo, batería con swing,
-// una melodía que entra y sale y crujido de vinilo. Se carga después de juice.js.
+// Música original de Gravle: chill pero animada (104 BPM), con un estribillo pegadizo.
+// Se sintetiza en directo con Web Audio, sin archivos: piano eléctrico, bajo saltarín,
+// batería suave, palmas y una melodía de campanita con eco. Se carga después de juice.js.
 (() => {
-  const BPM = 90, SPB = 60 / BPM, S16 = SPB / 4, SWING = 0.17 * S16;
+  const BPM = 104, SPB = 60 / BPM, S16 = SPB / 4, SWING = 0.1 * S16;
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
 
-  // ii – V – I – VI en Do: Dm9 · G13 · Cmaj9 · A7(b13). Voces cercanas para que fluya.
+  // Progresión IV – V – iii – vi en Do (Fmaj7 · G7 · Em7 · Am7): luminosa y muy cantable.
   const CHORDS = [
-    { bass: 38, notes: [53, 57, 60, 64] },
-    { bass: 43, notes: [53, 59, 64, 69] },
-    { bass: 36, notes: [52, 55, 59, 62] },
-    { bass: 45, notes: [55, 61, 65, 69] },
+    { bass: 41, notes: [57, 60, 64, 67] },
+    { bass: 43, notes: [55, 59, 62, 65] },
+    { bass: 40, notes: [55, 59, 62, 67] },
+    { bass: 45, notes: [55, 60, 64, 67] },
   ];
-  // Melodías: [semicorchea, nota MIDI, duración en semicorcheas], un compás por acorde.
-  const P1 = [
-    [[0, 76, 3], [3, 74, 3], [6, 72, 2], [8, 69, 6]],
-    [[2, 71, 2], [4, 74, 3], [7, 76, 5]],
-    [[0, 76, 4], [6, 79, 2], [8, 76, 2], [10, 74, 6]],
-    [[0, 73, 3], [3, 76, 3], [6, 77, 2], [8, 76, 6]],
+  // Estribillo: siempre el mismo ritmo (3 + 3 + 4 + 2 + 4), pregunta y respuesta.
+  // [semicorchea, nota MIDI, duración en semicorcheas]; un compás por acorde.
+  const HOOK = [
+    [[0, 76, 3], [3, 79, 3], [6, 81, 4], [10, 79, 2], [12, 76, 4]],
+    [[0, 74, 3], [3, 76, 3], [6, 79, 6]],
+    [[0, 76, 3], [3, 79, 3], [6, 83, 4], [10, 81, 2], [12, 79, 4]],
+    [[0, 76, 3], [3, 74, 3], [6, 72, 6], [14, 74, 2]],
   ];
-  const P2 = [
-    [[0, 81, 2], [2, 79, 2], [4, 77, 2], [6, 76, 2], [8, 74, 4], [12, 72, 3]],
-    [[0, 71, 5], [8, 74, 2], [10, 77, 2], [12, 76, 4]],
-    [[0, 79, 4], [4, 76, 2], [6, 74, 2], [8, 71, 7]],
-    [[0, 69, 3], [4, 73, 3], [8, 76, 3], [12, 79, 3]],
-  ];
-  // Forma de 16 compases: groove · melodía · respuesta · melodía.
-  const FORM = [null, P1, P2, P1];
-  const KICK = [0, 7, 10], KICK_FILL = [0, 10, 14];
-  const COMP = [[0, 6, 1], [6, 2, 0.55], [10, 3, 0.7]];          // acordes: [paso, duración, volumen]
-  const BASS = [[0, 5, 0], [6, 2, 7], [10, 3, 0], [14, 2, 'next']];
+  const HOOK_END = [[0, 76, 3], [3, 79, 3], [6, 81, 8]];             // final que sube, la segunda vez
+  // Parte B: arpegio suave del acorde, para respirar antes de volver al estribillo.
+  const ARP = [0, 1, 2, 3, 2, 1, 2, 3];
+  // Forma (bloques de 8 compases): estribillo · estribillo con más ritmo · parte B · estribillo.
+  const FORM = ['A', 'A2', 'B', 'A'];
+  const KICK = [0, 6, 8], KICK_FILL = [0, 6, 8, 11, 14];
+  const BASS = [[0, 2, 0], [3, 1, 0], [6, 2, 12], [8, 2, 0], [11, 1, 0], [14, 2, 7]];
 
   function engine(ctx, out, mix = {}) {
     const lv = (k) => mix[k] ?? 1;
@@ -38,23 +35,22 @@
     const filter = (type, f, q, to) => { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; if (q != null) b.Q.value = q; if (to) b.connect(to); return b; };
 
     const bus = gain(1, out);
-    const drums = filter('lowpass', 5200, 0.4, gain(0.9 * lv('drums'), bus));
-    const keys = filter('lowpass', 2300, 0.5, gain(lv('keys'), bus));
-    const low = filter('lowpass', 850, 0.6, gain(lv('bass'), bus));
-    const leadOut = filter('lowpass', 3400, 0.5, gain(lv('lead'), bus));
-    // eco de la melodía (3 semicorcheas, apagándose)
+    const drums = filter('lowpass', 6500, 0.4, gain(0.9 * lv('drums'), bus));
+    const keys = filter('lowpass', 2400, 0.5, gain(lv('keys'), bus));
+    const low = filter('lowpass', 900, 0.6, gain(lv('bass'), bus));
+    const leadOut = filter('lowpass', 3000, 0.5, gain(lv('lead'), bus));
     const dly = ctx.createDelay(1); dly.delayTime.value = S16 * 3;
-    const fb = gain(0.33), wet = gain(0.38, bus), dlp = filter('lowpass', 1800, 0.3);
+    const fb = gain(0.3), wet = gain(0.3, bus), dlp = filter('lowpass', 1800, 0.3);
     leadOut.connect(dly); dly.connect(dlp); dlp.connect(fb); fb.connect(dly); dlp.connect(wet);
 
     const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     { const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
-    // vinilo: siseo muy bajo con chasquidos sueltos
-    const vinyl = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate);
-    { const d = vinyl.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.04;
-      for (let k = 0; k < 46; k++) { const p = Math.floor(Math.random() * (d.length - 40)), a = (0.25 + Math.random() * 0.75) * (Math.random() < 0.5 ? -1 : 1); for (let j = 0; j < 30; j++) d[p + j] += a * Math.exp(-j / 4); } }
-    let crackle = null;
-
+    const burst = (t, v, type, f, q, dec, to) => {
+      const s = ctx.createBufferSource(); s.buffer = noise;
+      const g = gain(0, to || drums), bp = filter(type, f, q, g);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + dec);
+      s.connect(bp); s.start(t, Math.random() * 0.5); s.stop(t + dec + 0.02);
+    };
     const env = (g, t, peak, a, sustain, end, rel) => {
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(peak, t + a);
@@ -62,70 +58,63 @@
       g.gain.setTargetAtTime(0.0001, end, rel);
     };
     function kick(t, v = 1) {
-      const o = node('sine', 125), g = gain(0, drums);
-      o.frequency.setValueAtTime(125, t); o.frequency.exponentialRampToValueAtTime(46, t + 0.11);
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.85 * v, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
-      o.connect(g); o.start(t); o.stop(t + 0.4);
+      const o = node('sine', 130), g = gain(0, drums);
+      o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(50, t + 0.09);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.8 * v, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      o.connect(g); o.start(t); o.stop(t + 0.32);
     }
-    function snare(t, v = 1) {
-      const s = ctx.createBufferSource(); s.buffer = noise;
-      const g = gain(0, drums), bp = filter('bandpass', 1750, 0.75, g);
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.36 * v, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
-      s.connect(bp); s.start(t, Math.random() * 0.5); s.stop(t + 0.22);
-      const o = node('triangle', 190), og = gain(0, drums);
-      og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.2 * v, t + 0.003); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
-      o.connect(og); o.start(t); o.stop(t + 0.1);
+    function clap(t, v = 1) {                         // palmas: tres golpecitos muy juntos
+      for (const [dt, k] of [[0, 0.7], [0.011, 0.6], [0.022, 1]]) burst(t + dt, 0.26 * v * k, 'bandpass', 1500, 0.9, dt === 0.022 ? 0.16 : 0.03);
     }
-    function hat(t, v = 1) {
-      const s = ctx.createBufferSource(); s.buffer = noise;
-      const g = gain(0, drums), hp = filter('highpass', 7600, 0.5, g);
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.085 * v, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
-      s.connect(hp); s.start(t, Math.random() * 0.5); s.stop(t + 0.05);
-    }
-    function ep(m, t, dur, v) {                       // piano eléctrico suave
-      const f = mtof(m), g = gain(0, keys), det = (Math.random() - 0.5) * 8;
-      const a = node('sine', f), b = node('sine', f * 2.003), bg = gain(0.13, g), c = node('triangle', f), cg = gain(0.05, g);
-      a.detune.value = det; a.connect(g); b.connect(bg); c.connect(cg);
-      env(g, t, 0.072 * v, 0.018, 0.5, t + dur, 0.12);
-      for (const o of [a, b, c]) { o.start(t); o.stop(t + dur + 0.8); }
+    const hat = (t, v = 1) => burst(t, 0.06 * v, 'highpass', 8000, 0.5, 0.035);
+    const shaker = (t, v = 1) => burst(t, 0.035 * v, 'bandpass', 5200, 1.2, 0.05);
+    function ep(m, t, dur, v) {
+      const f = mtof(m), g = gain(0, keys);
+      const a = node('sine', f), b = node('sine', f * 2.003), bg = gain(0.12, g), c = node('triangle', f), cg = gain(0.05, g);
+      a.detune.value = (Math.random() - 0.5) * 8; a.connect(g); b.connect(bg); c.connect(cg);
+      env(g, t, 0.06 * v, 0.015, 0.5, t + dur, 0.1);
+      for (const o of [a, b, c]) { o.start(t); o.stop(t + dur + 0.7); }
     }
     function bass(m, t, dur) {
       const f = mtof(m), g = gain(0, low), a = node('triangle', f), b = node('sine', f);
       a.connect(g); b.connect(g);
-      env(g, t, 0.085, 0.012, 0.6, t + dur, 0.06);
-      for (const o of [a, b]) { o.start(t); o.stop(t + dur + 0.5); }
+      env(g, t, 0.085, 0.01, 0.6, t + dur, 0.05);
+      for (const o of [a, b]) { o.start(t); o.stop(t + dur + 0.4); }
     }
-    function lead(m, t, dur) {                        // campanita con eco
-      const f = mtof(m), g = gain(0, leadOut), a = node('triangle', f), b = node('sine', f * 2), bg = gain(0.22, g);
-      a.connect(g); b.connect(bg);
-      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.13, t + 0.006);
-      g.gain.exponentialRampToValueAtTime(0.035, t + Math.min(0.5, dur)); g.gain.setTargetAtTime(0.0001, t + dur, 0.09);
-      for (const o of [a, b]) { o.start(t); o.stop(t + dur + 0.6); }
+    function bell(m, t, dur, v = 1, to = leadOut) {   // campanita: redonda, sin agudos que piquen
+      const f = mtof(m), g = gain(0, to), a = node('sine', f), b = node('triangle', f * 2), bg = gain(0.12, g), c = node('sine', f * 3.01), cg = gain(0.04, g);
+      a.connect(g); b.connect(bg); c.connect(cg);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.15 * v, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.045 * v, t + Math.min(0.35, dur)); g.gain.setTargetAtTime(0.0001, t + dur, 0.08);
+      for (const o of [a, b, c]) { o.start(t); o.stop(t + dur + 0.5); }
     }
 
     return {
       step(n, t) {
-        const bar = Math.floor(n / 16), s = n % 16, ch = CHORDS[bar % 4], next = CHORDS[(bar + 1) % 4];
-        const tt = t + (s % 2 ? SWING : 0), fill = bar % 8 === 7, intro = bar === 0;
-        // batería (entra en el segundo compás)
-        if (!intro) {
-          if ((fill ? KICK_FILL : KICK).includes(s)) kick(tt, s === 0 ? 1 : 0.8);
-          if (s === 4 || s === 12) snare(tt);
-          if (fill && s >= 13) snare(tt, 0.35 + (s - 13) * 0.15);
-          if (s % 2 === 0) hat(tt, s % 4 === 0 ? 1 : 0.7);
-          else if (s === 3 || s === 11 || s === 15) hat(tt, 0.4);
+        const bar = Math.floor(n / 16), s = n % 16, intro = bar < 2;
+        const b = intro ? 0 : bar - 2, ch = CHORDS[b % 4];
+        const part = intro ? 'I' : FORM[Math.floor(b / 8) % 4], inPart = b % 8;
+        const tt = t + (s % 2 ? SWING : 0), fill = inPart === 7 && part !== 'B';
+        // batería: la intro solo lleva charles; la parte B va más ligera
+        if (part !== 'I') {
+          if (part === 'B') { if (s === 0 || s === 8) kick(tt, 0.7); }
+          else if ((fill ? KICK_FILL : KICK).includes(s)) kick(tt, s === 0 ? 1 : 0.75);
+          if (s === 4 || s === 12) clap(tt, part === 'B' ? 0.6 : 1);
+          if (part === 'A2') shaker(tt, s % 4 === 2 ? 1 : 0.5);
         }
-        // acordes
-        for (const [st, d, v] of COMP) if (st === s) ch.notes.forEach((m, i) => ep(m, tt + i * 0.011, d * S16, v * (intro ? 0.8 : 1)));
-        // bajo
-        if (!intro) for (const [st, d, w] of BASS) if (st === s) bass(w === 'next' ? next.bass - 1 : ch.bass + w, tt, d * S16 * 0.9);
+        if (s % 2 === 0) hat(tt, s % 4 === 2 ? 1 : 0.55);
+        // acordes: uno largo y un golpecito a contratiempo
+        if (s === 0) ch.notes.forEach((m, i) => ep(m, tt + i * 0.01, 9 * S16, intro ? 0.9 : 1));
+        if (s === 10 && part !== 'I') ch.notes.forEach((m, i) => ep(m, tt + i * 0.008, 2 * S16, 0.55));
+        // bajo saltarín
+        if (part !== 'I') for (const [st, d, w] of BASS) if (st === s) bass(ch.bass + w, tt, d * S16 * 0.9);
         // melodía
-        const ph = FORM[Math.floor(bar / 4) % 4];
-        if (ph) for (const [st, m, d] of ph[bar % 4]) if (st === s) lead(m, tt, d * S16);
-      },
-      crackle(on, t) {
-        if (on && !crackle) { crackle = ctx.createBufferSource(); crackle.buffer = vinyl; crackle.loop = true; const hp = filter('highpass', 1200, 0.5, gain(0.32 * lv('vinyl'), bus)); crackle.connect(hp); crackle.start(t); }
-        else if (!on && crackle) { try { crackle.stop(t); } catch (e) {} crackle = null; }
+        if (part === 'A' || part === 'A2') {
+          const ph = inPart === 7 ? HOOK_END : HOOK[inPart % 4];
+          for (const [st, m, d] of ph) if (st === s) { bell(m, tt, d * S16); if (part === 'A2') bell(m - 12, tt, d * S16, 0.45); }
+        } else if (part === 'B' && s % 2 === 0) {
+          const k = ARP[(s / 2) % 8]; bell(ch.notes[k] + 12, tt, 2 * S16, 0.45);
+        }
       },
     };
   }
@@ -151,14 +140,12 @@
     }
     playing = true; n = 0; nextT = c.currentTime + 0.08;
     master.gain.cancelScheduledValues(c.currentTime); master.gain.setTargetAtTime(VOL, c.currentTime, 0.6);
-    eng.crackle(true, nextT);
     clearInterval(timer); timer = setInterval(tick, 30); tick();
   }
   function stop(fade = 0.35) {
     if (!playing) return; playing = false; clearInterval(timer);
     const c = J.ctx(); if (!c) return;
     master.gain.cancelScheduledValues(c.currentTime); master.gain.setTargetAtTime(0, c.currentTime, fade / 3);
-    eng.crackle(false, c.currentTime + fade);
   }
   // Durante la cámara lenta la música suena «bajo el agua»; al chocar vuelve de golpe.
   function muffle(v) {
