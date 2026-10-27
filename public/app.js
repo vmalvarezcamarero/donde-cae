@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261027h';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261027h';
-import { makeCard } from './card.js?v=20261027h';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261027i';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261027i';
+import { makeCard } from './card.js?v=20261027i';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -497,19 +497,102 @@ async function openRank(scope) {
   const d0 = new Date(data.from + 'T12:00:00'), d1 = new Date(data.to + 'T12:00:00');
   const range = data.from === data.to ? fmtDay.format(d0) : fmtShort.format(d0) + ' – ' + fmtShort.format(d1);
   list.innerHTML = '';
+  // Los tres primeros suben al podio; la lista empieza en el 4.º
+  const pod = scope === 'countries'
+    ? data.rows.slice(0, 3).map((r, i) => ({ pos: i + 1, country: r.country, nickname: countryName(r.country), score: r.score, sub: r.players + (r.players === 1 ? ' player' : ' players'), isCountry: true }))
+    : data.rows.filter(r => r.pos <= 3).slice(0, 3);
+  renderPodium(pod);
   if (scope === 'countries') {
     $('rankSub').textContent = range + ' · average of their players';
-    data.rows.forEach((r, i) => list.appendChild(rankRow(i + 1, r.country, countryName(r.country), r.players + (r.players === 1 ? ' player' : ' players'), r.score)));
+    data.rows.forEach((r, i) => { if (i >= 3) list.appendChild(rankRow(i + 1, r.country, countryName(r.country), r.players + (r.players === 1 ? ' player' : ' players'), r.score)); });
   } else {
     $('rankSub').textContent = range + ' · ' + data.players + (data.players === 1 ? ' player' : ' players');
-    data.rows.forEach(r => list.appendChild(rankRow(r.pos, r.country, r.nickname, scope === 'week' ? r.days + (r.days === 1 ? ' day' : ' days') : '', r.score, r.me, r.color)));
+    data.rows.forEach(r => { if (!pod.includes(r)) list.appendChild(rankRow(r.pos, r.country, r.nickname, scope === 'week' ? r.days + (r.days === 1 ? ' day' : ' days') : '', r.score, r.me, r.color)); });
     if (data.me && !data.rows.some(r => r.me)) { me.innerHTML = ''; me.appendChild(rankRow(data.me.pos, data.me.country, data.me.nickname, '', data.me.score, true, data.me.color)); me.hidden = false; }
   }
+  // el resto de la lista entra escalonada después del podio
+  const J = window.Juice;
+  if (J && !J.reduce) [...list.children, ...(me.hidden ? [] : me.children)].forEach((li, i) => li.animate([{ opacity: 0, transform: 'translateX(24px)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: (pod.length ? 1500 : 100) + Math.min(i, 15) * 45, easing: 'cubic-bezier(.3,1.3,.5,1)', fill: 'backwards' }));
   if (!data.rows.length) {
     const li = document.createElement('li'); li.className = 'empty';
     li.textContent = scope === 'countries' ? 'No countries have scores for this period yet.' : 'Nobody has finished this challenge yet. You could be first!';
     list.appendChild(li);
   }
+}
+/* ---------- podio ----------
+   Los escalones suben del 3.º al 1.º; en cada uno cae la canica del jugador (su skin de la
+   tienda) con goma; al 1.º le cae una corona y sale confeti. Después el campeón da saltitos. */
+let podRaf = 0, podState = null;
+const CROWN = '<svg viewBox="0 0 40 28" aria-hidden="true"><path d="M3 24 L6 6 L14 15 L20 3 L26 15 L34 6 L37 24 Z" fill="var(--mostaza)" stroke="var(--ink)" stroke-width="2.4" stroke-linejoin="round"/><circle cx="20" cy="17" r="2.6" fill="var(--coral)"/><path d="M5 24 H35" stroke="var(--ink)" stroke-width="2.4"/></svg>';
+function renderPodium(rows) {
+  const el = $('podium'); el.innerHTML = ''; cancelAnimationFrame(podRaf); podRaf = 0;
+  if (!rows.length) { el.hidden = true; podState = null; return; }
+  el.hidden = false;
+  const J = window.Juice, calm = !J || J.reduce, blocks = [];
+  // orden visual: 2.º, 1.º, 3.º — y el que sube antes es el 3.º
+  [[1, 0.45], [0, 0.9], [2, 0]].forEach(([k, delay]) => {
+    const r = rows[k], col = document.createElement('div');
+    col.className = 'pod p' + (k + 1) + (r?.me ? ' me' : '') + (r ? '' : ' none');
+    col.innerHTML = '<div class="pav">' + (k === 0 ? '<span class="crown">' + CROWN + '</span>' : '') + '<canvas aria-hidden="true"></canvas></div><div class="pname"></div><div class="pscore"></div><div class="step"><b>' + (k + 1) + '</b></div>';
+    if (r) {
+      const nm = document.createElement('span'); nm.textContent = r.nickname; if (r.color) paintName(nm, r.color);
+      col.querySelector('.pname').append(flag(r.country) + ' ', nm);
+      if (r.me) { const y = document.createElement('em'); y.textContent = 'you'; col.querySelector('.pname').appendChild(y); }
+      col.querySelector('.pscore').textContent = calm ? r.score : '0';
+      col.setAttribute('aria-label', (k + 1) + '. ' + r.nickname + ', ' + r.score + ' points');
+    } else col.querySelector('.pname').textContent = '—';
+    el.appendChild(col); blocks.push({ col, r, k, delay, cv: col.querySelector('canvas') });
+  });
+  podState = { t0: performance.now() / 1000 - (calm ? 20 : 0), blocks };
+  if (!calm && rows[0]) blocks.find(b => b.k === 0).col.querySelector('.crown').style.opacity = '0';
+  if (!calm) blocks.forEach(b => {
+    const step = b.col.querySelector('.step'), info = b.col.querySelectorAll('.pname, .pscore');
+    step.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1.08)', offset: 0.7 }, { transform: 'scaleY(1)' }], { duration: 420, delay: b.delay * 1000, easing: 'ease-out', fill: 'backwards' });
+    info.forEach(n => n.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 300, delay: (b.delay + 0.75) * 1000, fill: 'backwards' }));
+    setTimeout(() => { if (!$('rank').hidden) J.sfx.star(2 - b.k); }, b.delay * 1000 + 120);
+    if (!b.r) return;
+    setTimeout(() => {                                   // la canica toca el escalón
+      if ($('rank').hidden) return;
+      J.sfx.tock(b.k === 0 ? 1.2 : 0.7);
+      J.roll(b.col.querySelector('.pscore'), b.r.score, { ms: 600, ticks: false });
+      if (b.k === 0) {
+        J.sfx.fanfare(); J.buzz([20, 30, 40]);
+        const cr = b.col.querySelector('.crown'); cr.style.opacity = '';
+        cr.animate([{ transform: 'translate(-50%, -60px) rotate(-25deg)', opacity: 0 }, { transform: 'translate(-50%, 4px) rotate(8deg)', opacity: 1, offset: 0.7 }, { transform: 'translate(-50%, 0) rotate(-6deg)', opacity: 1 }], { duration: 520, delay: 250, easing: 'cubic-bezier(.3,1.4,.5,1)', fill: 'backwards' });
+        const bb = b.col.getBoundingClientRect(); setTimeout(() => J.confetti(bb.left + bb.width / 2, bb.top + 30, { n: 90, power: 0.9 }), 300);
+      }
+    }, (b.delay + 0.7) * 1000);
+  });
+  podRaf = requestAnimationFrame(podLoop);
+}
+function podLoop(now) {
+  if ($('rank').hidden || !podState) { podRaf = 0; return; }
+  const t = now / 1000 - podState.t0, G = window.PhysleGame;
+  for (const b of podState.blocks) {
+    if (!b.r) continue;
+    const g = fitCanvas(b.cv); if (!g) continue;
+    const w = b.cv.clientWidth, h = b.cv.clientHeight, rad = b.k === 0 ? 17 : 14, ground = h - 1 - rad, tl = t - b.delay - 0.35;
+    g.clearRect(0, 0, w, h);
+    if (tl < 0) continue;
+    let y = ground, def = null;
+    if (tl < 0.35) { const u = tl / 0.35; y = -rad + (ground + rad) * u * u; def = { ax: Math.PI / 2, sx: 1 + 0.25 * u, sy: 1 - 0.12 * u, push: 0 }; }
+    else {
+      const a = tl - 0.35, s0 = 0.42 * Math.exp(-a * 7) * Math.cos(a * 22);
+      if (Math.abs(s0) > 0.015) def = { ax: -Math.PI / 2, sx: 1 - s0, sy: 1 + s0 * 0.7, push: s0 };
+      if (b.k === 0 && a > 1.2) {                         // el campeón da saltitos de vez en cuando
+        const ph = (a - 1.2) % 2.8;
+        if (ph < 0.5) { const u = ph / 0.5; y = ground - 22 * 4 * u * (1 - u); }
+        else if (ph < 0.9) { const c = ph - 0.5, s1 = 0.3 * Math.exp(-c * 9) * Math.cos(c * 24); def = { ax: -Math.PI / 2, sx: 1 - s1, sy: 1 + s1 * 0.7, push: s1 }; }
+      }
+    }
+    if (b.r.isCountry) { g.save(); g.translate(w / 2, y); if (def) { g.scale(def.sx > 1 ? 1 / def.sx : 1 + (1 - def.sx), def.sx); } g.font = (rad * 1.9) + 'px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(flag(b.r.country), 0, 2); g.restore(); }
+    else G.drawMarble(g, w / 2, y, rad, skinOf(b.r.skin), t * (b.k === 0 ? 2 : 1), def);
+    if (b.k === 0) {                                      // la corona va encima de la canica, también al saltar
+      const cr = b.col.querySelector('.crown'), top = rad * (def ? def.sx : 1);
+      if (cr) cr.style.top = Math.round(b.cv.offsetTop + Math.max(y, 0) - top - 18) + 'px';
+    }
+  }
+  podRaf = requestAnimationFrame(podLoop);
 }
 const MEDALS = { 1: ['🥇', 'gold', '1st place'], 2: ['🥈', 'silver', '2nd place'], 3: ['🥉', 'bronze', '3rd place'] };
 function rankRow(pos, cc, name, sub, score, isMe, color) {
