@@ -32,6 +32,85 @@
   // mark: drop → x mundo; balance → posición en unidades; pool → [x,y]; tower → índice de bloque o -1 (aguanta); race → usa order
   let day, roundIdx, phase, scores, details, mark, order, anim;
   let hooks = null, attempt = null, serverPts = 0, sending = false, lastCoins = null;
+
+  /* ---------- juice: cámara lenta, zoom, impacto (ver juice.js) ---------- */
+  const JU = () => window.Juice;
+  // Experimentos con un instante de impacto claro: llevan cámara lenta al final, hit-stop y polvo.
+  const SLOW = new Set(['drop', 'swing', 'pool', 'laser', 'orbit', 'magnet', 'jump', 'spring', 'bridge', 'loop', 'domino', 'flip', 'race', 'tower']);
+  const POWER = { drop: 1, swing: 1, jump: 1.2, tower: 1.1, orbit: 0.9, magnet: 0.8, domino: 0.8, spring: 0.9, bridge: 0.9, loop: 0.8, flip: 0.7, race: 0.6, pool: 0.5, laser: 0.4 };
+  const SLOW_WIN = 0.55, SLOW_F = 0.3, ZOOM = 0.6;
+  let cam = { z: 1, x: 200, y: 300 }, camRaf = 0, slowActive = false;
+  // Punto donde todo termina: hacia ahí va el zoom y de ahí sale el polvo.
+  function focusOf(r) {
+    try {
+      if (r.type === 'drop') return [r.impactX, FLOOR];
+      if (r.type === 'swing') return [r.impactX, r.impactY ?? FLOOR];
+      if (r.type === 'pool') return r.stop;
+      if (r.type === 'laser') return r.end;
+      if (r.type === 'orbit' || r.type === 'magnet' || r.type === 'jump') { const f = r.frames && r.frames.at(-1); if (f && typeof f[0] === 'number') return [f[0], f[1]]; }
+    } catch (e) {}
+    return null;
+  }
+  // Momento del impacto dentro de la animación (algunas siguen un poco después).
+  function impactT(r, dur) {
+    if (r.type === 'laser') return Math.min(dur, r.len / LASER_SPEED);
+    if (r.type === 'orbit' || r.type === 'magnet' || r.type === 'swing') return Math.min(dur, r.frames.length / 60);
+    if (r.type === 'flip') return Math.max(0, dur - 0.4);
+    return dur;
+  }
+  const ease = (k) => k * k * (3 - 2 * k);
+  function camAt(r) {
+    const c = cam, z = c.z, hw = W / 2 / z, hh = H / 2 / z;
+    return [Math.max(hw, Math.min(W - hw, c.x)), Math.max(hh, Math.min(H - hh, c.y)), z];
+  }
+  function toScreen(p) {
+    const b = cv.getBoundingClientRect(), [cx, cy, z] = camAt();
+    return [b.left + ((p[0] - cx) * z + W / 2) / W * b.width, b.top + ((p[1] - cy) * z + H / 2) / H * b.height];
+  }
+  function camOut(delay) {
+    cancelAnimationFrame(camRaf);
+    if (cam.z <= 1.001) return;
+    const z0 = cam.z, x0 = cam.x, y0 = cam.y, t0 = performance.now() + delay;
+    const f = (now) => {
+      const k = Math.max(0, Math.min(1, (now - t0) / 450)), e = ease(k);
+      cam.z = z0 + (1 - z0) * e; cam.x = x0 + (W / 2 - x0) * e; cam.y = y0 + (H / 2 - y0) * e;
+      try { draw(); } catch (err) {}
+      if (k < 1) camRaf = requestAnimationFrame(f);
+    };
+    camRaf = requestAnimationFrame(f);
+  }
+  const stageEl = () => cv.parentElement;
+  function impactFx(r) {
+    const J = JU(); if (!J) return;
+    const good = serverPts >= 80, pw = POWER[r.type] || 0.8;
+    J.sfx.impact(pw); J.buzz(good ? [18, 30, 26] : 40);
+    J.flash(stageEl(), 0.35 + 0.2 * pw);
+    setTimeout(() => J.shake(stageEl(), (good ? 7 : 4) * pw), 100);
+    const p = anim && anim.focus || focusOf(r);
+    if (p) { const [sx, sy] = toScreen(p); J.dust(sx, sy, { power: pw, ring: C.ink }); }
+  }
+  const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
+  function resultFx(s) {
+    const J = JU(); if (!J) return;
+    const pts = s.pts, b = band(pts), st = stageEl();
+    let streak = 0; for (let i = scores.length - 1; i >= 0 && scores[i] >= 80; i--) streak++;
+    J.roll($('rPts'), pts, { prefix: '+', ms: 650 });
+    if (!J.reduce) $('result').animate([{ transform: 'translateY(12px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300, easing: 'cubic-bezier(.3,1.4,.5,1)' });
+    if (b === 'g') {
+      J.sfx.good(streak, pts === 100);
+      J.slam(st, pts === 100 ? pickOne(['PERFECT!', 'BULLSEYE!', 'NAILED IT!']) : pickOne(['GREAT!', 'SHARP!', 'SO GOOD!']), 'g', streak >= 2 ? streak + ' in a row' : '');
+      const p = anim && anim.focus || focusOf(round()), sb = st.getBoundingClientRect();
+      const [x, y] = p ? toScreen(p) : [sb.left + sb.width / 2, sb.top + sb.height * 0.45];
+      setTimeout(() => J.confetti(x, y, { n: pts === 100 ? 120 : 70, power: pts === 100 ? 1.1 : 0.85 }), 120);
+    } else if (b === 'y') {
+      J.sfx.ok(); J.slam(st, pickOne(['CLOSE!', 'NOT BAD', 'ALMOST']), 'y');
+    } else {
+      J.sfx.bad(); J.slam(st, pickOne(['MISS', 'GRAVITY WINS', 'NOPE']), 'r');
+    }
+    const pips = $('pips').children, pip = pips[scores.length - 1];
+    if (pip) J.pop(pip, 1.8);
+    camOut(650);
+  }
   const DKEY = (id) => 'physle:detalles:' + id;
   function play(payload, h) {
     hooks = h; attempt = payload.attempt;
@@ -78,6 +157,8 @@
   function startRound() {
     cancelAnimationFrame(anim && anim.raf);
     anim = null; phase = 'aim'; mark = null; order = [];
+    cancelAnimationFrame(camRaf); cam = { z: 1, x: W / 2, y: H / 2 }; slowActive = false;
+    if (JU()) JU().clearSlam(stageEl());
     const r = round();
     $('tag').textContent = 'Round ' + (roundIdx + 1) + ' · ' + TYPE_NAME[r.type];
     $('slowmo').hidden = true; $('result').hidden = true; $('prompt').hidden = false;
@@ -245,15 +326,39 @@
     let dur = 0;
     try { dur = stands ? Math.min(duration(r), 1.6) : duration(r); } catch (e) { console.error('Gravle animation:', e); }
     if (!(dur > 0) || !Number.isFinite(dur)) dur = 0.05;
-    const t0 = performance.now();
+    // Juice: el último tramo antes del impacto va a cámara lenta con zoom; al tocar,
+    // 110 ms congelado (hit-stop), destello, temblor y polvo.
+    const fxOn = !!JU() && !reduce;
+    let iT = dur; try { iT = impactT(r, dur); } catch (e) {}
+    const slowOn = fxOn && SLOW.has(r.type) && !stands && iT > 1.0;
+    anim.focus = slowOn ? focusOf(r) : null;
+    let hitDone = !(fxOn && SLOW.has(r.type) && !stands), freezeUntil = 0, tPrev = performance.now();
+    if (fxOn) JU().sfx.release();
     let ended = false;
-    const end = () => { if (ended) return; ended = true; cancelAnimationFrame(anim.raf); clearTimeout(watchdog); anim.t = dur; try { finishRound(); } catch (e) { console.error('Gravle result:', e); } };
-    const watchdog = setTimeout(end, (dur / speed + 4) * 1000);
+    const end = () => { if (ended) return; ended = true; cancelAnimationFrame(anim.raf); clearTimeout(watchdog); anim.t = dur; slowActive = false; try { finishRound(); } catch (e) { console.error('Gravle result:', e); } };
+    const watchdog = setTimeout(end, (dur / speed + (slowOn ? SLOW_WIN / SLOW_F : 0) + 4) * 1000);
     const step = (now) => {
       if (ended) return;
-      anim.t = reduce ? dur : Math.min(dur, Math.max(0, (now - t0) / 1000 * speed));
+      const dt = Math.min(0.05, Math.max(0, (now - tPrev) / 1000)); tPrev = now;
+      if (reduce) anim.t = dur;
+      else if (now >= freezeUntil) {
+        let f = speed;
+        const inSlow = slowOn && !hitDone && anim.t >= iT - SLOW_WIN;
+        if (inSlow) {
+          f *= SLOW_F;
+          if (!slowActive) { slowActive = true; $('slowmo').textContent = 'Slow-mo ×' + num(SLOW_F * speed, 2).replace(/0$/, ''); $('slowmo').hidden = false; JU().sfx.slow(); }
+        }
+        let nt = anim.t + dt * f;
+        if (!hitDone && nt >= iT) { nt = iT; hitDone = true; if (slowActive) $('slowmo').hidden = true; slowActive = false; freezeUntil = now + 110; try { impactFx(r); } catch (e) { console.error(e); } }
+        anim.t = Math.min(dur, nt);
+      }
+      // zoom hacia el punto de impacto durante la cámara lenta
+      if (anim.focus) {
+        const k = ease(Math.max(0, Math.min(1, (anim.t - (iT - SLOW_WIN)) / SLOW_WIN)));
+        cam.z = 1 + ZOOM * k; cam.x = W / 2 + (anim.focus[0] - W / 2) * k; cam.y = H / 2 + (anim.focus[1] - H / 2) * k;
+      }
       try { draw(); } catch (e) { console.error('Gravle draw:', e); end(); return; }
-      if (anim.t < dur) anim.raf = requestAnimationFrame(step); else end();
+      if (anim.t < dur || now < freezeUntil) anim.raf = requestAnimationFrame(step); else end();
     };
     anim.raf = requestAnimationFrame(step);
   }
@@ -357,6 +462,7 @@
     $('result').hidden = false; $('prompt').hidden = true; $('chips').hidden = true;
     $('go').disabled = false; $('go').textContent = roundIdx < lastN() ? 'Next round' : 'See result';
     renderPips(); try { draw(); } catch (e) { console.error('Gravle draw:', e); }
+    try { resultFx(s); } catch (e) { console.error('Gravle juice:', e); }
     $('go').focus({ preventScroll: true });
     // En pantallas bajas el resultado y el botón pueden quedar fuera: se baja hasta ellos.
     const gb = $('go').getBoundingClientRect();
@@ -364,7 +470,12 @@
       $('go').scrollIntoView({ block: 'end', behavior: reduce ? 'auto' : 'smooth' });
   }
   function next() {
-    if (roundIdx < lastN()) { roundIdx++; startRound(); return; }
+    if (roundIdx < lastN()) {
+      phase = 'wipe';
+      const n = roundIdx + 2, go = () => { roundIdx++; startRound(); };
+      if (JU()) JU().wipe(stageEl(), 'Round ' + n + ' / ' + day.rounds.length, TYPE_NAME[day.rounds[roundIdx + 1].type] || '', go); else go();
+      return;
+    }
     $('play').hidden = true;
     hooks.done({ attempt, day, scores, details, total: scores.reduce((a, b) => a + b, 0), types: day.rounds.map(r => r.type), coins: lastCoins });
   }
@@ -382,10 +493,18 @@
     const s = cv.width / W;
     ctx.setTransform(s, 0, 0, s, 0, 0);
     ctx.clearRect(0, 0, W, H);
+    if (cam.z > 1.001) { const [cx, cy, z] = camAt(); ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-cx, -cy); }
     paper();
     const r = round(); if (!r) return;
     if (phase === 'playing' && !anim) return;
     ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge, orbit: drawOrbit, magnet: drawMagnet, pour: drawPour, pulley: drawPulley, flip: drawFlip, jump: drawJump, swing: drawSwing, spring: drawSpring })[r.type](r);
+    // viñeta de cámara lenta, fija a la pantalla
+    if (slowActive) {
+      ctx.setTransform(s, 0, 0, s, 0, 0);
+      const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.28, W / 2, H / 2, H * 0.78);
+      g.addColorStop(0, 'rgba(10,18,30,0)'); g.addColorStop(1, 'rgba(10,18,30,.32)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
   }
   function paper() {
     ctx.fillStyle = C.plate; ctx.fillRect(0, 0, W, H);

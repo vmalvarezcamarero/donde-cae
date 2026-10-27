@@ -262,3 +262,37 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .about { color: var(--ink-2); font-size: 13px; line-height: 1.5; }
 .about h2 { font: 700 14px var(--font-body); color: var(--ink); margin: 0 0 4px; }
 .about p { margin: 0; }
+
+/* ---------- juice (juice.js): sonido, texto slam, cortinilla, contadores ---------- */
+.snd { width: 36px; height: 36px; flex: none; display: grid; place-items: center; background: var(--plate); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 50%; cursor: pointer; padding: 0; }
+.snd svg { width: 20px; height: 20px; }
+.snd[aria-pressed="false"] { color: var(--ink-2); border-color: var(--line); }
+.snd:focus-visible { outline: 3px solid var(--azul); outline-offset: 2px; }
+.result .pts, .end .total b { display: inline-block; transform-origin: center; }
+.end .total b { font-weight: inherit; }
+.stage .slam {
+  position: absolute; left: 50%; top: 34%; z-index: 4; pointer-events: none;
+  display: grid; justify-items: center; gap: 2px; text-align: center;
+  transform: translate(-50%, -50%) rotate(-6deg);
+}
+.stage .slam span {
+  font: 800 clamp(28px, 9vw, 42px)/0.95 var(--font-display); letter-spacing: -0.02em; white-space: nowrap;
+  color: var(--plate); -webkit-text-stroke: 2.5px var(--ink); paint-order: stroke fill;
+  text-shadow: 4px 4px 0 var(--ink);
+}
+.stage .slam.g span { color: var(--good); }
+.stage .slam.y span { color: var(--warn); }
+.stage .slam.r span { color: var(--bad); }
+.stage .slam small {
+  font: 700 13px var(--font-mono); background: var(--ink); color: var(--plate); padding: 3px 8px; border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--coral);
+}
+.stage .wipe {
+  position: absolute; inset: 0; z-index: 5; border-radius: 5px; background: var(--ink); color: var(--plate);
+  display: grid; place-content: center; justify-items: center; gap: 6px; text-align: center;
+}
+.stage .wipe b { font: 800 34px/1 var(--font-display); letter-spacing: -0.02em; }
+.stage .wipe small { font: 600 13px var(--font-mono); color: var(--coral); text-transform: uppercase; letter-spacing: 0.1em; }
+.slowmo:not([hidden]) { animation: slowpulse 0.9s ease-in-out infinite; }
+@keyframes slowpulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .slowmo:not([hidden]) { animation: none; } }

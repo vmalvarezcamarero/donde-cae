@@ -21,7 +21,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261024c">
+<link rel="stylesheet" href="styles.css?v=20261027a">
 </head>
 <body>
 <div class="app" id="app">
@@ -31,6 +31,7 @@
       <span>Grav<em>le</em></span>
     </a>
     <div class="topright">
+    <button class="snd" id="sndBtn" type="button" aria-pressed="true" aria-label="Sound on"></button>
     <button class="coins" id="coinsBtn" type="button" hidden aria-label="Coins and shop"><span class="coin" aria-hidden="true"></span><span id="coinsN">0</span></button>
     <button class="acct" id="acctBtn" type="button"><span class="av" id="acctAv">?</span><span class="nm" id="acctName">Sign in</span></button>
     </div>
@@ -119,7 +120,7 @@
   <section id="end" class="end panel" hidden>
     <div>
       <div class="dayhead"><span id="endLabel"></span></div>
-      <div class="total" id="total">0<span> / 500</span></div>
+      <div class="total" id="total"><b id="totalN">0</b><span> / 500</span></div>
       <p class="note" id="endNote" style="margin-top:6px"></p>
     </div>
     <div class="rows" id="rows"></div>
@@ -251,7 +252,8 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="game.js?v=20261024c"></script>
-<script type="module" src="app.js?v=20261024c"></script>
+<script src="juice.js?v=20261027a"></script>
+<script src="game.js?v=20261027a"></script>
+<script type="module" src="app.js?v=20261027a"></script>
 </body>
 </html>
