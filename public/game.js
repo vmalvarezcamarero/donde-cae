@@ -287,7 +287,7 @@
     renderPips(); ready(); draw();
   }
   function renderPips() {
-    const p = $('pips'); p.innerHTML = '';
+    const p = $('pips'); p.innerHTML = ''; p.classList.toggle('many', day.rounds.length > 6);
     for (let i = 0; i < day.rounds.length; i++) {
       const d = document.createElement('span'); d.className = 'pip';
       if (i < scores.length) d.classList.add(band(scores[i]));
@@ -2376,6 +2376,6 @@
   }
 
   window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME, setSkin: (look) => { skin = look || skin; draw(); }, setTrail: (look) => { trailLook = look || trailLook; },
-    drawMarble: (g, x, y, r, look, ang) => { readColors(); drawSkin(g, x, y, r, look, ang); }, preview };
+    drawMarble: (g, x, y, r, look, ang, def) => { readColors(); drawSkin(g, x, y, r, look, ang, def); }, preview };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
 })();
