@@ -35,7 +35,7 @@ for (const f of files) {
     if (r.type === 'jump' && !(Number.isInteger(r.answer) && r.answer >= 0 && r.answer <= 6 && r.frames?.length > 60 && r.answer !== r.testSlot)) bad('salto sin autobús');
     if (r.type === 'pulley' && ![-1, 0, 1].includes(r.answer)) bad('poleas sin respuesta');
     if (r.type === 'swing' && !(isNum(r.impactX) && r.frames?.length > 20)) bad('péndulo sin caída');
-    if (r.type === 'spring' && !(isNum(r.answer) && r.lo <= r.answer && r.answer <= r.hi)) bad('muelle sin tensión correcta');
+    if (r.type === 'spring' && !(isNum(r.answer) && (r.target ? isNum(r.tx) && isNum(r.testX) : r.lo <= r.answer && r.answer <= r.hi))) bad('cañón sin tensión correcta');
     if (r.type === 'gears' && !(r.parts?.length >= 3 && r.w?.length === r.parts.length && [1, -1].includes(r.answer?.dir))) bad('engranajes sin respuesta');
     if (r.type === 'balance' && !(isNum(r.answer) && Math.abs(r.answer) <= 10.5 && r.weights?.length >= 2)) bad('equilibrio sin solución válida');
     if (r.type === 'drop' && !(r.frames?.length > 30 && isNum(r.impactX) && r.impactX > 0 && r.impactX < d.W)) bad('caída sin trayectoria o impacto fuera del suelo');

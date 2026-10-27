@@ -4,7 +4,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
 import { SKINS, NAME_COLORS, WELCOME_COINS } from './shop.js';
 import { publicRound, validPrediction, scorePoints } from './scoring.js';
-import { makeCard } from './card.js?v=20261027c';
+import { makeCard } from './card.js?v=20261027d';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -468,7 +468,7 @@ const HOW = {
   jump: { title: 'Bike jump', steps: ['The dotted line is a test jump at a known speed.', 'Speed counts double: twice as fast flies four times as far (half as fast, a quarter as far).', 'Tap the bus where you think the bike lands, or the green ramp if it clears them all.'], pts: 'Right bus: 100. One bus off: 40.' },
   pulley: { title: 'Pulleys', steps: ['Two weights hang from the same rope.', 'Count the ropes holding each weight: the pull of each side is its weight ÷ the number of ropes.', 'Pick which side goes down, or if it stays balanced.'], pts: 'Right answer: 100.' },
   swing: { title: 'Cut the rope', steps: ['The ball swings from where it starts.', 'At the scissors the rope is cut and the ball flies off in the direction it was moving.', 'Tap the floor where you think it lands.'], pts: 'The closer your mark, the more points.' },
-  spring: { title: 'Spring shot', steps: ['Drag the ball back to pull the spring.', 'The dotted line is a test shot with a known pull. Pulling twice as far launches twice as fast, and it flies much more than twice as far.', 'Find the pull that lands the ball in the bucket.'], pts: 'Bucket centre: 100. In the bucket: 50 or more. A miss: up to 30 if it was close.' },
+  spring: { title: 'Cannon shot', steps: ['Drag the ball back inside the cannon to pull its spring.', 'The dotted line is a test shot with a known pull. Pull twice as far and the ball leaves twice as fast, which carries it much more than twice as far.', 'Find the pull that lands the ball in the middle of the target.'], pts: 'Bullseye: 100. Each ring shows the points: 75, 50 and 25 as you move away from the centre.' },
   bridge: { title: 'Bridge', steps: ['Drag up to grow the plank standing on the edge.', 'When you release, it tips over onto the other side and the marble rolls to the end of it. If the far side is lower, the plank needs to reach diagonally.', 'If the tip lands on the far platform the marble makes it. The red mark is the perfect spot.'], pts: 'Landing on the red mark: 100. Anywhere on the platform: 50 or more. Falling: up to 30 if it was close.' },
   domino: { title: 'Dominoes', steps: ['The first domino gets a push.', 'A falling domino only knocks the next one if it can reach it, and a light domino struggles to topple a heavy one (dark = 3× heavier).', 'Tap the last domino you think will fall, then tap Release.'], pts: 'Exactly right: 100. One off: 45. Two off: 15.' },
   float: { title: 'Float or sink?', steps: ['Look at each object and the water: fresh or very salty.', 'Things lighter than water for their size float; denser ones sink. Salty water is denser, so it holds more up.', 'Tap the ones that float, then tap Release to drop them all in.'], pts: 'Points for every object you get right; all of them gets 100.' },
