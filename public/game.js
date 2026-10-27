@@ -42,12 +42,32 @@
   let cam = { z: 1, x: 200, y: 300 }, camRaf = 0, slowActive = false;
   // Punto donde todo termina: hacia ahí va el zoom y de ahí sale el polvo.
   function focusOf(r) {
+    const p = focusRaw(r);
+    if (!p || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) return null;
+    return [Math.max(0, Math.min(W, p[0])), Math.max(0, Math.min(H - 20, p[1]))];
+  }
+  function focusRaw(r) {
     try {
+      const last = (fr) => fr && fr.length ? fr[fr.length - 1] : null;
       if (r.type === 'drop') return [r.impactX, FLOOR];
       if (r.type === 'swing') return [r.impactX, r.impactY ?? FLOOR];
       if (r.type === 'pool') return r.stop;
       if (r.type === 'laser') return r.end;
-      if (r.type === 'orbit' || r.type === 'magnet' || r.type === 'jump') { const f = r.frames && r.frames.at(-1); if (f && typeof f[0] === 'number') return [f[0], f[1]]; }
+      if (r.type === 'orbit' || r.type === 'magnet' || r.type === 'jump') { const f = last(r.frames); if (f && typeof f[0] === 'number') return [f[0], f[1]]; }
+      // muelle: donde acaba la bola (dentro del cubo, en la plataforma o en el suelo)
+      if (r.type === 'spring') return last((r.sim || (r.sim = springPath(r, mark))).pts);
+      // marble run: el cubo donde cae la última canica
+      if (r.type === 'flip') { const g = flipGeo(r), [cx, cy] = g.P(g.D, r.answer); return [cx, cy + g.cupH / 2]; }
+      // rizo: donde termina la canica (arriba del todo si da la vuelta, o donde cae)
+      if (r.type === 'loop') { const f = last(r.sim || (r.sim = loopFrames(r, mark))); if (f) return [f[0], f[1]]; }
+      // puente: la canica al final ([ángulo, x, y, giro])
+      if (r.type === 'bridge') { const f = last((r.sim || (r.sim = bridgeFrames(r, mark))).frames); if (f) return [f[1], f[2]]; }
+      // torre: el bloque que toca el suelo primero
+      if (r.type === 'tower') { const f = last(r.frames); if (f && r.answer >= 0 && f[r.answer]) return [f[r.answer][0], 540]; }
+      // dominó: la última ficha que cae (la escena va ampliada ×DZ desde el suelo)
+      if (r.type === 'domino') { const d = r.dominoes[r.answer]; if (d) return [(d.x + d.w / 2) * DZ, DFLOOR - 20]; }
+      // carrera: la meta de la pista ganadora
+      if (r.type === 'race') { const t = r.tracks[r.order[0]]; const q = t && last(t.pts); if (q) return [r.finishX ?? q[0], q[1]]; }
     } catch (e) {}
     return null;
   }
@@ -56,6 +76,7 @@
     if (r.type === 'laser') return Math.min(dur, r.len / LASER_SPEED);
     if (r.type === 'orbit' || r.type === 'magnet' || r.type === 'swing') return Math.min(dur, r.frames.length / 60);
     if (r.type === 'flip') return Math.max(0, dur - 0.4);
+    if (r.type === 'spring' && r.sim) return Math.min(dur, Math.max(0, r.sim.pts.length - 20) / 60);   // los 20 últimos son pausa
     return dur;
   }
   const ease = (k) => k * k * (3 - 2 * k);
@@ -330,7 +351,7 @@
     // 110 ms congelado (hit-stop), destello, temblor y polvo.
     const fxOn = !!JU() && !reduce;
     let iT = dur; try { iT = impactT(r, dur); } catch (e) {}
-    const slowOn = fxOn && SLOW.has(r.type) && !stands && iT > 1.0;
+    const slowOn = fxOn && SLOW.has(r.type) && !stands && iT > 0.7;
     anim.focus = slowOn ? focusOf(r) : null;
     let hitDone = !(fxOn && SLOW.has(r.type) && !stands), freezeUntil = 0, tPrev = performance.now();
     if (fxOn) JU().sfx.release();
