@@ -416,3 +416,70 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .passup .arrow { font: 800 24px/1 var(--font-display); color: var(--good); }
 .passup b { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .cbar i { animation: none; } }
+
+/* ---------- tienda: vista previa, oferta del día, rarezas y compra animada ---------- */
+.hero { position: relative; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; align-items: center;
+  border: 1.5px solid var(--ink); border-radius: 8px; padding: 10px; background: var(--paper); box-shadow: 4px 4px 0 var(--ink); overflow: hidden; }
+.hero canvas { width: 100%; height: 150px; display: block; border-radius: 5px; border: 1px solid var(--line); }
+.heroinfo { display: grid; gap: 6px; align-content: center; min-width: 0; }
+.hname { font: 800 22px/1.05 var(--font-display); letter-spacing: -0.01em; text-wrap: balance; }
+.hnick { font: 800 20px var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heroinfo .btn { padding: 10px 8px; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.heroinfo .btn .coin { width: 15px; height: 15px; border-width: 1px; }
+@media (max-width: 380px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+.rar { justify-self: start; font: 700 10.5px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; border: 1.5px solid var(--ink-2); color: var(--ink-2); }
+.rar.r-common { color: var(--good); border-color: var(--good); }
+.rar.r-rare { color: var(--azul); border-color: var(--azul); }
+.rar.r-epic { color: var(--violeta); border-color: var(--violeta); }
+.rar.r-legendary { color: var(--plate); background: var(--mostaza); border-color: var(--ink); }
+.hero.r-legendary::after, .item.r-legendary::after {         /* brillo que recorre lo legendario */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 236, 170, .45) 48%, transparent 60%); background-size: 260% 100%;
+  animation: sheen 2.6s ease-in-out infinite;
+}
+.item.r-epic::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 38%, rgba(190, 150, 255, .3) 50%, transparent 62%); background-size: 260% 100%; animation: sheen 3.4s ease-in-out infinite; }
+@keyframes sheen { 0% { background-position: 130% 0; } 60%, 100% { background-position: -30% 0; } }
+.hflash { position: absolute; inset: 0; background: #fff; pointer-events: none; }
+.ustamp { position: absolute; left: 50%; top: 50%; pointer-events: none; font: 800 28px/1 var(--font-display); letter-spacing: 0.06em;
+  color: var(--good); border: 3px solid currentColor; outline: 1.5px solid currentColor; outline-offset: 3px; padding: 6px 12px; border-radius: 6px; background: color-mix(in srgb, var(--plate) 70%, transparent); }
+.flycoin { position: fixed; z-index: 60; width: 18px; height: 18px; pointer-events: none; }
+
+.deal { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; cursor: pointer;
+  border: 1.5px dashed var(--coral); border-radius: 8px; padding: 8px 10px; background: var(--plate); color: var(--ink); font: inherit; }
+.deal canvas { width: 44px; height: 44px; }
+.dtxt { display: grid; gap: 1px; min-width: 0; }
+.dtxt small { font: 700 10.5px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--coral); }
+.dtxt > b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dpr { display: inline-flex; align-items: center; gap: 4px; font: 700 13px var(--font-mono); }
+.dpr s { color: var(--ink-2); font-weight: 500; }
+.dpr .coin { width: 13px; height: 13px; border-width: 1px; }
+.dclock { font: 600 11px var(--font-mono); color: var(--ink-2); white-space: nowrap; }
+.deal:not([hidden]) { animation: dealpulse 2.4s ease-in-out infinite; }
+@keyframes dealpulse { 50% { border-color: var(--mostaza); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mostaza) 25%, transparent); } }
+
+.items { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.item { position: relative; overflow: hidden; cursor: pointer; font: inherit; color: var(--ink); gap: 4px; padding: 10px 6px 9px;
+  transition: transform .15s cubic-bezier(.3, 1.6, .5, 1), box-shadow .15s; }
+.item:hover { transform: translateY(-2px); }
+.item:active { transform: scale(.96); }
+.item canvas { width: 64px; height: 64px; }
+.item .sw { min-height: 64px; font-size: 17px; max-width: 100%; overflow: hidden; }
+.item .in { font-size: 13px; }
+.item.sel { border-color: var(--ink); box-shadow: 3px 3px 0 var(--azul); }
+.item.on { border-color: var(--ink); }
+.item.on .pr { color: var(--good); font-weight: 700; }
+.item.r-rare { border-color: color-mix(in srgb, var(--azul) 55%, var(--line)); }
+.item.r-epic { border-color: color-mix(in srgb, var(--violeta) 60%, var(--line)); }
+.item.r-legendary { border-color: var(--mostaza); }
+.item.sel.r-legendary, .item.sel.r-epic, .item.sel.r-rare { border-color: var(--ink); }
+.item .pr s { color: var(--ink-2); font-weight: 400; }
+.rtag { position: absolute; top: 5px; right: 5px; font: 700 8.5px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.item.r-legendary .rtag { color: var(--mostaza); } .item.r-epic .rtag { color: var(--violeta); } .item.r-rare .rtag { color: var(--azul); } .item.r-common .rtag { color: var(--good); }
+.need { width: 80%; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.need i { display: block; height: 100%; background: var(--mostaza); }
+.tick { color: var(--good); }
+.nc-fire { background: linear-gradient(90deg, #e2412f, #ff8a1f, #ffd23f, #ff8a1f, #e2412f); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important; animation: ncflow 1.6s linear infinite; }
+.nc-ice { background: linear-gradient(90deg, #2c7be5, #8fd3ff, #ffffff, #8fd3ff, #2c7be5); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important; animation: ncflow 3s linear infinite; }
+.rainbow { background-size: 200% 100% !important; animation: ncflow 3s linear infinite; }
+@keyframes ncflow { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .hero.r-legendary::after, .item.r-legendary::after, .item.r-epic::after, .deal:not([hidden]), .nc-fire, .nc-ice, .rainbow { animation: none; } }

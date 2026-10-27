@@ -5,7 +5,7 @@
 // - Limita los intentos por día, guarda cuentas y calcula los rankings.
 import { publicRound, validPrediction, scorePoints } from '../public/scoring.js';
 import { COUNTRIES } from '../public/countries.js';
-import { WELCOME_COINS, coinsFor, findItem } from '../public/shop.js';
+import { WELCOME_COINS, coinsFor, findItem, priceOf } from '../public/shop.js';
 
 const MAX_ATTEMPTS = 2;          // en el futuro: +1 viendo un vídeo
 const SETS = ['A', 'B', 'B'];    // reto que toca en cada intento
@@ -163,10 +163,16 @@ async function claimDevice(env, who, date) {
     ]);
   }
 }
+// La columna «trail» llega con migrations/0003_trails.sql; si aún no existe, todo sigue
+// funcionando con la estela clásica.
+let hasTrail = true;
 const profileOf = async (env, uid) => {
   if (!uid) return null;
-  const p = await env.DB.prepare('SELECT nickname, country, coins, skin, name_color, owned FROM users WHERE uid = ?').bind(uid).first();
-  return p && { ...p, owned: JSON.parse(p.owned) };
+  let p = null;
+  if (hasTrail) try { p = await env.DB.prepare('SELECT nickname, country, coins, skin, name_color, trail, owned FROM users WHERE uid = ?').bind(uid).first(); }
+    catch (e) { if (/no such column/i.test(String(e))) hasTrail = false; else throw e; }
+  if (!hasTrail) p = await env.DB.prepare('SELECT nickname, country, coins, skin, name_color, owned FROM users WHERE uid = ?').bind(uid).first();
+  return p && { trail: 'classic', ...p, owned: JSON.parse(p.owned) };
 };
 
 async function getToday(req, env) {
@@ -399,6 +405,7 @@ async function deleteMe(req, env) {
 }
 
 /* ---------------- tienda ---------------- */
+const b_kind = (key) => key.split(':')[0];
 async function shopUser(req, env) {
   const who = await identify(req, env, { requireUser: true });
   const p = await profileOf(env, who.uid);
@@ -410,18 +417,22 @@ async function shopUser(req, env) {
 }
 async function shopBuy(req, env) {
   const { who, p, item, key } = await shopUser(req, env);
+  const price = priceOf(b_kind(key), item, today(env));             // con la oferta del día
   if (item.price === 0 || p.owned.includes(key)) throw new HttpError(409, 'You already own this.');
-  if (p.coins < item.price) throw new HttpError(402, 'Not enough coins yet. Keep playing!');
+  if (p.coins < price) throw new HttpError(402, 'Not enough coins yet. Keep playing!');
   const owned = JSON.stringify([...p.owned, key]);
   // Solo se cobra si el saldo y lo comprado siguen como los leímos (evita compras dobles).
   const res = await env.DB.prepare('UPDATE users SET coins = coins - ?1, owned = ?2 WHERE uid = ?3 AND coins >= ?1 AND owned = ?4')
-    .bind(item.price, owned, who.uid, JSON.stringify(p.owned)).run();
+    .bind(price, owned, who.uid, JSON.stringify(p.owned)).run();
   if (!res.meta.changes) throw new HttpError(409, 'Something changed in the meantime. Please try again.');
   return json({ profile: await profileOf(env, who.uid) });
 }
 async function shopEquip(req, env) {
   const { who, p, item, key, kind } = await shopUser(req, env);
   if (item.price > 0 && !p.owned.includes(key)) throw new HttpError(403, 'Buy it first.');
-  await env.DB.prepare(`UPDATE users SET ${kind === 'skin' ? 'skin' : 'name_color'} = ? WHERE uid = ?`).bind(item.id, who.uid).run();
+  if (kind === 'trail' && !hasTrail) throw new HttpError(503, 'Trails are almost ready. Try again in a moment.');
+  const col = { skin: 'skin', trail: 'trail', color: 'name_color' }[kind];
+  try { await env.DB.prepare(`UPDATE users SET ${col} = ? WHERE uid = ?`).bind(item.id, who.uid).run(); }
+  catch (e) { if (kind === 'trail' && /no such column/i.test(String(e))) { hasTrail = false; throw new HttpError(503, 'Trails are almost ready. Try again in a moment.'); } throw e; }
   return json({ profile: await profileOf(env, who.uid) });
 }
