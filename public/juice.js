@@ -13,8 +13,10 @@
   /* ---------- sonido ---------- */
   let soundOn = store.get('sound', true);
   let ac = null, noise = null;
-  function audio() {
-    if (!soundOn) return null;
+  function audio() { return soundOn ? ctx() : null; }
+  // Contexto de audio compartido con la música (music.js). Con make = false no lo crea.
+  function ctx(make = true) {
+    if (!ac && !make) return null;
     try {
       if (!ac) {
         const A = window.AudioContext || window.webkitAudioContext; if (!A) return null;
@@ -85,7 +87,7 @@
     b.setAttribute('aria-pressed', String(soundOn));
     b.setAttribute('aria-label', soundOn ? 'Sound on' : 'Sound off');
   }
-  function setSound(v) { soundOn = v; store.set('sound', v); paintSoundBtn(); if (v) sfx.pick(); }
+  function setSound(v) { soundOn = v; store.set('sound', v); paintSoundBtn(); if (v) sfx.pick(); window.Juice.music?.sync(); }
   document.addEventListener('DOMContentLoaded', () => {
     paintSoundBtn();
     const b = document.getElementById('sndBtn');
@@ -248,5 +250,5 @@
     };
   }
 
-  window.Juice = { reduce, sfx, buzz, confetti, dust, sparks, shake, flash, slam, clearSlam, roll, pop, wipe, palette, get sound() { return soundOn; } };
+  window.Juice = { reduce, sfx, buzz, ctx, setSound, confetti, dust, sparks, shake, flash, slam, clearSlam, roll, pop, wipe, palette, get sound() { return soundOn; } };
 })();
