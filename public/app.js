@@ -24,6 +24,8 @@ const store = {
   set(k, v) { try { localStorage.setItem('physle:' + k, JSON.stringify(v)); } catch (e) {} },
 };
 const device = store.get('device') || (() => { const id = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); store.set('device', id); return id; })();
+// Umami (analítica sin cookies): si el script no carga (bloqueador), no pasa nada.
+const track = (name, data) => { try { window.umami?.track(name, data); } catch (e) {} };
 let toastTimer;
 function toast(msg) {
   const t = $('toast'); t.textContent = msg; t.hidden = false;
@@ -255,6 +257,7 @@ async function startAttempt() {
   try { st = await api('/api/attempt', { method: 'POST' }); } catch (e) { toast(e.message); refresh(); return; }
   $('playLabel').textContent = 'Gravle #' + st.day.n + ' · attempt ' + (st.attempt.index || st.attempt.num) + (st.ranked ? ' · counts for the leaderboard' : '');
   show('play');
+  track('game_start', { attempt: st.attempt.index || st.attempt.num, ranked: !!st.ranked, signed_in: !!user });
   window.PhysleGame.play(st, {
     // Si falla la red se reintenta una vez sola: el servidor no puntúa dos veces la misma ronda.
     submit: async (round, prediction) => {
@@ -378,6 +381,7 @@ function streakFx(st) {
 async function showEnd(r) {
   show('end'); lastResult = r;
   const isDemo = !!r.attempt.demo;
+  track(isDemo ? 'lab_complete' : 'game_complete', { score: r.total, attempt: r.attempt.index || r.attempt.num, signed_in: !!user });
   const firstToday = !isDemo && !store.get('played', {})[r.day.date];
   if (!isDemo) { const played = store.get('played', {}); played[r.day.date] = Math.max(played[r.day.date] || 0, r.total); store.set('played', played); }
   const max = r.scores.length * 100, nStars = starsOf(r.total, max), sn = isDemo ? 0 : streakCount(r.day.date);
@@ -419,6 +423,7 @@ async function showEnd(r) {
 }
 $('copy').addEventListener('click', () => {
   const txt = $('share').textContent, btn = $('copy');
+  track('share_copy');
   const done = () => { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy result'; }, 1600); };
   const fallback = () => { const sel = getSelection(), rg = document.createRange(); rg.selectNodeContents($('share')); sel.removeAllRanges(); sel.addRange(rg); btn.textContent = 'Text selected: copy it'; };
   try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
@@ -428,6 +433,7 @@ $('copy').addEventListener('click', () => {
 $('shareImg').addEventListener('click', async () => {
   const r = lastResult, btn = $('shareImg'); if (!r) return;
   btn.disabled = true; btn.textContent = 'Making image…';
+  track('share_image');
   try {
     const host = SITE;
     const blob = await makeCard({
@@ -481,7 +487,7 @@ function syncRankTabs() {
 async function openRank(scope) {
   if (!fullRankings) scope = 'day';
   syncRankTabs();
-  rankScope = scope; show('rank');
+  rankScope = scope; show('rank'); track('leaderboard_view', { scope });
   for (const [id, s] of [['tabDay', 'day'], ['tabWeek', 'week'], ['tabCountries', 'countries']]) $(id).setAttribute('aria-selected', String(s === scope));
   if (scope === 'countries' && rankFilter.dataset.mode !== 'period') {
     rankFilter.dataset.mode = 'period'; rankFilter.innerHTML = '<option value="day">Today</option><option value="week">This week</option>';
@@ -672,7 +678,7 @@ async function googleSignIn() {
   $('authErr').textContent = '';
   try {
     const provider = new A.GoogleAuthProvider();
-    try { await A.signInWithPopup(fbAuth, provider); }
+    try { const res = await A.signInWithPopup(fbAuth, provider); track(A.getAdditionalUserInfo?.(res)?.isNewUser ? 'signup' : 'signin', { method: 'google' }); }
     catch (e) { if (e.code === 'auth/popup-blocked') await A.signInWithRedirect(fbAuth, provider); else throw e; }
     for (const d of ['authDlg', 'guestDlg']) if ($(d)?.open) $(d).close();
     await refresh();
@@ -691,6 +697,7 @@ $('emailForm').addEventListener('submit', async (ev) => {
   try {
     if (signUp) await A.createUserWithEmailAndPassword(fbAuth, email, pass);
     else await A.signInWithEmailAndPassword(fbAuth, email, pass);
+    track(signUp ? 'signup' : 'signin', { method: 'email' });
     $('authDlg').close(); await refresh();
   } catch (e) { $('authErr').textContent = authMsg(e); }
 });
@@ -857,6 +864,7 @@ async function heroAction() {
     if (!owned) {
       const before = p.coins, res = await api('/api/shop/buy', { method: 'POST', body: { kind, id: it.id } });
       today.user.profile = res.profile;
+      track('shop_buy', { kind, item: it.id });
       await buyFx(it, before, res.profile.coins);
     }
     const eq = await api('/api/shop/equip', { method: 'POST', body: { kind, id: it.id } });
