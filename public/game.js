@@ -451,7 +451,7 @@
     if (fxOn && r.type === 'pool') JU().sfx.tock(1.4);
     if (fxOn && r.type === 'spring' && r.target) { JU().sfx.boom(); JU().buzz(30); JU().shake(stageEl(), 3, 220); }
     let ended = false;
-    const end = () => { if (ended) return; ended = true; cancelAnimationFrame(anim.raf); clearTimeout(watchdog); anim.t = dur; slowActive = false; try { finishRound(); } catch (e) { console.error('Gravle result:', e); } };
+    const end = () => { if (ended) return; ended = true; JU()?.music?.muffle(false); cancelAnimationFrame(anim.raf); clearTimeout(watchdog); anim.t = dur; slowActive = false; try { finishRound(); } catch (e) { console.error('Gravle result:', e); } };
     const watchdog = setTimeout(end, (dur / speed + (slowOn ? SLOW_WIN / SLOW_F : 0) + 4) * 1000);
     const step = (now) => {
       if (ended) return;
@@ -462,10 +462,10 @@
         const inSlow = slowOn && !hitDone && anim.t >= iT - SLOW_WIN;
         if (inSlow) {
           f *= SLOW_F;
-          if (!slowActive) { slowActive = true; $('slowmo').textContent = 'Slow-mo ×' + num(SLOW_F * speed, 2).replace(/0$/, ''); $('slowmo').hidden = false; JU().sfx.slow(); }
+          if (!slowActive) { slowActive = true; $('slowmo').textContent = 'Slow-mo ×' + num(SLOW_F * speed, 2).replace(/0$/, ''); $('slowmo').hidden = false; JU().sfx.slow(); JU().music?.muffle(true); }
         }
         let nt = anim.t + dt * f;
-        if (!hitDone && nt >= iT) { nt = iT; hitDone = true; if (slowActive) $('slowmo').hidden = true; slowActive = false; freezeUntil = now + 110; try { impactFx(r); } catch (e) { console.error(e); } }
+        if (!hitDone && nt >= iT) { nt = iT; hitDone = true; if (slowActive) $('slowmo').hidden = true; slowActive = false; JU()?.music?.muffle(false); freezeUntil = now + 110; try { impactFx(r); } catch (e) { console.error(e); } }
         anim.t = Math.min(dur, nt);
       }
       // zoom hacia el punto de impacto durante la cámara lenta

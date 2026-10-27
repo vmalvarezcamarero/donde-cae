@@ -530,3 +530,16 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .labtrails { gap: 6px; }
 .labtrails .chip { padding: 5px 11px; font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .labexps .exp { transition: none; } }
+
+/* ---------- cabecera con botón de música: que quepa en móviles estrechos ---------- */
+.top { gap: 8px; }
+.logo { flex: none; }
+.topright { gap: 6px; flex: 0 1 auto; justify-content: flex-end; }
+.topright .acct { min-width: 0; flex: 0 1 auto; }
+@media (max-width: 440px) {
+  .logo { gap: 7px; } .logo svg { width: 34px; height: 34px; } .logo span { font-size: 29px; }
+  .snd { width: 34px; height: 34px; } .snd svg { width: 18px; height: 18px; }
+  .coins { padding: 5px 8px 5px 6px; font-size: 13px; }
+}
+@media (max-width: 390px) { .topright .acct { padding-right: 6px; } .topright .acct .nm { display: none; } }
+@media (max-width: 360px) { .logo span { font-size: 25px; } .logo svg { width: 30px; height: 30px; } .logo { gap: 5px; } .topright { gap: 4px; } .snd { width: 32px; height: 32px; } }
