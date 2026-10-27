@@ -4,7 +4,7 @@ import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
 import { SKINS, NAME_COLORS, WELCOME_COINS } from './shop.js';
 import { publicRound, validPrediction, scorePoints } from './scoring.js';
-import { makeCard } from './card.js?v=20261027e';
+import { makeCard } from './card.js?v=20261027f';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -320,7 +320,30 @@ function endFx(r, st) {
     if (!st.show) return;
     await wait(t >= max ? 1100 : 650); if (!alive()) return;
     streakFx(st);
+    if (st.rank && st.rank.passed > 0) { await wait(st.firstToday ? 1300 : 300); if (!alive()) return; passedFx(st.rank); }
   });
+}
+// Dónde quedas hoy: percentil entre todos los jugadores y, con perfil, tu puesto del ranking.
+function renderRank(k) {
+  const el = $('rankLine'); el.innerHTML = '';
+  if (!k || (k.top == null && k.pos == null)) { el.hidden = true; return; }
+  el.hidden = false;
+  const chip = (txt, cls) => { const c = document.createElement('span'); c.className = 'rchip ' + (cls || ''); c.textContent = txt; el.appendChild(c); return c; };
+  if (k.top != null) chip('Top ' + k.top + '% today', k.top <= 10 ? 'hot' : '');
+  if (k.pos != null) chip('#' + k.pos + ' of ' + k.ranked + ' on the leaderboard');
+  if (k.passed > 0) chip('↑ passed ' + k.passed, 'up');
+}
+// Aviso que sube desde abajo: «You passed N players» con el número rodando.
+function passedFx(k) {
+  const J = window.Juice; if (!J) return;
+  document.querySelector('.passup')?.remove();
+  const el = document.createElement('div'); el.className = 'passup'; el.setAttribute('role', 'status');
+  el.innerHTML = '<span class="arrow" aria-hidden="true">↑</span><span>You passed <b>0</b> players · now <b></b></span>';
+  el.querySelectorAll('b')[1].textContent = '#' + k.pos;
+  document.body.appendChild(el);
+  el.animate([{ transform: 'translate(-50%, 140%)' }, { transform: 'translate(-50%, -8%)', offset: 0.7 }, { transform: 'translate(-50%, 0)' }], { duration: 420, easing: 'ease-out', fill: 'forwards' });
+  J.roll(el.querySelector('b'), k.passed, { ms: 900 }).then(() => { J.sfx.good(3); J.buzz(20); });
+  setTimeout(() => { const a = el.animate([{ transform: 'translate(-50%, 0)' }, { transform: 'translate(-50%, 160%)' }], { duration: 320, easing: 'ease-in', fill: 'forwards' }); a.onfinish = () => el.remove(); }, 3600);
 }
 // Pinta el bloque de racha con el número indicado (antes y después de sumar el día de hoy).
 function paintStreak(st, n) {
@@ -357,6 +380,7 @@ async function showEnd(r) {
   const max = r.scores.length * 100, nStars = starsOf(r.total, max), sn = isDemo ? 0 : streakCount(r.day.date);
   const st = { show: !isDemo, n: sn, firstToday, stars: nStars, milestone: firstToday && MILESTONES.includes(sn), ...stampOf(r) };
   $('end').querySelector('.stamp')?.remove();
+  st.rank = r.rank || null; renderRank(st.rank);
   $('stars').innerHTML = STAR_SVG.repeat(3); $('stars').setAttribute('aria-label', nStars + ' of 3 stars');
   $('streakBox').hidden = isDemo; $('streakBox').querySelector('.milestone')?.remove(); $('streakBox').classList.remove('has-milestone');
   if (!isDemo) { paintStreak({ ...st, milestone: false }, firstToday ? Math.max(0, sn - 1) : sn); clockPrev = ''; tick(); }

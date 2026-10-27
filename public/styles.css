@@ -390,3 +390,29 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .stamp b { font: 800 23px/1 var(--font-display); letter-spacing: 0.05em; }
 .stamp small { font: 700 9.5px var(--font-mono); letter-spacing: 0.14em; }
 @media (prefers-reduced-motion: reduce) { .logo .lball { animation: none; } .exp svg { transition: none; } }
+
+/* ---------- lo que hizo la gente: barras en cada ronda y puesto del día ---------- */
+.result .crowd { grid-column: 1 / -1; display: grid; gap: 5px; margin-top: 8px; padding-top: 9px; border-top: 1px dashed var(--line); }
+.crow { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) 3em; gap: 8px; align-items: center; font: 600 12px var(--font-mono); color: var(--ink-2); }
+.crow b { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cbar { height: 9px; border-radius: 3px; background: var(--paper); border: 1px solid var(--line); overflow: hidden; }
+.cbar i { display: block; height: 100%; width: var(--w); background: var(--ink-2); border-radius: 2px; animation: cgrow 0.8s cubic-bezier(.2, .9, .3, 1.05) both; }
+.crow.you .cbar i { background: var(--azul); }
+.crow.ok .cbar i { background: var(--good); animation-delay: 0.12s; }
+.crow.same .cbar i { background: var(--mostaza); animation-delay: 0.24s; }
+.crowd small { font: 500 11px var(--font-mono); color: var(--ink-2); }
+.crowd .cfirst { margin: 0; font-size: 13px; color: var(--ink-2); }
+@keyframes cgrow { from { width: 0; } }
+.rankline { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.rchip { font: 700 12px var(--font-mono); padding: 4px 9px; border-radius: 4px; border: 1.5px solid var(--ink); background: var(--plate); color: var(--ink); white-space: nowrap; }
+.rchip.hot { background: var(--mostaza); }
+.rchip.up { background: var(--good); border-color: var(--good); color: var(--plate); }
+.passup {
+  position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 45;
+  display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px);
+  background: var(--ink); color: var(--plate); border-radius: 6px; padding: 10px 16px; font: 600 15px var(--font-body);
+  box-shadow: 4px 4px 0 var(--good); transform: translate(-50%, 140%);
+}
+.passup .arrow { font: 800 24px/1 var(--font-display); color: var(--good); }
+.passup b { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .cbar i { animation: none; } }
