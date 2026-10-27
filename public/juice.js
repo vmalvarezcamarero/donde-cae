@@ -62,6 +62,7 @@
     star(i) { tone(659 * semi(i * 5), 0.22, 'triangle', 0.12); tone(1318 * semi(i * 5), 0.12, 'sine', 0.04, 0.02); },
     fanfare() { [0, 4, 7, 12, 16, 19, 24].forEach((n, i) => tone(392 * semi(n), 0.3, 'triangle', 0.1, i * 0.085)); },
     wipe() { hiss(0.32, 0.05, 1700); },
+    boom() { tone(95, 0.4, 'sine', 0.45, 0, 38); hiss(0.45, 0.3, 900); tone(190, 0.12, 'square', 0.05); },
     streak() { hiss(0.45, 0.07, 3200); tone(240, 0.35, 'triangle', 0.08, 0, 720); tone(960, 0.18, 'triangle', 0.08, 0.3); tone(1280, 0.22, 'triangle', 0.07, 0.38); },
   };
   function buzz(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }

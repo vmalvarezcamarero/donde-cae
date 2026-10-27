@@ -13,7 +13,7 @@
   const OBJ_NAME = { canica: 'Marble', rueda: 'Solid wheel', aro: 'Hoop', hielo: 'Ice cube' };
   const TYPE_NAME = { balance: 'Balance', drop: 'Where will it land?', race: 'Which finishes first?', pool: 'Bank shot', tower: 'Will it stand?',
     loop: 'Loop the loop', laser: 'Laser', domino: 'Dominoes', bridge: 'Bridge',
-    orbit: 'Orbit', magnet: 'Magnets', pour: 'Which glass fills first?', pulley: 'Pulleys', swing: 'Cut the rope', spring: 'Spring shot', flip: 'Marble run', jump: 'Bike jump', float: 'Float or sink?', gears: 'Gears' };
+    orbit: 'Orbit', magnet: 'Magnets', pour: 'Which glass fills first?', pulley: 'Pulleys', swing: 'Cut the rope', spring: 'Cannon shot', flip: 'Marble run', jump: 'Bike jump', float: 'Float or sink?', gears: 'Gears' };
   const num = (x, d = 1) => x.toFixed(d);
   const side = (u) => Math.abs(u) < 0.05 ? 'center' : num(Math.abs(u)) + (u < 0 ? ' left' : ' right');
 
@@ -170,7 +170,8 @@
     jump: (r) => 'At ' + r.kmh + ' km/h, where does the bike land?<small>The dotted line is a test jump at ' + r.test + ' km/h. Twice as fast flies four times as far. Tap a bus, or the green ramp if it clears them all.</small>',
     pulley: () => 'Which side goes down?<small>Count the ropes holding each weight: every extra rope shares the load.</small>',
     swing: (r) => 'The ball swings and the rope is cut at the scissors. Where does it land?<small>Tap the floor.' + (r.step ? ' Careful with the step.' : '') + '</small>',
-    spring: () => 'How far do you pull the spring to land the ball in the bucket?<small>The dotted line is a test shot. Pulling twice as far launches twice as fast, and that goes much more than twice as far. Drag the ball back.</small>',
+    spring: (r) => r.target ? 'How far do you pull the cannon’s spring to hit the bullseye?<small>The dotted line is a test shot. Pull twice as far and the ball leaves twice as fast, which carries it much more than twice as far. Drag the ball back inside the cannon.</small>'
+      : 'How far do you pull the spring to land the ball in the bucket?<small>The dotted line is a test shot. Pulling twice as far launches twice as fast, and that goes much more than twice as far. Drag the ball back.</small>',
     domino: () => 'Someone pushes the first domino. Which is the last one to fall?<small>Tap that domino. Dark dominoes weigh three times as much.</small>',
     float: (r) => 'Which of these float' + (r.salty ? ' in very salty water' : ' in water') + '?<small>Tap the ones that float; the rest will sink.' + (r.salty ? ' Salt water is denser than fresh water, so it pushes harder.' : '') + '</small>',
     gears: () => 'The first gear turns clockwise. How does the gear with the flag turn?<small>Pick its direction and whether it spins faster or slower than the first one.</small>',
@@ -355,6 +356,7 @@
     anim.focus = slowOn ? focusOf(r) : null;
     let hitDone = !(fxOn && SLOW.has(r.type) && !stands), freezeUntil = 0, tPrev = performance.now();
     if (fxOn) JU().sfx.release();
+    if (fxOn && r.type === 'spring' && r.target) { JU().sfx.boom(); JU().buzz(30); JU().shake(stageEl(), 3, 220); }
     let ended = false;
     const end = () => { if (ended) return; ended = true; cancelAnimationFrame(anim.raf); clearTimeout(watchdog); anim.t = dur; slowActive = false; try { finishRound(); } catch (e) { console.error('Gravle result:', e); } };
     const watchdog = setTimeout(end, (dur / speed + (slowOn ? SLOW_WIN / SLOW_F : 0) + 4) * 1000);
@@ -449,6 +451,12 @@
       return { pts: 0, l1: mark === r.answer ? 'Correct: ' + txt : 'Not quite: ' + txt, l2: 'Left ' + r.left.m + ' kg ÷ ' + r.left.a + ' = ' + (r.left.m / r.left.a).toFixed(1) + ' · right ' + r.right.m + ' kg ÷ ' + r.right.a + ' = ' + (r.right.m / r.right.a).toFixed(1), d: txt[0].toUpperCase() + txt.slice(1) }; }
     if (r.type === 'swing') { const err = Math.abs(mark - r.impactX) / 4;
       return { pts: 0, l1: err <= 2 ? 'Spot on!' : err <= 7 ? 'Very close' : err <= 18 ? 'Close' : 'Way off', l2: 'Landed at ' + (r.impactX / 4).toFixed(0) + ' · your mark ' + (mark / 4).toFixed(0), d: 'Landed at ' + (r.impactX / 4).toFixed(0) + ', you said ' + (mark / 4).toFixed(0) }; }
+    if (r.type === 'spring' && r.target) {
+      const land = (r.sim || (r.sim = springPath(r, mark))).land, off = Math.abs(land - r.tx) / 2, side = land < r.tx ? 'short' : 'past';
+      return { pts: 0, l1: off <= 4 ? 'Bullseye!' : off <= 10 ? 'Very close' : off <= 25 ? 'Close' : land < r.tx ? 'Too soft: fell short' : 'Too hard: flew past',
+        l2: (off <= 4 ? 'In the bullseye' : Math.round(off) + ' cm ' + side) + ' · perfect pull ' + (r.answer / 2).toFixed(1) + ' cm · you ' + (mark / 2).toFixed(1) + ' cm',
+        d: off <= 4 ? 'Bullseye' : Math.round(off) + ' cm ' + side };
+    }
     if (r.type === 'spring') { const ok = mark >= r.lo && mark <= r.hi, off = Math.abs(mark - r.answer) / 2;
       return { pts: 0, l1: ok ? (off <= 1 ? 'Swish! Perfect pull' : 'In the bucket!') : mark < r.lo ? 'Too soft: fell short' : 'Too hard: flew over', l2: 'Perfect pull ' + (r.answer / 2).toFixed(1) + ' cm · you ' + (mark / 2).toFixed(1) + ' cm', d: 'Perfect ' + (r.answer / 2).toFixed(1) + ' cm, you ' + (mark / 2).toFixed(1) }; }
     if (r.type === 'bridge') {
@@ -1683,8 +1691,107 @@
   }
   const SWING_FLOOR = 556;
 
-  /* ---------- Spring shot ---------- */
+  /* ---------- Cannon shot: cañón de muelle con diana (retos desde el 28 oct 2026) ---------- */
+  // Misma fórmula que cannonLand y CANNON_RINGS en scoring.js, que es con la que puntúa el servidor.
+  const CN = { G: 980, ground: 556, rb: 9, barrel: 92, rings: [8, 19.5, 35.7, 63.5] };
+  function cannonPath(r, pull) {
+    const v = r.k * pull, vx = v * Math.cos(r.ang), vy = v * Math.sin(r.ang), h = CN.ground - CN.rb - r.ly;
+    const T = (vy + Math.sqrt(vy * vy + 2 * CN.G * h)) / CN.G, pts = [];
+    for (let t = 0; t < T; t += 1 / 60) pts.push([r.lx + vx * t, r.ly - vy * t + CN.G * t * t / 2]);
+    const land = [r.lx + vx * T, CN.ground - CN.rb]; pts.push(land);
+    for (let k = 0; k < 20; k++) pts.push(land);
+    return { pts, land: land[0], into: false };
+  }
+  // La bola se ve dentro del cañón: al tirar hacia atrás se mete y comprime el muelle.
+  const ballBack = (pull) => 10 + pull;
+  function drawTarget(cx, y) {
+    const cols = [C.plate, C.coral, C.plate, C.coral];
+    for (let i = CN.rings.length - 1; i >= 0; i--) {
+      const rx = CN.rings[i]; ctx.beginPath(); ctx.ellipse(cx, y, rx, Math.max(3, rx * 0.24), 0, 0, Math.PI * 2);
+      ctx.fillStyle = cols[CN.rings.length - 1 - i] || C.coral; ctx.fill();
+      ctx.strokeStyle = C.ink; ctx.lineWidth = i === CN.rings.length - 1 ? 2.5 : 1.2; ctx.stroke();
+    }
+    // banderín en el centro para que se vea dónde está el blanco
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx, y - 34); ctx.stroke();
+    ctx.fillStyle = C.coral; ctx.beginPath(); ctx.moveTo(cx, y - 34); ctx.lineTo(cx + 15, y - 29); ctx.lineTo(cx, y - 24); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2; ctx.stroke();
+  }
+  function drawCannon(r) {
+    const G0 = CN.ground, ca = Math.cos(r.ang), sa = Math.sin(r.ang);
+    ctx.fillStyle = C.paper; ctx.fillRect(0, G0, W, H - G0); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, G0); ctx.lineTo(W, G0); ctx.stroke();
+    drawTarget(r.tx, G0);
+    // tiro de prueba
+    const T = cannonPath(r, r.test), tp = T.pts.slice(0, T.pts.length - 20);
+    ctx.save(); ctx.setLineDash([3, 5]); ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 1.5; ctx.beginPath(); tp.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); ctx.restore();
+    const tlx = T.land; ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tlx - 6, G0 - 12); ctx.lineTo(tlx + 6, G0); ctx.moveTo(tlx + 6, G0 - 12); ctx.lineTo(tlx - 6, G0); ctx.stroke();
+    label(tlx, G0 + 26, 'test: ' + (r.test / 2).toFixed(1) + ' cm pull', C['ink-2']);
+    // tiempo de la animación: retroceso, muelle que se suelta, fogonazo y humo
+    const t = phase === 'playing' && anim ? anim.t : phase === 'result' ? 99 : -1;
+    const recoil = t >= 0 && t < 0.3 ? 7 * (1 - t / 0.3) ** 2 : 0;
+    const pull = phase === 'aim' ? (mark ?? 0) : t >= 0 && t < 0.05 ? (mark || 0) * (1 - t / 0.05) : 0;
+    const mx = r.lx - recoil * ca, my = r.ly + recoil * sa;              // boca del cañón
+    const L = CN.barrel, at = (sx, off) => [mx + ca * sx + sa * off, my - sa * sx + ca * off];   // punto del cañón: a lo largo y hacia abajo
+    const A = at(-L + 2, 16), B = at(-24, 16), top = Math.max(A[1], B[1]) + 8;
+    const wr = 14, wx = B[0] + 8, wy = top - wr;
+    // base: taco de madera o torre de ladrillo si el cañón está alto
+    if (G0 - top > 2) {
+      const bx0 = Math.min(A[0] - 14, wx - wr) - 4, bx1 = Math.max(B[0] + 10, wx + wr) + 6, tall = G0 - top > 60;
+      ctx.fillStyle = tall ? C['ink-2'] : C.wood; ctx.fillRect(bx0, top, bx1 - bx0, G0 - top);
+      if (tall) { ctx.strokeStyle = C.plate; ctx.globalAlpha = 0.35; ctx.lineWidth = 1;
+        for (let y = top + 12, row = 0; y < G0; y += 12, row++) { ctx.beginPath(); ctx.moveTo(bx0, y); ctx.lineTo(bx1, y); ctx.stroke();
+          for (let x = bx0 + (row % 2 ? 10 : 20); x < bx1; x += 20) { ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x, y); ctx.stroke(); } }
+        ctx.globalAlpha = 1; }
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.strokeRect(bx0, top, bx1 - bx0, G0 - top);
+    }
+    // caballete de madera que sujeta el cañón
+    ctx.fillStyle = C.wood; ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.lineTo(B[0] + 8, top); ctx.lineTo(A[0] - 10, top); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // cañón (girado): cuerpo, ventana donde se ven el muelle y la bola, aros y boca
+    ctx.save(); ctx.translate(mx, my); ctx.rotate(-r.ang);
+    ctx.fillStyle = C.ink; ctx.beginPath(); ctx.moveTo(-L, -16); ctx.lineTo(0, -13); ctx.lineTo(0, 13); ctx.lineTo(-L, 16); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(-L - 5, 0, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = C.plate; roundRect(-L + 6, -10, L - 12, 20, 5); ctx.fill();
+    const bb = -ballBack(pull);
+    ctx.strokeStyle = C.violeta; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.beginPath();
+    const s0 = -L + 8, s1 = bb - 9, coils = 9;
+    for (let k = 0; k <= coils * 2; k++) { const xx = s0 + (s1 - s0) * k / (coils * 2), yy = k % 2 ? -7 : 7; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.fillRect(s1 - 2, -9, 4, 18);
+    ctx.fillStyle = C['ink-2']; for (const sx of [-L + 3, -L / 2]) ctx.fillRect(sx, -16, 3, 32);
+    ctx.fillStyle = C.ink; roundRect(-4, -15, 9, 30, 3); ctx.fill();
+    if (phase === 'aim') { ctx.fillStyle = C.plate; for (let c = 0; c <= 35; c += 5) ctx.fillRect(-10 - c * 2 - 0.5, 10, 1, c % 10 ? 3 : 5); }
+    ctx.restore();
+    if (phase === 'aim') drawSkin(ctx, r.lx + bb * ca, r.ly - bb * sa, CN.rb, skin, 0);
+    // rueda (por delante del carro)
+    ctx.fillStyle = C.wood; ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(wx, wy, wr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.lineWidth = 1.6; for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx + Math.cos(a) * wr, wy + Math.sin(a) * wr); ctx.stroke(); }
+    ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(wx, wy, 3.5, 0, Math.PI * 2); ctx.fill();
+    // la bola: dentro del cañón al apuntar, en vuelo después
+    if (phase !== 'aim') { const S = r.sim || (r.sim = springPath(r, mark)), i = frameAt(S.pts); trail(S.pts, i, C.coral); drawSkin(ctx, S.pts[i][0], S.pts[i][1], CN.rb, skin, i * 0.25); }
+    // fogonazo y humo
+    if (t >= 0 && t < 1.1) {
+      if (t < 0.13) { const k = 1 - t / 0.13, fx = mx + ca * 12, fy = my - sa * 12;
+        ctx.save(); ctx.translate(fx, fy); ctx.rotate(-r.ang); ctx.beginPath();
+        for (let q = 0; q < 14; q++) { const a = q * Math.PI / 7, rad = (q % 2 ? 8 : 24) * k + 4; ctx.lineTo(Math.cos(a) * rad * 1.3, Math.sin(a) * rad * 0.8); }
+        ctx.closePath(); ctx.fillStyle = C.mostaza; ctx.fill(); ctx.fillStyle = C.plate; ctx.beginPath(); ctx.arc(0, 0, 7 * k + 2, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+      for (let q = 0; q < 6; q++) {
+        const d = 14 + q * 6 + t * (30 + q * 8), ox = (q % 3 - 1) * 7 * t * 3;
+        ctx.globalAlpha = Math.max(0, 0.45 * (1 - t / 1.1)); ctx.fillStyle = C['ink-2'];
+        ctx.beginPath(); ctx.arc(r.lx + ca * d + ox, r.ly - sa * d - t * 14 * (q % 2 + 1), 5 + t * 16 + q, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // etiquetas
+    const lbx = Math.max(60, r.lx + 6), lby = Math.max(90, r.ly - 110);
+    if (mark != null && phase !== 'playing') label(lbx, lby, 'pull ' + (mark / 2).toFixed(1) + ' cm', C.azul);
+    if (phase === 'aim' && mark == null) label(lbx + 30, lby, 'drag the ball back ↙', C['ink-2']);
+    if (phase === 'result') {
+      label(r.tx, G0 - 52, 'perfect: ' + (r.answer / 2).toFixed(1) + ' cm', C.coral);
+      const S = r.sim, off = Math.abs(S.land - r.tx) / 2;
+      if (off > 4) label(Math.max(30, Math.min(W - 30, S.land)), G0 - 26, Math.round(off) + ' cm ' + (S.land < r.tx ? 'short' : 'past'), C.azul);
+    }
+  }
   function springPath(r, pull) {
+    if (r.target) return cannonPath(r, pull);
     const v = r.k * pull, ca = Math.cos(r.ang), sa = Math.sin(r.ang); const G = 980, dt = 1 / 600, pts = [];
     let x = r.lx, y = r.ly, vx = v * ca, vy = -v * sa, into = false, crossed = false;
     for (let s = 0; s < 600 * 6; s++) {
@@ -1700,9 +1807,10 @@
   }
   function aimSpring(r, x, y) {
     const ux = Math.cos(r.ang), uy = -Math.sin(r.ang), d = (r.lx - x) * ux + (r.ly - y) * uy;
-    mark = Math.round(Math.max(4, Math.min(70, d)) * 2) / 2; return true;
+    mark = Math.round(Math.max(4, Math.min(70, r.target ? d - 10 : d)) * 2) / 2; return true;
   }
   function drawSpring(r) {
+    if (r.target) { drawCannon(r); return; }
     ctx.fillStyle = C.paper; ctx.fillRect(0, 556, W, H - 556); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, 556); ctx.lineTo(W, 556); ctx.stroke();
     // cubo sobre su pilar
     const bx0 = r.tx - r.bw / 2, by = r.ty;

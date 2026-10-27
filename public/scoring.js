@@ -23,7 +23,7 @@ export function publicRound(r) {
     case 'flip': return { type: r.type, level: r.level, rows: r.rows, n: r.n };
     case 'jump': return { type: r.type, level: r.level, lipY: r.lipY, ang: r.ang, deg: r.deg, kmh: r.kmh, test: r.test, testX: r.testX };
     case 'swing': return { type: r.type, level: r.level, px: r.px, py: r.py, L: r.L, th0: r.th0, thc: r.thc, step: r.step };
-    case 'spring': return { type: r.type, level: r.level, lx: r.lx, ly: r.ly, ang: r.ang, k: r.k, tx: r.tx, ty: r.ty, bw: r.bw, test: r.test, testX: r.testX, platform: r.platform };
+    case 'spring': return { type: r.type, level: r.level, target: r.target, lx: r.lx, ly: r.ly, ang: r.ang, k: r.k, tx: r.tx, ty: r.ty, bw: r.bw, test: r.test, testX: r.testX, platform: r.platform };
     case 'gears': return { type: r.type, level: r.level, parts: r.parts, links: r.links };
   }
   throw new Error('tipo de ronda desconocido');
@@ -110,6 +110,8 @@ export function scorePoints(r, p) {
       return err <= 2 ? 100 : Math.round(100 * Math.exp(-(err - 2) / 20));
     }
     case 'spring':
+      if (r.target) return cannonPts(Math.abs(cannonLand(r, p).x - r.tx) / 2);   // cañón con diana
+      // (retos antiguos con cubo: misma regla que el puente)
     case 'bridge': {
       if (p >= r.lo && p <= r.hi) {                                // llega: 50–100 según lo cerca del centro
         const off = Math.abs(p - r.answer), half = Math.max(r.answer - r.lo, r.hi - r.answer);
@@ -140,5 +142,20 @@ export function perimPos([x, y], room = ROOM) {
   const d = [Math.abs(y - y0), Math.abs(x - x1), Math.abs(y - y1), Math.abs(x - x0)], s = d.indexOf(Math.min(...d));
   return s === 0 ? x - x0 : s === 1 ? w + (y - y0) : s === 2 ? w + h + (x1 - x) : 2 * w + h + (y1 - y);
 }
+// Cañón de muelle con diana en el suelo (retos desde el 28 oct 2026).
+// La bola sale de la boca del cañón (lx, ly) a v = k · tensión con ángulo ang y vuela
+// en parábola exacta hasta el suelo. La misma fórmula la usan el generador, el
+// servidor (que puntúa) y la animación, así que lo que se ve es lo que puntúa.
+export const CANNON = { G: 980, ground: 556, rb: 9, barrel: 92 };
+export function cannonLand(r, pull) {
+  const v = r.k * pull, vx = v * Math.cos(r.ang), vy = v * Math.sin(r.ang);
+  const h = CANNON.ground - CANNON.rb - r.ly;                     // cuánto más abajo está el suelo que la boca
+  const t = (vy + Math.sqrt(vy * vy + 2 * CANNON.G * h)) / CANNON.G;
+  return { x: r.lx + vx * t, t };
+}
+// Puntos según la distancia al centro de la diana, en cm (2 px = 1 cm).
+// Los anillos se dibujan justo donde se pasa a 75, 50 y 25 puntos.
+export const cannonPts = (cm) => cm <= 4 ? 100 : Math.round(100 * Math.exp(-(cm - 4) / 20));
+export const CANNON_RINGS = [100, 75, 50, 25].map(p => 2 * (p === 100 ? 4 : 4 + 20 * Math.log(100 / p)));
 // Gears: las cuatro respuestas posibles, en orden.
 export const GEAR_CHOICES = [[1, true], [1, false], [-1, true], [-1, false]];

@@ -3,6 +3,7 @@
 // de una semilla, comprueba que sea justa (que un pequeño cambio no cambie el
 // resultado) y guarda la respuesta. 2 px = 1 cm en todo el juego.
 import { mulberry32 } from './rounds.mjs';
+import { cannonLand } from '../public/scoring.js';
 
 const r1 = (x) => Math.round(x * 10) / 10;
 const G = 980;
@@ -275,7 +276,35 @@ export function springLand(r, pull) {
   }
   return { x: 999, pts };
 }
+/* ---------- Cañón de muelle con diana (desde el 28 oct 2026) ----------
+   La bola sale de la boca del cañón con v = k · tensión y cae en una diana del suelo.
+   Tiros bombeados (de mortero) para que la parábola llene la escena. Fácil: 70° y altura fija.
+   Medio: otro ángulo y otra altura. Difícil: ángulo cualquiera (más tendido o más
+   vertical) y el cañón sobre una torre más alta o más baja. */
 export function genSpring(seed, level) {
+  const rand = mulberry32(seed);
+  for (let a = 0; a < 5000; a++) {
+    const deg = level === 1 ? 70 : level === 2 ? 58 + rand() * 18 : 42 + rand() * 36;
+    const ang = Math.round(deg * Math.PI / 180 * 1000) / 1000;
+    const ly = level === 1 ? 400 : Math.round(level === 2 ? 340 + rand() * 90 : 260 + rand() * 180);
+    const lx = 92, k = Math.round((8 + rand() * 3) * 100) / 100;
+    const tx = Math.round(200 + rand() * 130);
+    const r = { target: true, lx, ly, ang, k, tx };
+    const xAt = (p) => cannonLand(r, p).x;
+    if (xAt(70) < tx + 40) continue;                                  // con el máximo hay que poder pasarse
+    let lo = 4, hi = 70;
+    for (let it = 0; it < 40; it++) { const m = (lo + hi) / 2; if (xAt(m) < tx) lo = m; else hi = m; }
+    const best = (lo + hi) / 2;
+    if (best < 22 || best > 62) continue;
+    // tiro de prueba con otra tensión, que caiga lejos de la diana (para no regalarlo)
+    const test = Math.round(best * (0.45 + rand() * 0.25) * 2) / 2, tl = xAt(test);
+    if (Math.abs(tl - tx) < 75 || tl < lx + 60) continue;
+    return { type: 'spring', level, ...r, test, testX: r1(tl), answer: r1(best) };
+  }
+  throw new Error('No spring ' + seed);
+}
+// Versión anterior (cubo sobre un pilar), usada hasta el 27 oct 2026.
+export function genSpringBucket(seed, level) {
   const rand = mulberry32(seed);
   for (let a = 0; a < 5000; a++) {
     const ang = (level === 1 ? 45 : 32 + rand() * 30) * Math.PI / 180;
