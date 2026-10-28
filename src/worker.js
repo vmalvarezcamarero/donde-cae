@@ -7,6 +7,7 @@ import { publicRound, validPrediction, scorePoints } from '../public/scoring.js'
 import { COUNTRIES } from '../public/countries.js';
 import { WELCOME_COINS, coinsFor, findItem, priceOf, STREAK_SKINS } from '../public/shop.js';
 import { botsFor } from './bots.js';
+import { sendPushes, syncSub, vapidPublic, pushMessage } from './push.js';
 
 const MAX_ATTEMPTS = 2;          // en el futuro: +1 viendo un vídeo
 const SETS = ['A', 'B', 'B'];    // reto que toca en cada intento
@@ -35,6 +36,12 @@ export default {
   },
   // Limpieza diaria: las partidas sin cuenta se borran a los 12 meses (como dice la política de privacidad).
   async scheduled(event, env) {
+    // Recordatorios: «*/5 16» = los experimentos de hoy ya están; «*/5 20» = tu racha se acaba esta noche.
+    if (event.cron.includes(' 16 ') || event.cron.includes(' 20 ')) {
+      const d = today(env), kind = event.cron.includes(' 20 ') ? 'risk' : 'new';
+      try { console.log('push', kind, JSON.stringify(await sendPushes(env, kind, d, addDays(d, -1)))); } catch (e) { if (!/no such table/i.test(String(e))) throw e; }
+      return;
+    }
     const limit = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
     await env.DB.prepare('DELETE FROM attempts WHERE uid IS NULL AND date < ?').bind(limit).run();
   },
@@ -126,6 +133,7 @@ async function route(req, env, url) {
   if (path === '/api/shop/buy' && method === 'POST') return shopBuy(req, env);
   if (path === '/api/shop/equip' && method === 'POST') return shopEquip(req, env);
   if (path === '/api/shop/freeze' && method === 'POST') return buyFreeze(req, env);
+  if (path.startsWith('/api/push/')) return pushRoute(req, env, url, path, method);
   if (path === '/api/me') {
     if (method === 'GET') return getMe(req, env);
     if (method === 'PUT') return putMe(req, env);
@@ -193,6 +201,32 @@ async function getToday(req, env) {
     user: who.uid ? { uid: who.uid, profile: await profileOf(env, who.uid) } : null,
     streak: who.uid ? await streakOf(env, who.uid, date).catch(e => { console.error('streak', e); return null; }) : null,
   });
+}
+
+/* ---------------- recordatorios (src/push.js) ---------------- */
+async function pushRoute(req, env, url, path, method) {
+  try {
+    if (path === '/api/push/key' && method === 'GET') return json({ key: await vapidPublic(env) });
+    if (path === '/api/push/msg' && method === 'GET') {
+      const row = await env.DB.prepare('SELECT kind, streak, last_play FROM push_subs WHERE endpoint = ?').bind(url.searchParams.get('e') || '').first();
+      const d = today(env);
+      return json(pushMessage(row || { kind: 'new', streak: 0 }, d, addDays(d, -1), Math.floor(secondsToReset(env) / 3600)));
+    }
+    if (path === '/api/push/sync' && method === 'POST') {
+      const who = await identify(req, env);
+      if (!(await syncSub(env, who, await req.json().catch(() => null), today(env)))) throw new HttpError(400, 'Invalid subscription.');
+      return json({ ok: true });
+    }
+    if (path === '/api/push/off' && method === 'POST') {
+      const b = await req.json().catch(() => ({}));
+      if (typeof b.endpoint === 'string') await env.DB.prepare('DELETE FROM push_subs WHERE endpoint = ?').bind(b.endpoint).run();
+      return json({ ok: true });
+    }
+  } catch (e) {
+    if (/no such table/i.test(String(e))) throw new HttpError(503, 'Reminders are almost ready. Try again soon.');
+    throw e;
+  }
+  throw new HttpError(404, 'Not found.');
 }
 
 /* ---------------- racha y protectores ---------------- */

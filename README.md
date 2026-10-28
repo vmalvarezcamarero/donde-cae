@@ -13,6 +13,7 @@ Juego diario de física, en inglés. Hay **10 experimentos**: Balance, Where wil
 - **Protector de racha:** con cuenta, la racha se calcula en el servidor (vale en cualquier dispositivo). En la tienda se compran protectores (200 monedas, máximo 2) que se gastan solos si faltas un día. Necesita `migrations/0004_freezes.sql`; sin ella todo funciona igual, solo que sin protectores.
 - **Canicas de racha:** Ember (3 días), Aurora (10) y Supernova (30) no se compran: el servidor las regala al llegar a la racha (solo con cuenta) y la web lo celebra.
 - **Primera visita:** bienvenida + calentamiento de 2 rondas guiadas (`public/warmup.json`, se regenera con `node scripts/warmup.mjs`) y de ahí al reto del día. El registro se ofrece al terminar la primera partida, no antes.
+- **Recordatorios y app instalable:** `manifest.webmanifest` + `sw.js` (sin caché) hacen que Gravle se pueda instalar. Al terminar una partida se ofrecen avisos: uno cuando salen los experimentos (cron `*/5 16 * * *`, UTC) y otro si tu racha se acaba esa noche (`*/5 20 * * *`). Las claves VAPID se crean solas en D1; los avisos van vacíos y el service worker pide el texto a `/api/push/msg`. Cada pasada manda unos 40 avisos (límite del plan gratuito), así que en una hora llegan a unos 480 por tanda. En iPhone solo funcionan con Gravle añadido a la pantalla de inicio (iOS 16.4+).
 - **El servidor puntúa.** Los retos con sus respuestas están en `public/days/`, pero el servidor bloquea su descarga. El navegador solo recibe la escena; envía su predicción y recibe el resultado y la animación.
 - **Sin cuenta se puede jugar**, pero esas partidas no entran en el ranking. Los intentos se cuentan por cuenta **y** por dispositivo, para que nadie practique sin cuenta y luego juegue con ventaja.
 - **Ranking:** diario (mejor intento del día), semanal (suma de lunes a domingo) y por países (media de sus jugadores). Se puede filtrar por país.
@@ -46,7 +47,7 @@ public/                    la web: index.html, app.js (cuentas y pantallas),
 
 1. En el panel de Cloudflare: **Storage & databases → D1 SQL database → Create**. Nómbrala `physle`.
 2. Copia el **Database ID** en `wrangler.jsonc`, en `database_id`.
-3. Abre la base de datos → pestaña **Console**. Pega el contenido de `migrations/0001_init.sql` y pulsa **Execute**. Después haz lo mismo con `migrations/0002_shop.sql` (monedas y tienda) , con `migrations/0003_trails.sql` (estelas de la canica) y con `migrations/0004_freezes.sql` (protectores de racha).
+3. Abre la base de datos → pestaña **Console**. Pega el contenido de `migrations/0001_init.sql` y pulsa **Execute**. Después haz lo mismo con `migrations/0002_shop.sql` (monedas y tienda) , con `migrations/0003_trails.sql` (estelas de la canica) , con `migrations/0004_freezes.sql` (protectores de racha) y con `migrations/0005_push.sql` (recordatorios).
 
 ### 3. Subir a GitHub
 

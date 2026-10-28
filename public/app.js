@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261028c';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028c';
-import { makeCard } from './card.js?v=20261028c';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261028e';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028e';
+import { makeCard } from './card.js?v=20261028e';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -396,7 +396,8 @@ function paintStreak(st, n) {
   else sub.textContent = 'Next goal: ' + nextMilestone(n) + ' days';
   // protectores: cuántos llevas, o una pista para conseguirlos si la racha ya vale algo
   const nx = STREAK_SKINS.find(x => x.streak > n);
-  if (nx && n > 0 && st.firstToday !== undefined) sub.textContent = (nx.streak - n === 1 ? '1 more day' : (nx.streak - n) + ' more days') + ' to unlock the ' + nx.name + ' marble';
+  if (n > 0 && !today?.user?.profile) sub.textContent = 'Sign up to collect exclusive streak marbles 🔥';
+  else if (nx && n > 0) sub.textContent = (nx.streak - n === 1 ? '1 more day' : (nx.streak - n) + ' more days') + ' to unlock the ' + nx.name + ' marble';
   const fz = today?.streak?.freezes || 0;
   if (n > 0 && fz) sub.textContent += ' · ❄️×' + fz;
   else if (n >= 3 && today?.streak && today.user?.profile) sub.textContent += ' · Protect it with a streak freeze in the shop';
@@ -446,7 +447,7 @@ async function showEnd(r) {
   else earned.hidden = true;
   if ($('endJoin')) $('endJoin').hidden = !(accountsOn && !user);
   lastEndDemo = isDemo;
-  $('vsEnd').hidden = true; $('challengeBtn').hidden = true;
+  $('vsEnd').hidden = true; $('challengeBtn').hidden = true; renderRemind(isDemo);
   if (isDemo) {
     $('endLabel').textContent = 'Lab · ' + LEVEL[r.day.level] + ' · ' + r.scores.length + (r.scores.length === 1 ? ' experiment' : ' experiments');
     if ($('endJoin')) $('endJoin').hidden = true;
@@ -457,6 +458,7 @@ async function showEnd(r) {
   await refresh();
   renderVsEnd(r);
   setTimeout(() => { if (!$('end').hidden) showUnlocks(); }, 3600);
+  pushState().then(() => renderRemind(false));
   $('challengeBtn').hidden = !today.attempts.some(a => a.set === 'A' && a.finished);
   const left = today.max - today.attempts.length;
   $('again').hidden = left <= 0;
@@ -1062,7 +1064,7 @@ $('demoHome').addEventListener('click', (ev) => {
 async function startDemo() {
   if (!labPick.size) return;
   let data = labData[demoLevel];
-  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028c')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028e')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
   let games = [...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
   if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
   const run = demoRun++;
@@ -1272,7 +1274,7 @@ $('warmGo').addEventListener('click', startWarmup);
 async function startWarmup() {
   track('ftue_start');
   let data;
-  try { data = await (await fetch('warmup.json?v=20261028c')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
+  try { data = await (await fetch('warmup.json?v=20261028e')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
   leaveWelcome('started');
   const full = data.rounds.map(r => JSON.parse(JSON.stringify(r)));
   const st = { day: { n: 0, date: today?.day?.date || '', level: 1, W: data.W, H: data.H, FLOOR: data.FLOOR, R: data.R },
@@ -1336,12 +1338,77 @@ function warmDone() {
 }
 $('weGo').addEventListener('click', () => { track('ftue_play'); if (today) renderHome(); startAttempt(); });
 
+/* ---------- recordatorios y app instalable ----------
+   Un aviso al día cuando salen los experimentos nuevos, y otro si tu racha se acaba esa noche.
+   Se ofrece al terminar una partida (el mejor momento para pedir permiso). En iPhone los
+   avisos solo funcionan con Gravle en la pantalla de inicio, así que allí se explica cómo. */
+const PUSH_OK = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const STANDALONE = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+let swReg = null, installEvt = null, pushOn = false;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').then(r => { swReg = r; pushState(); }).catch(() => {});
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
+const b64ToBytes = (s) => { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - s.length % 4) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function pushState() {
+  if (!PUSH_OK || !swReg || Notification.permission !== 'granted') { pushOn = false; return; }
+  const sub = await swReg.pushManager.getSubscription().catch(() => null);
+  pushOn = !!sub;
+  if (sub && today) syncPush(sub);
+}
+function syncPush(sub) {
+  const played = store.get('played', {}), last = Object.keys(played).sort().pop() || null;
+  const j = sub.toJSON();
+  api('/api/push/sync', { method: 'POST', body: { endpoint: j.endpoint, keys: j.keys, streak: streakCount(), played: !!(played[today.day.date] || today.streak?.today), lastPlay: last } }).catch(() => {});
+}
+async function enablePush(btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast(perm === 'denied' ? 'Notifications are blocked. You can allow them in your browser settings.' : 'No problem, maybe later.'); return false; }
+    swReg = swReg || await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    const { key } = await api('/api/push/key');
+    const sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+    syncPush(sub); pushOn = true; track('push_on', { ios: IOS, app: STANDALONE });
+    const J = window.Juice; J?.sfx.ding(); J?.buzz([15, 30]);
+    toast('Reminders on 🔔 See you tomorrow!');
+    return true;
+  } catch (e) { console.error(e); toast('Couldn’t turn on reminders in this browser. Try Chrome, or add Gravle to your Home Screen.'); return false; }
+  finally { if (btn) btn.disabled = false; }
+}
+function renderRemind(isDemo) {
+  const card = $('remindCard');
+  const snoozed = (store.get('remindSnooze', 0) || 0) > Date.now();
+  const iosHelp = IOS && !STANDALONE;
+  if (isDemo || pushOn || snoozed || (!PUSH_OK && !iosHelp)) { card.hidden = true; return; }
+  const n = streakCount();
+  card.hidden = false; card.innerHTML = '';
+  const head = document.createElement('div'); head.className = 'rhead';
+  head.innerHTML = '<span class="bell" aria-hidden="true">🔔</span><div><b></b><p></p></div>';
+  head.querySelector('b').textContent = n >= 2 ? 'Don’t lose your ' + n + '-day streak' : 'Never miss a Gravle';
+  head.querySelector('p').textContent = iosHelp ? 'Add Gravle to your Home Screen to get a reminder when new experiments drop.' : 'One reminder when new experiments drop, and one if your streak is about to end. No spam.';
+  card.appendChild(head);
+  if (iosHelp) {
+    const ol = document.createElement('ol'); ol.className = 'ios-steps';
+    ol.innerHTML = '<li>Tap <b>Share</b> <span class="ios-share" aria-hidden="true"></span> in Safari</li><li>Choose <b>Add to Home Screen</b></li><li>Open Gravle from your Home Screen and tap <b>Remind me</b></li>';
+    card.appendChild(ol);
+  }
+  const bar = document.createElement('div'); bar.className = 'rbar';
+  if (!iosHelp) { const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = '🔔 Remind me'; b.addEventListener('click', async () => { if (await enablePush(b)) { card.animate([{ opacity: 1 }, { opacity: 0, transform: 'scale(.96)' }], { duration: 260, fill: 'forwards' }).onfinish = () => { card.hidden = true; }; } }); bar.appendChild(b); }
+  if (installEvt && !STANDALONE) { const b = document.createElement('button'); b.className = 'btn ghost'; b.type = 'button'; b.textContent = 'Install app'; b.addEventListener('click', async () => { installEvt.prompt(); const r = await installEvt.userChoice.catch(() => null); track('app_install', { outcome: r?.outcome }); installEvt = null; renderRemind(); }); bar.appendChild(b); }
+  const later = document.createElement('button'); later.className = 'linkbtn'; later.type = 'button'; later.textContent = 'Not now';
+  later.addEventListener('click', () => { store.set('remindSnooze', Date.now() + 3 * 864e5); track('push_later'); card.hidden = true; });
+  bar.appendChild(later); card.appendChild(bar);
+  const J = window.Juice; if (J && !J.reduce) card.animate([{ transform: 'translateY(12px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, delay: 2600, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' });
+}
+
 /* ---------- arranque ---------- */
 (async () => {
   if (FIRST) openWelcome();                 // sin esperar a la red: nada de parpadeos
   try { await initAuth(); } catch (e) { console.error(e); }
   await refresh();
   if (!DEMO) await loadChallenge();
+  pushState();
   // Si en realidad ya jugaba (con cuenta, desde otro dispositivo), no hace falta bienvenida.
   if (FIRST && (today?.attempts?.length || today?.streak?.n) && !$('welcome').hidden) { leaveWelcome('returning'); show('home'); renderHome(); }
   if (!$('home').hidden) setTimeout(showUnlocks, 900);
