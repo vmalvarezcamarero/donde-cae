@@ -21,7 +21,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261028b">
+<link rel="stylesheet" href="styles.css?v=20261028c">
 <script defer src="https://cloud.umami.is/script.js" data-website-id="85313345-61e7-43d0-9200-e1e60b2d9753"></script>
 </head>
 <body>
@@ -39,6 +39,28 @@
     </div>
   </header>
   <p class="tagline">Can you predict physics? 5 experiments a day.</p>
+
+  <!-- Primera visita: bienvenida y calentamiento -->
+  <section id="welcome" class="panel welcome" hidden>
+    <canvas id="welcomeCv" aria-hidden="true"></canvas>
+    <h2 class="wtitle">Can you predict <em>physics?</em></h2>
+    <p class="wsub">Guess where the marble lands, which tower falls, which magnet wins. Then watch what really happens.</p>
+    <p class="wproof" id="wProof" hidden></p>
+    <button class="btn wgo" id="warmGo" type="button"><span aria-hidden="true">▶</span> Try it · 20 seconds</button>
+    <button class="linkbtn" id="warmSkip" type="button">Skip to today’s challenge</button>
+  </section>
+  <section id="warmEnd" class="panel welcome" hidden>
+    <div class="dayhead"><span>Warm-up done</span><span class="badge l1">PRACTICE</span></div>
+    <h2 class="wtitle" id="weTitle">You’re a natural!</h2>
+    <div class="wescores" id="weScores"></div>
+    <p class="wsub" id="weSub"></p>
+    <div class="wenext">
+      <b>Now the real thing</b>
+      <ul class="exps" id="weExps" aria-label="Today’s five experiments"></ul>
+      <ul class="weperks"><li>🧪 5 new experiments every day, the same for everyone</li><li>🔥 Build a streak and unlock exclusive marbles</li><li>🏆 Climb the daily leaderboard</li></ul>
+    </div>
+    <button class="btn wgo" id="weGo" type="button">Play today’s 5 experiments</button>
+  </section>
 
   <!-- Daily home -->
   <section id="home" class="panel" aria-live="polite">
@@ -118,6 +140,7 @@
     </div>
     <div class="stage">
       <canvas id="cv" tabindex="0" aria-label="Physics scene"></canvas>
+      <div class="coach" id="coach" hidden><div class="cbubble" id="coachMsg"></div><span class="cfinger" id="coachFinger" aria-hidden="true">👆</span></div>
     </div>
     <p class="prompt" id="prompt"></p>
     <div class="chips" id="chips" hidden></div>
@@ -299,10 +322,10 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="juice.js?v=20261028b"></script>
-<script src="music.js?v=20261028b"></script>
-<script src="game.js?v=20261028b"></script>
-<script type="module" src="app.js?v=20261028b"></script>
+<script src="juice.js?v=20261028c"></script>
+<script src="music.js?v=20261028c"></script>
+<script src="game.js?v=20261028c"></script>
+<script type="module" src="app.js?v=20261028c"></script>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "17666b232ffe4c9c89b2ac10bd2f422c"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>
