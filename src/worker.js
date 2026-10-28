@@ -125,6 +125,7 @@ async function route(req, env, url) {
   if (m && method === 'GET') return getChallenge(req, env, m[1]);
   if (path === '/api/shop/buy' && method === 'POST') return shopBuy(req, env);
   if (path === '/api/shop/equip' && method === 'POST') return shopEquip(req, env);
+  if (path === '/api/shop/freeze' && method === 'POST') return buyFreeze(req, env);
   if (path === '/api/me') {
     if (method === 'GET') return getMe(req, env);
     if (method === 'PUT') return putMe(req, env);
@@ -190,7 +191,59 @@ async function getToday(req, env) {
     day: dayMeta(day), max: MAX_ATTEMPTS, resetIn: secondsToReset(env),
     attempts: list.map(a => ({ id: a.id, code: challengeCode(a.id), num: a.num, set: a.set_id, round: a.round, scores: a.scores, total: a.total, finished: !!a.finished, mine: a.player === who.player })),
     user: who.uid ? { uid: who.uid, profile: await profileOf(env, who.uid) } : null,
+    streak: who.uid ? await streakOf(env, who.uid, date).catch(e => { console.error('streak', e); return null; }) : null,
   });
+}
+
+/* ---------------- racha y protectores ---------------- */
+// Con cuenta, la racha se calcula aquí (vale en cualquier dispositivo). Los protectores
+// (migrations/0004_freezes.sql) cubren días sin jugar: si al volver faltan días y tienes
+// protectores para todos, se gastan solos y la racha sigue (los días cubiertos no suman).
+const MAX_FREEZES = 2, FREEZE_PRICE = 200;
+let hasFreeze = true;
+const noSuch = (e) => /no such (column|table)/i.test(String(e));
+async function streakOf(env, uid, date) {
+  const { results } = await env.DB.prepare('SELECT DISTINCT date FROM attempts WHERE uid = ? AND finished = 1 AND date > ? AND date <= ?')
+    .bind(uid, addDays(date, -400), date).all();
+  const played = new Set(results.map(r => r.date));
+  let frozen = new Set(), freezes = 0, saved = 0;
+  if (hasFreeze) try {
+    frozen = new Set((await env.DB.prepare('SELECT date FROM frozen_days WHERE uid = ?').bind(uid).all()).results.map(r => r.date));
+    freezes = (await env.DB.prepare('SELECT freezes FROM users WHERE uid = ?').bind(uid).first())?.freezes || 0;
+  } catch (e) { if (noSuch(e)) hasFreeze = false; else throw e; }
+  const kept = (d) => played.has(d) || frozen.has(d);
+  if (hasFreeze && freezes > 0) {
+    const gap = []; let d = addDays(date, -1);
+    while (!kept(d) && gap.length <= MAX_FREEZES) { gap.push(d); d = addDays(d, -1); }
+    if (gap.length && gap.length <= freezes && kept(d)) {
+      // Primero se marcan los días (la clave primaria evita gastar dos veces si llegan dos peticiones).
+      const ins = await env.DB.batch(gap.map(g => env.DB.prepare('INSERT OR IGNORE INTO frozen_days (uid, date) VALUES (?, ?)').bind(uid, g)));
+      if (ins.every(r => r.meta.changes)) {
+        const res = await env.DB.prepare('UPDATE users SET freezes = freezes - ?1 WHERE uid = ?2 AND freezes >= ?1').bind(gap.length, uid).run();
+        if (res.meta.changes) { gap.forEach(g => frozen.add(g)); freezes -= gap.length; saved = gap.length; }
+        else await env.DB.batch(gap.map(g => env.DB.prepare('DELETE FROM frozen_days WHERE uid = ? AND date = ?').bind(uid, g)));
+      }
+    }
+  }
+  let n = 0, d = played.has(date) ? date : addDays(date, -1);
+  while (kept(d)) { if (played.has(d)) n++; d = addDays(d, -1); }
+  return { n, today: played.has(date), freezes, max: MAX_FREEZES, price: FREEZE_PRICE, saved, on: hasFreeze };
+}
+async function buyFreeze(req, env) {
+  const who = await identify(req, env, { requireUser: true });
+  const p = await profileOf(env, who.uid);
+  if (!p) throw new HttpError(403, 'Create your player profile first.');
+  if (!hasFreeze) throw new HttpError(503, 'Streak freezes are almost ready. Try again soon.');
+  let res;
+  try {
+    res = await env.DB.prepare('UPDATE users SET coins = coins - ?1, freezes = freezes + 1 WHERE uid = ?2 AND coins >= ?1 AND freezes < ?3')
+      .bind(FREEZE_PRICE, who.uid, MAX_FREEZES).run();
+  } catch (e) { if (noSuch(e)) { hasFreeze = false; throw new HttpError(503, 'Streak freezes are almost ready. Try again soon.'); } throw e; }
+  if (!res.meta.changes) {
+    const s = await streakOf(env, who.uid, today(env));
+    throw new HttpError(409, s.freezes >= MAX_FREEZES ? 'You already have ' + MAX_FREEZES + ' streak freezes equipped.' : 'Not enough coins yet. Keep playing!');
+  }
+  return json({ profile: await profileOf(env, who.uid), streak: await streakOf(env, who.uid, today(env)) });
 }
 
 async function startAttempt(req, env) {

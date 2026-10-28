@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261028a';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028a';
-import { makeCard } from './card.js?v=20261028a';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261028b';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028b';
+import { makeCard } from './card.js?v=20261028b';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -183,6 +183,7 @@ function renderHome() {
   $('noteLogin')?.addEventListener('click', openAuth);
   $('noteProfile')?.addEventListener('click', () => openProfile(true));
   renderHomeStreak();
+  savedFx();
   renderVs();
   if (homeEnter && !$('home').hidden) { homeEnter = false; enterHome(); }
   // La tienda aparece después de la primera partida: al entrar, lo único importante es jugar.
@@ -220,6 +221,9 @@ function streakCount(date = today.day.date) {
   let n = 0, t = Date.parse(date + 'T12:00:00Z');
   if (!played[date]) t -= 864e5;
   while (played[new Date(t).toISOString().slice(0, 10)]) { n++; t -= 864e5; }
+  // Con cuenta manda la racha del servidor (cuenta en cualquier dispositivo y respeta los protectores).
+  const s = today?.streak;
+  if (s && today.day.date === date) n = Math.max(n, s.n + (!s.today && played[date] ? 1 : 0));
   return n;
 }
 function streakText() { const n = streakCount(); return n ? '🔥 ' + n + '-day streak' : ''; }
@@ -229,12 +233,33 @@ const nextMilestone = (n) => MILESTONES.find(m => m > n) || (Math.floor(n / 100)
 // La llama crece con la racha y cambia de color: naranja, más grande a partir de 7, azul-violeta desde 30.
 const flameTier = (n) => n >= 30 ? 3 : n >= 7 ? 2 : 1;
 function renderHomeStreak() {
-  const el = $('streak'), n = streakCount(), atRisk = n > 0 && !store.get('played', {})[today.day.date];
+  const el = $('streak'), n = streakCount(), atRisk = n > 0 && !store.get('played', {})[today.day.date] && !today.streak?.today;
   el.innerHTML = '';
   if (!n) return;
   const f = document.createElement('span'); f.className = 'flame sm' + (atRisk ? ' risk' : ''); f.dataset.tier = flameTier(n); f.setAttribute('aria-hidden', 'true');
   const t = document.createElement('span'); t.textContent = n + '-day streak' + (atRisk ? ' · play today to keep it' : '');
   el.append(f, t);
+  const fz = today.streak?.freezes || 0;
+  if (fz) { const z = document.createElement('span'); z.className = 'fzpill'; z.title = fz + ' streak freeze' + (fz > 1 ? 's' : '') + ' equipped'; z.textContent = '❄️×' + fz; el.appendChild(z); }
+}
+// El protector de racha ha salvado la racha: se avisa una vez, con hielo que estalla.
+function savedFx() {
+  const s = today?.streak, key = 'saved:' + today?.day?.date;
+  if (s?.saved) store.set(key, s.saved);
+  const k = store.get(key, 0); if (!k || store.get(key + ':seen')) return;
+  store.set(key + ':seen', true);
+  const n = streakCount(), card = document.createElement('div'); card.className = 'savedcard'; card.setAttribute('role', 'status');
+  card.innerHTML = '<span class="icecube" aria-hidden="true"></span><div><b>Streak saved!</b><p></p></div><button class="link" type="button">OK</button>';
+  card.querySelector('p').textContent = 'Your streak freeze covered ' + (k > 1 ? 'the ' + k + ' days you missed' : 'yesterday') + '. Your ' + n + '-day streak lives on. Play today to keep it going!';
+  card.querySelector('button').addEventListener('click', () => card.remove());
+  $('home').insertBefore(card, $('home').children[1]);
+  const J = window.Juice; if (!J || J.reduce) return;
+  card.animate([{ transform: 'scale(.6) rotate(-4deg)', opacity: 0 }, { transform: 'scale(1.05) rotate(1deg)', opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 480, delay: 300, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' });
+  setTimeout(() => {
+    const b = card.querySelector('.icecube').getBoundingClientRect();
+    J.sfx.ding(); J.sfx.streak(); J.buzz([15, 40, 15]);
+    J.confetti(b.left + b.width / 2, b.top + b.height / 2, { n: 70, power: 0.8, colors: ['#bfe9ff', '#7fd8ff', '#ffffff', '#4aa8e0'] });
+  }, 650);
 }
 // Estrellas: 1 con el 30 %, 2 con el 60 % y 3 con el 84 % de los puntos (150 / 300 / 420 de 500).
 const starsOf = (total, max) => [0.3, 0.6, 0.84].filter(k => total >= k * max).length;
@@ -366,6 +391,10 @@ function paintStreak(st, n) {
   else if (st.milestone) sub.textContent = 'Next goal: ' + nextMilestone(n) + ' days';
   else if (n === 1) sub.textContent = 'Streak started. Come back tomorrow!';
   else sub.textContent = 'Next goal: ' + nextMilestone(n) + ' days';
+  // protectores: cuántos llevas, o una pista para conseguirlos si la racha ya vale algo
+  const fz = today?.streak?.freezes || 0;
+  if (n > 0 && fz) sub.textContent += ' · ❄️×' + fz;
+  else if (n >= 3 && today?.streak && today.user?.profile) sub.textContent += ' · Protect it with a streak freeze in the shop';
 }
 function streakFx(st) {
   const J = window.Juice, box = $('streakBox'), wrap = $('flameWrap');
@@ -821,6 +850,7 @@ function renderShop() {
   const d = today?.day && dailyDeal(today.day.date), dealIt = d && SHOP[d.kind].find(x => x.id === d.id);
   $('shopDeal').hidden = !dealIt || ownsIt(d.kind, dealIt, p);
   if (dealIt) { $('dealName').textContent = dealIt.name + ' · ' + ({ skin: 'marble', trail: 'trail', color: 'name color' })[d.kind]; $('dealWas').textContent = d.was; $('dealPrice').textContent = d.price; }
+  renderFreeze();
   // tarjetas
   const box = $('items'); box.innerHTML = ''; shopCards = [];
   const eq = equippedId(shopTab, p);
@@ -882,6 +912,49 @@ async function heroAction() {
   } catch (e) { toast(e.message); renderHero(); }
 }
 // Compra: las monedas vuelan de la cartera al artículo, el saldo baja rodando y el artículo se desbloquea.
+// Protector de racha: se compra aparte (no se equipa) y se guarda hasta 2.
+function renderFreeze() {
+  const p = today?.user?.profile, s = today?.streak, box = $('shopFreeze');
+  box.hidden = !p || !s || s.on === false;
+  if (box.hidden) return;
+  const n = s.freezes || 0, btn = $('fzBtn');
+  $('fzSlots').innerHTML = Array.from({ length: s.max }, (_, i) => '<i class="' + (i < n ? 'on' : '') + '"></i>').join('') + '<span>' + n + ' / ' + s.max + ' equipped</span>';
+  btn.disabled = n >= s.max || fzBusy;
+  btn.innerHTML = n >= s.max ? 'Full' : '<span class="coin" aria-hidden="true"></span>' + s.price;
+  btn.classList.toggle('ghost', n >= s.max || p.coins < s.price);
+}
+let fzBusy = false;
+$('fzBtn').addEventListener('click', async () => {
+  const p = today?.user?.profile, s = today?.streak; if (!p || !s || fzBusy) return;
+  if (p.coins < s.price) { toast('You need ' + (s.price - p.coins) + ' more coins. Keep playing!'); return; }
+  fzBusy = true; renderFreeze();
+  try {
+    const before = p.coins, res = await api('/api/shop/freeze', { method: 'POST' });
+    today.user.profile = res.profile; today.streak = res.streak;
+    track('shop_buy', { kind: 'freeze', item: 'freeze' });
+    await freezeFx(before, res.profile.coins);
+  } catch (e) { toast(e.message); }
+  fzBusy = false; renderAccount(); renderShop();
+});
+function freezeFx(from, to) {
+  const J = window.Juice;
+  if (!J || J.reduce) { toast('Streak freeze equipped ❄️'); return Promise.resolve(); }
+  const a = $('walletCoin').getBoundingClientRect(), b = $('fzCube').getBoundingClientRect();
+  const x0 = a.left + a.width / 2, y0 = a.top + a.height / 2, x1 = b.left + b.width / 2, y1 = b.top + b.height / 2, n = 8;
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('span'); c.className = 'coin flycoin'; c.style.left = x0 + 'px'; c.style.top = y0 + 'px'; document.body.appendChild(c);
+    const mx = (x0 + x1) / 2 + (Math.random() - 0.5) * 100, my = Math.min(y0, y1) - 30 - Math.random() * 50;
+    c.animate([{ transform: 'translate(-50%,-50%) scale(1)' }, { transform: `translate(calc(-50% + ${mx - x0}px), calc(-50% + ${my - y0}px)) scale(1.2)`, offset: 0.5 }, { transform: `translate(calc(-50% + ${x1 - x0}px), calc(-50% + ${y1 - y0}px)) scale(.6)`, opacity: 0.4 }],
+      { duration: 480, delay: i * 45, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'backwards' }).onfinish = () => { c.remove(); J.sfx.tick(); };
+  }
+  J.roll($('walletN'), to, { from, ms: 500 + n * 45, ticks: false });
+  return new Promise(res => setTimeout(() => {
+    J.sfx.ding(); J.sfx.good(3, true); J.buzz([20, 30]);
+    $('fzCube').animate([{ transform: 'rotate(-8deg) scale(1)' }, { transform: 'rotate(6deg) scale(1.3)', offset: 0.35 }, { transform: 'rotate(-3deg) scale(.95)', offset: 0.7 }, { transform: 'rotate(-8deg) scale(1)' }], { duration: 520, easing: 'ease-out' });
+    J.confetti(x1, y1, { n: 60, power: 0.75, colors: ['#bfe9ff', '#7fd8ff', '#ffffff', '#4aa8e0'] });
+    res();
+  }, 480 + n * 45));
+}
 function buyFx(it, from, to) {
   const J = window.Juice;
   if (!J || J.reduce) { $('walletN').textContent = to; toast('Unlocked: ' + it.name + '!'); return Promise.resolve(); }
@@ -976,7 +1049,7 @@ $('demoHome').addEventListener('click', (ev) => {
 async function startDemo() {
   if (!labPick.size) return;
   let data = labData[demoLevel];
-  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028a')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028b')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
   let games = [...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
   if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
   const run = demoRun++;
