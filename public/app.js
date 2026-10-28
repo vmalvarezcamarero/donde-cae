@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261028e';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028e';
-import { makeCard } from './card.js?v=20261028e';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261028f';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028f';
+import { makeCard, makeStatsCard } from './card.js?v=20261028f';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -33,11 +33,11 @@ function toast(msg) {
 }
 // Cambiar de pantalla como quien pasa la hoja del cuaderno: hacia delante entra por la
 // derecha (portada → partida → resultado → ranking) y al volver, por la izquierda.
-const PAGE = { welcome: 0, home: 0, demoHome: 0, play: 1, end: 2, warmEnd: 2, rank: 3, shop: 3 };
+const PAGE = { welcome: 0, home: 0, demoHome: 0, play: 1, end: 2, warmEnd: 2, rank: 3, shop: 3, stats: 3 };
 let curPage = 'home', homeEnter = true;
 function show(id) {
   const prev = curPage; curPage = id;
-  for (const s of ['welcome', 'warmEnd', 'home', 'demoHome', 'play', 'end', 'rank', 'shop']) $(s).hidden = s !== id;
+  for (const s of ['welcome', 'warmEnd', 'home', 'demoHome', 'play', 'end', 'rank', 'shop', 'stats']) $(s).hidden = s !== id;
   window.scrollTo({ top: 0 });
   if (id === 'home') homeEnter = true;
   const J = window.Juice;
@@ -190,6 +190,7 @@ function renderHome() {
   // La tienda aparece después de la primera partida: al entrar, lo único importante es jugar.
   const hasPlayed = Object.keys(store.get('played', {})).length > 0 || list.some(a => a.finished) || !!today.streak?.n || !!today.user?.profile?.owned?.length;
   $('shopBtn').hidden = !hasPlayed;
+  $('homeStats').hidden = !hasPlayed;
 }
 // Cuenta atrás hasta el próximo Gravle: se mueve cada segundo en la portada y en
 // la pantalla final (allí con dígitos que giran al cambiar).
@@ -1064,7 +1065,7 @@ $('demoHome').addEventListener('click', (ev) => {
 async function startDemo() {
   if (!labPick.size) return;
   let data = labData[demoLevel];
-  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028e')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028f')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
   let games = [...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
   if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
   const run = demoRun++;
@@ -1274,7 +1275,7 @@ $('warmGo').addEventListener('click', startWarmup);
 async function startWarmup() {
   track('ftue_start');
   let data;
-  try { data = await (await fetch('warmup.json?v=20261028e')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
+  try { data = await (await fetch('warmup.json?v=20261028f')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
   leaveWelcome('started');
   const full = data.rounds.map(r => JSON.parse(JSON.stringify(r)));
   const st = { day: { n: 0, date: today?.day?.date || '', level: 1, W: data.W, H: data.H, FLOOR: data.FLOOR, R: data.R },
@@ -1401,6 +1402,100 @@ function renderRemind(isDemo) {
   bar.appendChild(later); card.appendChild(bar);
   const J = window.Juice; if (J && !J.reduce) card.animate([{ transform: 'translateY(12px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, delay: 2600, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' });
 }
+
+/* ---------- estadísticas personales ----------
+   Números que ruedan, tu «ADN de físico» por experimento, el calendario de las últimas
+   6 semanas y tu mejor partida. Se puede compartir como imagen. */
+let statsData = null, statsBack = 'home';
+async function openStats(from) {
+  statsBack = from || curPage; show('stats'); track('stats_view');
+  $('stTiles').innerHTML = '<p class="note">Loading your stats…</p>'; $('stDna').innerHTML = ''; $('stCal').innerHTML = ''; $('stBest').innerHTML = '';
+  try { statsData = await api('/api/stats'); } catch (e) { $('stTiles').innerHTML = ''; toast(e.message); return; }
+  renderStats(statsData);
+}
+function renderStats(d) {
+  const J = window.Juice, calm = !J || J.reduce, p = d.profile;
+  $('stName').textContent = ''; 
+  if (p) { const nm = document.createElement('span'); nm.textContent = p.nickname; paintName(nm, p.color); $('stName').append(flag(p.country) + ' ', nm); }
+  else $('stName').textContent = 'Guest player';
+  $('stSince').textContent = d.first ? 'Playing since ' + fmtShort.format(new Date(d.first + 'T12:00:00')) + ' · ' + d.days + (d.days === 1 ? ' day' : ' days') : 'No games yet';
+  requestAnimationFrame(() => { const cv = $('stBall'), g = fitCanvas(cv); if (g) { g.clearRect(0, 0, cv.clientWidth, cv.clientHeight); window.PhysleGame.drawMarble(g, cv.clientWidth / 2, cv.clientHeight / 2, cv.clientWidth / 2 - 3, skinOf(p?.skin), 0.5); } });
+  // fichas
+  const tiles = [['Games', d.played, ''], ['Average', d.avg, '/500'], ['Best', d.best?.total ?? 0, '/500'], ['Streak', d.streak, d.streak === 1 ? ' day' : ' days', 'fire'], ['Best streak', d.bestStreak, d.bestStreak === 1 ? ' day' : ' days'], ['Perfect rounds', d.perfect, '', 'gold']];
+  const box = $('stTiles'); box.innerHTML = '';
+  tiles.forEach(([k, v, unit, cls], i) => {
+    const t = document.createElement('div'); t.className = 'sttile' + (cls ? ' ' + cls : '');
+    t.innerHTML = '<small></small><b>0</b><span></span>'; t.children[0].textContent = k; t.children[2].textContent = unit;
+    box.appendChild(t);
+    if (calm) t.children[1].textContent = v;
+    else { t.animate([{ transform: 'translateY(10px) scale(.9)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, delay: 80 + i * 70, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' }); setTimeout(() => J.roll(t.children[1], v, { ms: 700, ticks: i === 0 }), 150 + i * 70); }
+  });
+  // ADN: media por experimento
+  const dna = $('stDna'); dna.innerHTML = '';
+  const ex = d.experiments;
+  $('stDnaNote').textContent = !ex.length ? 'Play a few days to see which experiments are your thing.' : ex.length < 3 ? 'Keep playing: the more experiments you try, the clearer your profile gets.'
+    : 'Strongest: ' + window.PhysleGame.TYPE_NAME[ex[0].type] + ' · Needs work: ' + window.PhysleGame.TYPE_NAME[ex[ex.length - 1].type];
+  ex.forEach((e, i) => {
+    const row = document.createElement('div'); row.className = 'dnarow ' + band(e.avg) + (i === 0 && ex.length >= 3 ? ' top' : '') + (i === ex.length - 1 && ex.length >= 3 ? ' low' : '');
+    row.innerHTML = '<span class="dico"></span><span class="dnm"></span><span class="dbar"><i></i></span><b></b>';
+    row.querySelector('.dico').innerHTML = (ICONS[e.type] || '').replace(/<\/svg>[\s\S]*$/, '</svg>');
+    row.querySelector('.dnm').textContent = window.PhysleGame.TYPE_NAME[e.type] + ' ×' + e.n;
+    row.querySelector('i').style.setProperty('--w', e.avg + '%'); row.querySelector('i').style.animationDelay = (0.5 + i * 0.06) + 's';
+    row.querySelector('b').textContent = e.avg;
+    dna.appendChild(row);
+  });
+  // calendario (lunes a domingo)
+  const cal = $('stCal'); cal.innerHTML = '';
+  ['M', 'T', 'W', 'T', 'F', 'S', 'S'].forEach(x => { const h = document.createElement('span'); h.className = 'cwd'; h.textContent = x; cal.appendChild(h); });
+  // empieza en la semana de tu primera partida (como mucho 6 semanas atrás, como poco 2)
+  const mon = (iso) => { const t = new Date(iso + 'T12:00:00Z'); return new Date(t.getTime() - ((t.getUTCDay() + 6) % 7) * 864e5).toISOString().slice(0, 10); };
+  let from = d.first ? mon(d.first) : d.calendar[d.calendar.length - 14].date;
+  if (from > d.calendar[d.calendar.length - 14].date) from = mon(d.calendar[d.calendar.length - 14].date);
+  const days = d.calendar.filter(c => c.date >= from);
+  const first = new Date(days[0].date + 'T12:00:00Z'), pad = (first.getUTCDay() + 6) % 7;
+  for (let i = 0; i < pad; i++) cal.appendChild(document.createElement('span'));
+  days.forEach((c, i) => {
+    const el = document.createElement('span');
+    el.className = 'cday' + (c.best != null ? ' ' + (c.best >= 420 ? 'g' : c.best >= 300 ? 'y' : 'r') : c.frozen ? ' fz' : '') + (c.date === d.today ? ' today' : '');
+    el.title = c.date + (c.best != null ? ' · ' + c.best : c.frozen ? ' · streak freeze' : '');
+    el.textContent = c.frozen && c.best == null ? '❄' : String(Number(c.date.slice(8)));
+    if (!calm && c.best != null) el.animate([{ transform: 'scale(0)' }, { transform: 'scale(1.15)', offset: 0.6 }, { transform: 'none' }], { duration: 320, delay: 600 + i * 18, easing: 'ease-out', fill: 'backwards' });
+    cal.appendChild(el);
+  });
+  // mejor partida
+  $('stBestBox').hidden = !d.best;
+  if (d.best) {
+    const b = $('stBest'); b.innerHTML = '<div class="sbtop"><b></b><span></span></div><div class="sbrows"></div>';
+    b.querySelector('b').textContent = d.best.total; b.querySelector('span').textContent = (d.best.n ? 'Gravle #' + d.best.n + ' · ' : '') + fmtShort.format(new Date(d.best.date + 'T12:00:00'));
+    d.best.scores.forEach((v, i) => { const r = document.createElement('div'); r.className = 'sbrow'; r.innerHTML = '<span class="sq ' + band(v) + '"></span><span></span><b></b>'; r.children[1].textContent = window.PhysleGame.TYPE_NAME[d.best.types[i]] || 'Round ' + (i + 1); r.children[2].textContent = v; b.querySelector('.sbrows').appendChild(r); });
+  }
+  $('stGuest').hidden = !!p;
+  if (!p) $('stGuest').innerHTML = 'These stats live on this device only. <button class="link" type="button" id="stSign">Sign up</button> to keep them everywhere and collect streak marbles.';
+  $('stSign')?.addEventListener('click', () => openAuth(true));
+  $('stShare').hidden = !d.played;
+}
+$('statsBack').addEventListener('click', () => { if (statsBack === 'end') show('end'); else { show('home'); if (today) renderHome(); } });
+$('homeStats').addEventListener('click', () => openStats('home'));
+$('endStats').addEventListener('click', () => openStats('end'));
+$('acctStats').addEventListener('click', () => { $('accountDlg').close(); openStats(curPage === 'end' ? 'end' : 'home'); });
+$('stShare').addEventListener('click', async () => {
+  const d = statsData, btn = $('stShare'); if (!d) return;
+  btn.disabled = true; btn.textContent = 'Making image…'; track('stats_share');
+  try {
+    const ex = d.experiments;
+    const blob = await makeStatsCard({
+      name: d.profile ? d.profile.nickname : 'My Gravle stats', flag: d.profile ? flag(d.profile.country) : '',
+      tiles: [['Games', d.played], ['Average', d.avg], ['Best', d.best?.total ?? 0], ['Best streak', d.bestStreak]],
+      top: ex.slice(0, 3).map(e => ({ name: window.PhysleGame.TYPE_NAME[e.type], avg: e.avg, icon: (ICONS[e.type] || '').replace(/<\/svg>[\s\S]*$/, '</svg>') })),
+      calendar: d.calendar.slice(-28), host: SITE,
+    });
+    const file = new File([blob], 'gravle-stats.png', { type: 'image/png' });
+    const text = 'My Gravle stats 🧪 ' + d.played + ' games · best ' + (d.best?.total ?? 0) + '/500 · ' + d.bestStreak + '-day best streak. Can you beat me? https://' + SITE;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], text }); } catch (e) { if (e.name !== 'AbortError') throw e; } }
+    else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('Image saved. Share it wherever you like!'); }
+  } catch (e) { console.error(e); toast('Couldn’t create the image.'); }
+  btn.disabled = false; btn.textContent = 'Share my stats';
+});
 
 /* ---------- arranque ---------- */
 (async () => {

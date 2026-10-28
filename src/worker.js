@@ -134,6 +134,7 @@ async function route(req, env, url) {
   if (path === '/api/shop/equip' && method === 'POST') return shopEquip(req, env);
   if (path === '/api/shop/freeze' && method === 'POST') return buyFreeze(req, env);
   if (path.startsWith('/api/push/')) return pushRoute(req, env, url, path, method);
+  if (path === '/api/stats' && method === 'GET') return getStats(req, env);
   if (path === '/api/me') {
     if (method === 'GET') return getMe(req, env);
     if (method === 'PUT') return putMe(req, env);
@@ -200,6 +201,65 @@ async function getToday(req, env) {
     attempts: list.map(a => ({ id: a.id, code: challengeCode(a.id), num: a.num, set: a.set_id, round: a.round, scores: a.scores, total: a.total, finished: !!a.finished, mine: a.player === who.player })),
     user: who.uid ? { uid: who.uid, profile: await profileOf(env, who.uid) } : null,
     streak: who.uid ? await streakOf(env, who.uid, date).catch(e => { console.error('streak', e); return null; }) : null,
+  });
+}
+
+/* ---------------- estadísticas personales ---------------- */
+let dayIndex = null, dayIndexAt = 0;
+async function loadIndex(env) {
+  if (dayIndex && Date.now() - dayIndexAt < 3600e3) return dayIndex;
+  const res = await env.ASSETS.fetch(new Request('https://assets.local/days/index.json'));
+  dayIndex = res.ok ? await res.json() : { games: {} }; dayIndexAt = Date.now();
+  return dayIndex;
+}
+const starsFor = (t) => [150, 300, 420].filter(k => t >= k).length;
+async function getStats(req, env) {
+  const who = await identify(req, env);
+  const p = who.uid ? await profileOf(env, who.uid) : null;
+  const d = today(env);
+  const { results: rows } = await env.DB.prepare(
+    `SELECT date, set_id, scores, total, finished_at FROM attempts WHERE finished = 1 AND ${p ? 'uid = ?' : 'player = ?'} AND date <= ? ORDER BY date, finished_at`
+  ).bind(p ? who.uid : who.player, d).all();
+  const idx = await loadIndex(env), per = {}, byDay = {};
+  let perfect = 0, stars = 0, best = null, sum = 0;
+  for (const a of rows) {
+    const sc = JSON.parse(a.scores), types = idx.games?.[a.date]?.[a.set_id === 'A' ? 0 : 1] || [];
+    sum += a.total; stars += starsFor(a.total);
+    sc.forEach((v, i) => {
+      if (v === 100) perfect++;
+      const t = types[i]; if (!t) return;
+      const e = per[t] || (per[t] = { n: 0, sum: 0, best: 0, perfect: 0 });
+      e.n++; e.sum += v; e.best = Math.max(e.best, v); if (v === 100) e.perfect++;
+    });
+    byDay[a.date] = Math.max(byDay[a.date] ?? 0, a.total);
+    if (!best || a.total > best.total) best = { date: a.date, n: idx.dates ? idx.dates.indexOf(a.date) + 1 : null, total: a.total, scores: sc, types };
+  }
+  if (best) { try { best.n = (await loadDay(env, best.date)).n; } catch (e) {} }
+  // racha actual (con cuenta, la del servidor con protectores) y mejor racha
+  let frozen = new Set(), streak = null;
+  if (p) {
+    streak = await streakOf(env, who.uid, d).catch(() => null);
+    if (hasFreeze) try { frozen = new Set((await env.DB.prepare('SELECT date FROM frozen_days WHERE uid = ?').bind(who.uid).all()).results.map(r => r.date)); } catch (e) {}
+  }
+  const days = Object.keys(byDay).sort();
+  let bestStreak = 0, run = 0, prev = null;
+  for (let x = days[0]; x && x <= d; x = addDays(x, 1)) {
+    if (byDay[x] != null) { run++; bestStreak = Math.max(bestStreak, run); }
+    else if (!frozen.has(x)) { if (x !== d) run = 0; }
+    prev = x;
+  }
+  let cur = streak?.n;
+  if (cur == null) { cur = 0; for (let x = byDay[d] != null ? d : addDays(d, -1); byDay[x] != null; x = addDays(x, -1)) cur++; }
+  const calendar = [];
+  for (let k = 41; k >= 0; k--) { const x = addDays(d, -k); calendar.push({ date: x, best: byDay[x] ?? null, frozen: frozen.has(x) }); }
+  let since = null;
+  if (p) { const u = await env.DB.prepare('SELECT created_at FROM users WHERE uid = ?').bind(who.uid).first(); since = u?.created_at || null; }
+  return json({
+    profile: p ? { nickname: p.nickname, country: p.country, skin: p.skin, color: p.name_color, since } : null,
+    played: rows.length, days: days.length, avg: rows.length ? Math.round(sum / rows.length) : 0, best, perfect, stars,
+    streak: cur, bestStreak: Math.max(bestStreak, cur), first: days[0] || null, today: d,
+    experiments: Object.entries(per).map(([type, e]) => ({ type, n: e.n, avg: Math.round(e.sum / e.n), best: e.best, perfect: e.perfect })).sort((a, b) => b.avg - a.avg || b.n - a.n),
+    calendar,
   });
 }
 
