@@ -19,9 +19,15 @@
 <meta name="theme-color" content="#e9efeb" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101b1f" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gravle">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261028c">
+<link rel="stylesheet" href="styles.css?v=20261028e">
 <script defer src="https://cloud.umami.is/script.js" data-website-id="85313345-61e7-43d0-9200-e1e60b2d9753"></script>
 </head>
 <body>
@@ -171,6 +177,7 @@
       <div class="sbtext"><div class="sbnum"><b id="streakN">0</b><span>-day streak</span></div><small id="streakSub"></small></div>
       <div class="nextbox"><small>Next Gravle in</small><span class="clock" id="endClock" role="timer" aria-live="off"></span></div>
     </div>
+    <div class="remind" id="remindCard" hidden></div>
     <div class="rows" id="rows"></div>
     <p class="earned" id="earned" hidden></p>
     <div class="join" id="endJoin" hidden>
@@ -322,10 +329,10 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="juice.js?v=20261028c"></script>
-<script src="music.js?v=20261028c"></script>
-<script src="game.js?v=20261028c"></script>
-<script type="module" src="app.js?v=20261028c"></script>
+<script src="juice.js?v=20261028e"></script>
+<script src="music.js?v=20261028e"></script>
+<script src="game.js?v=20261028e"></script>
+<script type="module" src="app.js?v=20261028e"></script>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "17666b232ffe4c9c89b2ac10bd2f422c"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

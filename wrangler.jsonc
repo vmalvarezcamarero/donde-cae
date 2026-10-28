@@ -16,6 +16,6 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "physle", "database_id": "aab4a57b-ee0d-46f3-ac35-2ec68b622dd1" }
   ],
-  "triggers": { "crons": ["0 4 * * *"] },
+  "triggers": { "crons": ["0 4 * * *", "*/5 16 * * *", "*/5 20 * * *"] },
   "vars": { "TIMEZONE": "Europe/Madrid", "FIREBASE_PROJECT_ID": "physle" }
 }
