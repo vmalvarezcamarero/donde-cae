@@ -5,30 +5,25 @@
 // lo que falte hasta llegar a él. Con BOTS = "0" en las variables del Worker se apagan.
 import { SKINS, NAME_COLORS } from '../public/shop.js';
 
-// Apodos con aire de usuario real, con su país. Uno de cada cuatro (elegido por su nombre)
+// Apodos variados como los de la gente real (nombres, motes, números, mayúsculas…), con su país. Uno de cada cuatro (elegido por su nombre)
 // es «habitual» y juega casi todos los días; el resto entra y sale.
 const NAMES = `
-jake.r|US emmawalsh|US tyler_b|US maddie.k|US rmiller04|US olivia.p|US chrisdunn|US ashleyy|US kbrooks|US danny_m|US
-sarah.h|US mattg|US jenna_l|US nate.s|US hannahbee|US coltonw|US brianna_t|US jmoore22|US katiec|US ethanp|US
-lauren.m|US devinj|US mikeyb|US abbyrose|US calebh|US grace.l|US joshk_|US megan.r|US tannerj|US sydney_w|US
-aaronz|US bella.c|US kyle.t|US jessie.v|US dylanw|US taylor_s|US noahg|US paige.e|US bwilson|US emilyann|US
-ltran|US marcus_d|US kim.n|US zachf|US ellie.g|US jacksonr|US claire.b|US ryan.o|US avery_m|US trevor.h|US
-lucia.mtz|ES pablo_g|ES martaa|ES javi.r|ES irene.lp|ES dani_glez|ES carmen.s|ES alvaro.m|ES sergio_r|ES nerea.b|ES
-adri.fdz|ES paula.ruiz|ES jorge.ns|ES elena_mt|ES miguelangel|ES laura.cb|ES
-tom.hgs|GB lily.w|GB jamie.p|GB sophie.j|GB alfie_r|GB chloe.m|GB harry.d|GB amelia.t|GB
-liam.c|CA ava.g|CA owenm|CA zoe.b|CA
-jack_aus|AU mia.h|AU coopz|AU
-lukas.w|DE lena.k|DE jonas_s|DE marie.b|DE finn.h|DE
-lea.m|FR hugo.d|FR camille.r|FR theo_b|FR
-sofia.rossi|IT luca_b|IT giulia.m|IT
-noah.vd|NL sanne.j|NL daan_b|NL
-joao.pedro|BR ana.lima|BR gabriel_s|BR lari.c|BR rafa.costa|BR
-camila.hdz|MX diego_r|MX valeria.g|MX santi.m|MX ximena_l|MX
-mateo.f|AR mica.p|AR tomi_g|AR
-juanes.v|CO vale.r|CO
-nico.s|CL
-ines.c|PT
-ola.n|SE
+jdog44|US kaylaaa|US Big_Ced|US MikeTran|US pancakeboi|US momof3|US Dre|US tylerrr|US Brookie|US zacharyq|US
+TheRealJess|US ohioguy|US noodle|US bryce99|US AshCake|US lilmoe|US Jfresh|US kdub|US marissa|US Chris_P|US
+sleepydev|US hoopsfan23|US texasmama|US ellieeee|US Quinn|US Jakester|US LaurenB|US dustyfeet|US kevo|US smitty|US
+cass|US BriBri|US notkevin|US sadie_rose|US Tbone|US monkeybars|US Riley|US jamesonh|US Kat|US dkim|US
+sprinkles|US WhoaItsMaya|US lemonlime|US bigmike72|US spaghettio|US nina|US Rach|US Patty|US Gus|US hdawg|US
+bea_m|US carlosv|US mrsjohnson|US Trev|US gingerr|US Danielle|US j_wash|US Coop|US frankie|US mags|US
+mollyy|US theo|US Brayden_|US k8lyn|US AJ_31|US mr_peterson|US dani_rae|US benny|US Salem|US luvbug|US
+goob|US Hank|US emmy|US rjr|US coffeeplease|US tired_teacher|US Mcgee|US Leo_v|US scoots|US Jules|US
+Iñaki98|ES lauritaa_|ES pakoo|ES eljavi|ES Nuria.G|ES Marcos_10|ES chiqui|ES Begoña_r|ES aleixx|ES Txema|ES
+sarita|ES pablete|ES Rocío|ES Dani|ES manolo84|ES Ainhoa|ES kikee|ES Sofi_|ES el_memo|MX Pato_rdz|MX
+ximenita|MX Charlyy|MX fer.ochoa|MX Lupita|MX Gera|MX joaozinho|BR Duda_|BR brunoxd|BR Lari|BR gabizinha|BR
+Thiaguinho|BR Biazinha|BR Tincho|AR lucho_92|AR Flor.m|AR Juancho|CO Nachito|CL Majo|VE alfie10|GB bethh|GB
+Mr_Biscuit|GB CallumR|GB Ciara|IE soph|GB Rhys|GB maisie_|GB moosejaw|CA tay.lynn|CA Gab|CA Owen_|CA
+Davo|AU Kirra_|AU Hamish|NZ lukas2001|DE Jojo_|DE MaxHz|DE Pauli|DE Lenny|AT Clem|FR toto_|FR
+Juju92|FR Maelle|FR ale_bianchi|IT Fede|IT Giuly|IT Bram|NL Femke_|NL Jesse_vd|NL Wout|BE Kuba_|PL
+Ebba|SE emre_k|TR Rahul_s|IN jaydee|PH kenta_|JP minji|KR Rita_s|PT Mads|DK Aino|FI
 `.trim().split(/\s+/).map(s => { const [nick, country] = s.split('|'); return { nick, country }; });
 
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }

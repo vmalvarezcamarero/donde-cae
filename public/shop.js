@@ -37,7 +37,12 @@ export const SKINS = [
   { id: 'neon', name: 'Neon', price: 750, look: { kind: 'neon', base: '#141a2e', alt: '#4ce0ff', dark: '#ff4fd8' } },
   { id: 'disco', name: 'Disco', price: 800, look: { kind: 'disco', base: '#9aa7b4', alt: '#f4f7fa' } },
   { id: 'prism', name: 'Prism', price: 1200, look: { kind: 'prism', base: '#ffffff', alt: '#ffffff' } },
+  // Exclusivas de racha: no se compran, se ganan jugando N días seguidos (las da el servidor).
+  { id: 'ember', name: 'Ember', price: 0, streak: 3, look: { kind: 'ember', base: '#21130d', alt: '#ff7a1a' } },
+  { id: 'aurora', name: 'Aurora', price: 0, streak: 10, look: { kind: 'aurora', base: '#0b1b33', alt: '#3cffb0' } },
+  { id: 'nova', name: 'Supernova', price: 0, streak: 30, look: { kind: 'nova', base: '#ffe9a8', alt: '#ff4fd8' } },
 ];
+export const STREAK_SKINS = SKINS.filter(s => s.streak);
 
 // Estelas: el rastro que deja la canica al moverse. "look.style" lo interpreta game.js.
 export const TRAILS = [

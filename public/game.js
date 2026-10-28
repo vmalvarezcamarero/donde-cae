@@ -687,8 +687,20 @@
     } else if (look.kind === 'prism') {
       if (g.createConicGradient) { const gr = g.createConicGradient((ang || 0) * 0.5, 0, 0); ['#ff8a8a', '#ffd36e', '#9ef2a6', '#7fd8ff', '#c9a2ff', '#ff8a8a'].forEach((c, i) => gr.addColorStop(i / 5, c)); g.fillStyle = gr; }
       else { const gr = g.createLinearGradient(-rad, 0, rad, 0); ['#ff8a8a', '#ffd36e', '#9ef2a6', '#7fd8ff', '#c9a2ff'].forEach((c, i) => gr.addColorStop(i / 4, c)); g.fillStyle = gr; }
+    } else if (look.kind === 'ember') {
+      const gr = g.createRadialGradient(rad * 0.15, rad * 0.25, 0, 0, 0, rad);
+      gr.addColorStop(0, '#5a2a14'); gr.addColorStop(1, base); g.fillStyle = gr;
+    } else if (look.kind === 'aurora') {
+      const gr = g.createRadialGradient(-rad * 0.2, -rad * 0.3, 0, 0, 0, rad);
+      gr.addColorStop(0, '#1d3a66'); gr.addColorStop(1, base); g.fillStyle = gr;
+    } else if (look.kind === 'nova') {
+      const gr = g.createRadialGradient(0, 0, 0, 0, 0, rad);
+      gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.28, base); gr.addColorStop(0.55, '#ffb347'); gr.addColorStop(0.8, alt); gr.addColorStop(1, '#5b1f8a'); g.fillStyle = gr;
     } else g.fillStyle = base;
-    g.fill();
+    // Canicas de racha: un aura que late alrededor.
+    const T = performance.now() / 1000, aura = { ember: alt, aurora: alt, nova: '#ffd36e' }[look.kind];
+    if (aura) { g.shadowColor = aura; g.shadowBlur = rad * (look.kind === 'nova' ? 1.1 : 0.7) * (0.75 + 0.25 * Math.sin(T * 4)); }
+    g.fill(); g.shadowBlur = 0;
     g.save(); g.clip(); g.rotate(ang || 0);
     if (look.kind === 'solid') {
       g.strokeStyle = C.plate; g.globalAlpha = 0.7; g.lineWidth = rad * 0.22; g.lineCap = 'round';
@@ -746,6 +758,33 @@
     } else if (look.kind === 'neon') {
       g.shadowColor = alt; g.shadowBlur = rad * 0.7; g.strokeStyle = alt; g.lineWidth = rad * 0.16; g.beginPath(); g.arc(0, 0, rad * 0.68, 0, Math.PI * 2); g.stroke();
       g.shadowColor = look.dark; g.strokeStyle = look.dark; g.lineWidth = rad * 0.1; g.beginPath(); g.arc(0, 0, rad * 0.36, 0.3, Math.PI * 1.6); g.stroke(); g.shadowBlur = 0;
+    } else if (look.kind === 'ember') {
+      // brasas que se encienden y se apagan
+      g.shadowColor = alt;
+      [[-0.45, -0.3, 0.16, 0], [0.3, -0.5, 0.11, 1.3], [0.5, 0.25, 0.15, 2.1], [-0.15, 0.45, 0.13, 3.2], [0.05, -0.02, 0.1, 4.4], [-0.6, 0.2, 0.09, 5.1]].forEach(([ex, ey, er, ph]) => {
+        const k = 0.55 + 0.45 * Math.sin(T * 3 + ph); g.globalAlpha = 0.5 + 0.5 * k; g.shadowBlur = rad * 0.5 * k;
+        g.fillStyle = k > 0.7 ? '#ffd36e' : alt; g.beginPath(); g.arc(ex * rad, ey * rad, er * rad * (0.8 + 0.3 * k), 0, Math.PI * 2); g.fill();
+      });
+      g.globalAlpha = 1; g.shadowBlur = 0;
+    } else if (look.kind === 'aurora') {
+      // cortinas de luz que ondulan
+      g.globalCompositeOperation = 'lighter';
+      [[alt, -0.25, 0], ['#4cc9ff', 0.1, 1.7], ['#b47cff', 0.42, 3.1]].forEach(([c, oy, ph]) => {
+        g.strokeStyle = c; g.globalAlpha = 0.55; g.lineWidth = rad * 0.26; g.lineCap = 'round'; g.beginPath();
+        for (let k = 0; k <= 16; k++) { const u = -1 + k / 8, yy = (oy + 0.16 * Math.sin(u * 3 + T * 1.6 + ph)) * rad; k ? g.lineTo(u * rad, yy) : g.moveTo(u * rad, yy); }
+        g.stroke();
+      });
+      g.globalCompositeOperation = 'source-over'; g.globalAlpha = 0.9; g.fillStyle = '#fff';
+      for (const [sx, sy] of [[-0.55, -0.6], [0.4, -0.65], [0.65, 0.55], [-0.4, 0.7]]) { g.beginPath(); g.arc(sx * rad, sy * rad, rad * 0.045, 0, Math.PI * 2); g.fill(); }
+      g.globalAlpha = 1;
+    } else if (look.kind === 'nova') {
+      // destello de cuatro puntas que gira y late
+      g.rotate(T * 0.8); const k = 0.85 + 0.15 * Math.sin(T * 5);
+      g.fillStyle = 'rgba(255,255,255,.95)';
+      for (const rot of [0, Math.PI / 2]) { g.save(); g.rotate(rot); g.beginPath(); g.moveTo(0, -rad * 0.95 * k); g.lineTo(rad * 0.1, 0); g.lineTo(0, rad * 0.95 * k); g.lineTo(-rad * 0.1, 0); g.closePath(); g.fill(); g.restore(); }
+      g.globalAlpha = 0.6; g.rotate(Math.PI / 4);
+      for (const rot of [0, Math.PI / 2]) { g.save(); g.rotate(rot); g.beginPath(); g.moveTo(0, -rad * 0.55 * k); g.lineTo(rad * 0.06, 0); g.lineTo(0, rad * 0.55 * k); g.lineTo(-rad * 0.06, 0); g.closePath(); g.fill(); g.restore(); }
+      g.globalAlpha = 1;
     } else if (look.kind === 'prism') {
       g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = rad * 0.06;
       for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * rad, Math.sin(a) * rad); g.stroke(); }

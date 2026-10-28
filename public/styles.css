@@ -606,3 +606,60 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .savedcard .icecube { width: 40px; height: 40px; border-radius: 8px; }
 .savedcard b { font: 800 18px var(--font-display); } .savedcard p { margin: 2px 0 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.35; }
 @media (prefers-reduced-motion: reduce) { .icecube::after { animation: none; } }
+
+/* ---------- canicas de racha ---------- */
+.rar.r-streak, .rtag.streak { background: linear-gradient(90deg, #ff7a1a, #ff4fd8); color: #fff; border-color: var(--ink); }
+.item.r-streak { border-color: #ff7a1a; }
+.item.streaklock canvas { filter: saturate(.55) brightness(.92); }
+.item.streaklock .pr { font-size: 11px; }
+.need.streak i { background: linear-gradient(90deg, #ff7a1a, #ffd36e); }
+.hero.r-streak { box-shadow: 4px 4px 0 #ff7a1a; }
+.unlock { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(16, 27, 31, .62); backdrop-filter: blur(3px); }
+.ucard { position: relative; width: min(360px, 100%); display: grid; justify-items: center; gap: 6px; padding: 22px 18px 18px; border: 2px solid var(--ink); border-radius: 14px;
+  background: var(--plate); box-shadow: 6px 6px 0 var(--ink); overflow: hidden; text-align: center; }
+.urays { position: absolute; left: 50%; top: 118px; width: 460px; height: 460px; margin: -230px 0 0 -230px; pointer-events: none; opacity: .35;
+  background: repeating-conic-gradient(from 0deg, #ffd36e 0 10deg, transparent 10deg 24deg); border-radius: 50%; animation: urays 9s linear infinite;
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 62%); mask: radial-gradient(circle, #000 18%, transparent 62%); }
+@keyframes urays { to { transform: rotate(360deg); } }
+.ustreak { position: relative; font: 700 12px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; color: #c2410c; }
+.uball { position: relative; width: 150px; height: 150px; }
+.utitle { position: relative; font: 800 34px/1 var(--font-display); letter-spacing: -0.02em; }
+.uname { position: relative; font: 800 20px var(--font-display); color: var(--plate); background: linear-gradient(90deg, #ff7a1a, #ff4fd8); padding: 2px 12px; border-radius: 6px; border: 1.5px solid var(--ink); transform: rotate(-2deg); }
+.unote { position: relative; margin: 4px 0 6px; font-size: 13px; color: var(--ink-2); }
+.ubtns { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+@media (prefers-reduced-motion: reduce) { .urays { animation: none; } }
+
+/* ---------- primera visita: bienvenida y calentamiento ---------- */
+.welcome { display: grid; gap: 14px; text-align: center; justify-items: center; }
+#welcomeCv { width: 100%; height: 190px; border: 1.5px solid var(--ink); border-radius: 8px; box-shadow: 4px 4px 0 var(--line); }
+.wtitle { margin: 4px 0 0; font: 800 clamp(34px, 10vw, 46px)/0.98 var(--font-display); letter-spacing: -0.03em; text-wrap: balance; }
+.wtitle em { font-style: normal; color: var(--plate); background: var(--coral); padding: 0 8px; border-radius: 8px; display: inline-block; transform: rotate(-2deg); box-shadow: 3px 3px 0 var(--ink); }
+.wsub { margin: 0; font-size: 16px; color: var(--ink-2); line-height: 1.45; max-width: 30em; }
+.btn.wgo { width: 100%; font-size: 19px; padding: 16px 18px; position: relative; overflow: hidden; animation: wpulse 1.8s ease-in-out infinite; }
+.btn.wgo::after { content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.35), transparent); animation: wsheen 2.6s ease-in-out infinite; }
+@keyframes wpulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025); } }
+@keyframes wsheen { 0%, 55% { left: -60%; } 100% { left: 130%; } }
+.wescores { display: flex; gap: 12px; justify-content: center; }
+.wes { display: grid; gap: 2px; justify-items: center; min-width: 96px; padding: 10px 14px; border: 1.5px solid var(--ink); border-radius: 8px; background: var(--plate); box-shadow: 3px 3px 0 var(--ink); }
+.wes small { font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); }
+.wes b { font: 800 32px/1 var(--font-display); } .wes.g b { color: var(--good); } .wes.y b { color: var(--warn); } .wes.r b { color: var(--bad); }
+.wenext { width: 100%; display: grid; gap: 10px; padding: 14px; border: 1.5px dashed var(--line); border-radius: 8px; text-align: left; }
+.wenext > b { font: 800 18px var(--font-display); }
+.weperks { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; color: var(--ink-2); }
+/* entrenador del calentamiento */
+.coach { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.cbubble { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); width: min(88%, 300px); padding: 10px 12px; border: 1.5px solid var(--ink); border-radius: 10px;
+  background: var(--plate); box-shadow: 3px 3px 0 var(--coral); font-size: 14px; line-height: 1.35; text-align: center; }
+.cbubble b { color: var(--coral); }
+.cfinger { position: absolute; font-size: 38px; line-height: 1; transform: translate(-30%, 0); filter: drop-shadow(2px 3px 0 rgba(0,0,0,.25)); }
+.cfinger.scan { top: 86%; animation: fscan 3.2s ease-in-out infinite; }
+@keyframes fscan { 0% { left: 25%; transform: translate(-30%, 0) scale(1); } 20% { transform: translate(-30%, 0) scale(.85); } 25% { transform: translate(-30%, 0) scale(1); } 50% { left: 70%; transform: translate(-30%, 0) scale(1); } 70% { transform: translate(-30%, 0) scale(.85); } 75% { transform: translate(-30%, 0) scale(1); } 100% { left: 25%; } }
+.cfinger.mags { animation: fmags 2.6s ease-in-out infinite; }
+@keyframes fmags { 0%, 40% { left: var(--x1); top: calc(var(--y1) + 3%); } 20% { transform: translate(-30%, 0) scale(.85); } 50%, 90% { left: var(--x2); top: calc(var(--y2) + 3%); } 70% { transform: translate(-30%, 0) scale(.85); } 100% { left: var(--x1); top: calc(var(--y1) + 3%); } }
+.btn.coachpulse { animation: cpulse 1s ease-in-out infinite; box-shadow: 0 0 0 0 rgba(226, 88, 58, .6); }
+@keyframes cpulse { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(226, 88, 58, .55); } 50% { transform: scale(1.04); box-shadow: 0 0 0 10px rgba(226, 88, 58, 0); } }
+@media (prefers-reduced-motion: reduce) { .btn.wgo, .btn.wgo::after, .cfinger, .btn.coachpulse { animation: none; } .cfinger.scan { left: 45%; } }
+/* el bocadillo va debajo de la escena (en el sitio del texto de ayuda) para no tapar nada */
+.cbubble { top: auto; bottom: 0; transform: translate(-50%, calc(100% + 12px)); width: min(94%, 340px); font-size: 15px; }
+.cbubble::before { content: ''; position: absolute; left: 50%; top: -8px; width: 13px; height: 13px; background: var(--plate); border-left: 1.5px solid var(--ink); border-top: 1.5px solid var(--ink); transform: translateX(-50%) rotate(45deg); }
+#play.warming .prompt { visibility: hidden; }

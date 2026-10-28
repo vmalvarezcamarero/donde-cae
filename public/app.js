@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261028b';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028b';
-import { makeCard } from './card.js?v=20261028b';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261028c';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028c';
+import { makeCard } from './card.js?v=20261028c';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -33,11 +33,11 @@ function toast(msg) {
 }
 // Cambiar de pantalla como quien pasa la hoja del cuaderno: hacia delante entra por la
 // derecha (portada → partida → resultado → ranking) y al volver, por la izquierda.
-const PAGE = { home: 0, demoHome: 0, play: 1, end: 2, rank: 3, shop: 3 };
+const PAGE = { welcome: 0, home: 0, demoHome: 0, play: 1, end: 2, warmEnd: 2, rank: 3, shop: 3 };
 let curPage = 'home', homeEnter = true;
 function show(id) {
   const prev = curPage; curPage = id;
-  for (const s of ['home', 'demoHome', 'play', 'end', 'rank', 'shop']) $(s).hidden = s !== id;
+  for (const s of ['welcome', 'warmEnd', 'home', 'demoHome', 'play', 'end', 'rank', 'shop']) $(s).hidden = s !== id;
   window.scrollTo({ top: 0 });
   if (id === 'home') homeEnter = true;
   const J = window.Juice;
@@ -123,6 +123,7 @@ async function refresh() {
   }
   resetAt = Date.now() + today.resetIn * 1000;
   renderAccount(); renderHome(); tick();
+  queueUnlocks(); if (!$('home').hidden) setTimeout(showUnlocks, 900);
   if (user && today.user && !today.user.profile && !$('profileDlg').open && !store.get('skipProfile:' + user.uid)) openProfile(true);
 }
 const skinOf = (id) => (SKINS.find(x => x.id === id) || SKINS[0]).look;
@@ -187,7 +188,7 @@ function renderHome() {
   renderVs();
   if (homeEnter && !$('home').hidden) { homeEnter = false; enterHome(); }
   // La tienda aparece después de la primera partida: al entrar, lo único importante es jugar.
-  const hasPlayed = Object.keys(store.get('played', {})).length > 0 || list.some(a => a.finished);
+  const hasPlayed = Object.keys(store.get('played', {})).length > 0 || list.some(a => a.finished) || !!today.streak?.n || !!today.user?.profile?.owned?.length;
   $('shopBtn').hidden = !hasPlayed;
 }
 // Cuenta atrás hasta el próximo Gravle: se mueve cada segundo en la portada y en
@@ -274,7 +275,9 @@ function maybeGate() {
   if (lastEndDemo && !$('end').hidden) { startDemo(); return; }
   const open = today?.attempts?.some(a => !a.finished);
   const key = 'guestOk:' + (today?.day?.date || '');
-  if (accountsOn && !user && !open && !store.get(key) && $('guestDlg')) { $('guestDlg').showModal(); return; }
+  // La primera partida nunca se interrumpe con el registro: se ofrece al terminarla.
+  const veteran = Object.keys(store.get('played', {})).length > 0;
+  if (accountsOn && !user && !open && !store.get(key) && $('guestDlg') && veteran) { $('guestDlg').showModal(); return; }
   startAttempt();
 }
 $('guestPlay')?.addEventListener('click', () => { store.set('guestOk:' + (today?.day?.date || ''), 1); $('guestDlg').close(); startAttempt(); });
@@ -392,6 +395,8 @@ function paintStreak(st, n) {
   else if (n === 1) sub.textContent = 'Streak started. Come back tomorrow!';
   else sub.textContent = 'Next goal: ' + nextMilestone(n) + ' days';
   // protectores: cuántos llevas, o una pista para conseguirlos si la racha ya vale algo
+  const nx = STREAK_SKINS.find(x => x.streak > n);
+  if (nx && n > 0 && st.firstToday !== undefined) sub.textContent = (nx.streak - n === 1 ? '1 more day' : (nx.streak - n) + ' more days') + ' to unlock the ' + nx.name + ' marble';
   const fz = today?.streak?.freezes || 0;
   if (n > 0 && fz) sub.textContent += ' · ❄️×' + fz;
   else if (n >= 3 && today?.streak && today.user?.profile) sub.textContent += ' · Protect it with a streak freeze in the shop';
@@ -451,6 +456,7 @@ async function showEnd(r) {
   }
   await refresh();
   renderVsEnd(r);
+  setTimeout(() => { if (!$('end').hidden) showUnlocks(); }, 3600);
   $('challengeBtn').hidden = !today.attempts.some(a => a.set === 'A' && a.finished);
   const left = today.max - today.attempts.length;
   $('again').hidden = left <= 0;
@@ -802,7 +808,8 @@ $('tabColors').addEventListener('click', () => openShop('color'));
 $('heroBtn').addEventListener('click', () => { if (shopSel) heroAction(); });
 $('shopDeal').addEventListener('click', () => { const d = dailyDeal(today.day.date); openShop(d.kind, d.id); });
 const equippedId = (kind, p) => kind === 'skin' ? (p?.skin || 'classic') : kind === 'trail' ? (p?.trail || 'classic') : (p?.name_color || 'default');
-const ownsIt = (kind, it, p) => it.price === 0 || !!p?.owned.includes(kind + ':' + it.id);
+const ownsIt = (kind, it, p) => (it.price === 0 && !it.streak) || !!p?.owned.includes(kind + ':' + it.id);
+const streakNow = () => today?.streak?.n ?? streakCount();
 function openShop(tab, selId) {
   shopTab = tab; show('shop');
   [['skin', 'tabSkins'], ['trail', 'tabTrails'], ['color', 'tabColors']].forEach(([k, id]) => $(id).setAttribute('aria-selected', String(k === tab)));
@@ -867,12 +874,17 @@ function renderShop() {
     const st = document.createElement('div'); st.className = 'pr';
     if (on) st.innerHTML = '<span class="tick">✓</span> Equipped';
     else if (owned) st.textContent = 'Owned';
-    else {
+    else if (it.streak) {                                // canica de racha: candado y progreso
+      card.classList.add('streaklock'); st.textContent = '🔒 ' + it.streak + '-day streak';
+      const bar = document.createElement('span'); bar.className = 'need streak'; bar.innerHTML = '<i></i>'; bar.firstChild.style.width = Math.min(100, Math.round(100 * streakNow() / it.streak)) + '%';
+      card.appendChild(st); card.appendChild(bar);
+    } else {
       st.innerHTML = '<span class="coin" aria-hidden="true"></span>' + (price < it.price ? '<s>' + it.price + '</s> ' : '') + price;
       if (p && p.coins < price) { const bar = document.createElement('span'); bar.className = 'need'; bar.innerHTML = '<i></i>'; bar.firstChild.style.width = Math.round(100 * p.coins / price) + '%'; card.appendChild(st); card.appendChild(bar); }
     }
     if (!card.contains(st)) card.appendChild(st);
-    if (rar) { const b = document.createElement('span'); b.className = 'rtag'; b.textContent = rar.name; card.appendChild(b); }
+    if (rar || it.streak) { const b = document.createElement('span'); b.className = 'rtag' + (it.streak ? ' streak' : ''); b.textContent = it.streak ? 'Streak' : rar.name; card.appendChild(b); }
+    if (it.streak) card.classList.add('r-streak');
     card.addEventListener('click', () => { shopSel = it; window.Juice?.sfx.tap(); renderShop(); const J = window.Juice; if (J && !J.reduce) $('heroCv').animate([{ transform: 'scale(.96)' }, { transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.3,1.6,.5,1)' }); });
     box.appendChild(card);
   });
@@ -881,14 +893,15 @@ function renderShop() {
 function renderHero() {
   const p = today?.user?.profile, it = shopSel, kind = shopTab; if (!it) return;
   const rar = rarityOf(it.price), owned = ownsIt(kind, it, p), on = equippedId(kind, p) === it.id, price = priceNow(kind, it), btn = $('heroBtn');
-  $('heroRar').textContent = rar ? rar.name : 'Free'; $('heroRar').className = 'rar' + (rar ? ' r-' + rar.id : '');
+  $('heroRar').textContent = it.streak ? '🔥 Streak reward' : rar ? rar.name : 'Free'; $('heroRar').className = 'rar' + (it.streak ? ' r-streak' : rar ? ' r-' + rar.id : '');
   $('heroName').textContent = it.name;
   const nick = $('heroNick'); nick.hidden = kind !== 'color';
   if (kind === 'color') { nick.textContent = p?.nickname || 'Your name'; paintName(nick, it.id); }
-  $('shopHero').className = 'hero' + (rar ? ' r-' + rar.id : '');
+  $('shopHero').className = 'hero' + (it.streak ? ' r-streak' : rar ? ' r-' + rar.id : '');
   btn.disabled = false; btn.classList.remove('ghost');
   if (on) { btn.textContent = 'Equipped ✓'; btn.disabled = true; }
   else if (owned) { btn.textContent = 'Equip'; btn.disabled = !p; }
+  else if (it.streak) { btn.textContent = '🔒 Play ' + it.streak + ' days in a row (' + Math.min(streakNow(), it.streak) + '/' + it.streak + ')'; btn.disabled = true; btn.classList.add('ghost'); }
   else if (!p) { btn.textContent = 'Sign in to buy'; btn.disabled = !accountsOn; }
   else if (p.coins < price) { btn.textContent = 'Need ' + (price - p.coins) + ' more coins'; btn.disabled = true; }
   else btn.innerHTML = 'Buy for <span class="coin" aria-hidden="true"></span> ' + price;
@@ -1049,7 +1062,7 @@ $('demoHome').addEventListener('click', (ev) => {
 async function startDemo() {
   if (!labPick.size) return;
   let data = labData[demoLevel];
-  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028b')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028c')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
   let games = [...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
   if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
   const run = demoRun++;
@@ -1181,10 +1194,156 @@ async function shareChallenge() {
 $('challengeBtn').addEventListener('click', shareChallenge);
 $('homeChallenge').addEventListener('click', shareChallenge);
 
+/* ---------- canicas de racha: celebración al desbloquear ---------- */
+function queueUnlocks() {
+  const u = today?.streak?.unlocked;
+  if (u?.length) store.set('unlockQ', [...new Set([...store.get('unlockQ', []), ...u])]);
+}
+function showUnlocks() {
+  const q = store.get('unlockQ', []);
+  if (!q.length || document.querySelector('.unlock')) return;
+  store.set('unlockQ', q.slice(1));
+  const it = SKINS.find(x => x.id === q[0]); if (!it) return showUnlocks();
+  const J = window.Juice, calm = !J || J.reduce;
+  const ov = document.createElement('div'); ov.className = 'unlock'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'New marble unlocked: ' + it.name);
+  ov.innerHTML = '<div class="ucard"><div class="urays" aria-hidden="true"></div><small class="ustreak"></small><canvas class="uball" aria-hidden="true"></canvas>'
+    + '<b class="utitle">New marble!</b><span class="uname"></span><p class="unote">Exclusive: it can’t be bought, only earned.</p>'
+    + '<div class="ubtns"><button class="btn" type="button" data-eq>Equip it</button><button class="btn ghost" type="button" data-close>Later</button></div></div>';
+  ov.querySelector('.ustreak').textContent = '🔥 ' + it.streak + '-day streak reward';
+  ov.querySelector('.uname').textContent = it.name;
+  document.body.appendChild(ov);
+  const cv = ov.querySelector('.uball'), t0 = performance.now();
+  let raf = 0;
+  const loop = (now) => {
+    if (!ov.isConnected) return;
+    const g = fitCanvas(cv);
+    if (g) {
+      const w = cv.clientWidth, h = cv.clientHeight, t = (now - t0) / 1000, rad = w * 0.34, ground = h / 2;
+      let y = ground, def = null;
+      if (!calm && t < 0.45) { const u = t / 0.45; y = -rad + (ground + rad) * u * u; def = { ax: Math.PI / 2, sx: 1 + 0.25 * u, sy: 1 - 0.12 * u, push: 0 }; }
+      else if (!calm) { const a = t - 0.45, s0 = 0.4 * Math.exp(-a * 6) * Math.cos(a * 20); if (Math.abs(s0) > 0.01) def = { ax: -Math.PI / 2, sx: 1 - s0, sy: 1 + s0 * 0.7, push: s0 }; y = ground - 6 * Math.sin(t * 2.2); }
+      g.clearRect(0, 0, w, h);
+      window.PhysleGame.drawMarble(g, w / 2, y, rad, it.look, t * 1.6, def);
+    }
+    raf = requestAnimationFrame(loop);
+  };
+  raf = requestAnimationFrame(loop);
+  const close = () => { cancelAnimationFrame(raf); ov.remove(); setTimeout(showUnlocks, 400); };
+  ov.querySelector('[data-close]').addEventListener('click', close);
+  ov.querySelector('[data-eq]').addEventListener('click', async (ev) => {
+    ev.target.disabled = true;
+    try { const res = await api('/api/shop/equip', { method: 'POST', body: { kind: 'skin', id: it.id } }); today.user.profile = res.profile; renderAccount(); toast(it.name + ' equipped!'); J?.sfx.pick(); }
+    catch (e) { toast(e.message); }
+    close();
+  });
+  track('streak_unlock', { item: it.id });
+  if (calm) return;
+  ov.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 250 });
+  ov.querySelector('.ucard').animate([{ transform: 'scale(.5) rotate(-6deg)', opacity: 0 }, { transform: 'scale(1.06) rotate(1deg)', opacity: 1, offset: 0.65 }, { transform: 'none', opacity: 1 }], { duration: 520, easing: 'cubic-bezier(.3,1.5,.5,1)' });
+  setTimeout(() => {
+    J.sfx.fanfare(); J.buzz([20, 40, 60]);
+    const b = cv.getBoundingClientRect(), pal = { ember: ['#ff7a1a', '#ffd36e', '#c2410c'], aurora: ['#3cffb0', '#4cc9ff', '#b47cff'], nova: ['#ffd36e', '#ff4fd8', '#ffffff'] }[it.id];
+    J.confetti(b.left + b.width / 2, b.top + b.height / 2, { n: it.streak >= 30 ? 180 : 120, power: 1.1, colors: pal });
+    setTimeout(() => J.confetti(b.left + b.width / 2, b.top + b.height / 2, { n: 80, power: 0.9, colors: pal }), 450);
+  }, 480);
+}
+
+/* ---------- primera visita: bienvenida y calentamiento ----------
+   Quien entra por primera vez juega antes de leer: dos rondas fáciles guiadas con un dedo
+   (tocar dónde cae y elegir un imán), su primer acierto con todo el «juice», y de ahí
+   directo al reto de hoy. El registro se ofrece después de la primera partida, no antes. */
+const FIRST = !DEMO && !store.get('ftue') && !Object.keys(store.get('played', {})).length;
+let warm = null, welcomeRaf = 0, coachTimer = 0;
+function openWelcome() {
+  show('welcome'); track('ftue_view');
+  const cv = $('welcomeCv'); cancelAnimationFrame(welcomeRaf);
+  const loop = (now) => {
+    if ($('welcome').hidden) { welcomeRaf = 0; return; }
+    const g = fitCanvas(cv); if (g) window.PhysleGame.preview(g, cv.clientWidth, cv.clientHeight, skinOf(today?.user?.profile?.skin), trailOf('rainbow'), now / 1000, false);
+    welcomeRaf = requestAnimationFrame(loop);
+  };
+  welcomeRaf = requestAnimationFrame(loop);
+}
+function leaveWelcome(how) {
+  store.set('ftue', how); cancelAnimationFrame(welcomeRaf); welcomeRaf = 0;
+}
+$('warmSkip').addEventListener('click', () => { leaveWelcome('skipped'); track('ftue_skip'); show('home'); if (today) renderHome(); });
+$('warmGo').addEventListener('click', startWarmup);
+async function startWarmup() {
+  track('ftue_start');
+  let data;
+  try { data = await (await fetch('warmup.json?v=20261028c')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
+  leaveWelcome('started');
+  const full = data.rounds.map(r => JSON.parse(JSON.stringify(r)));
+  const st = { day: { n: 0, date: today?.day?.date || '', level: 1, W: data.W, H: data.H, FLOOR: data.FLOOR, R: data.R },
+    attempt: { id: 'warm' + Date.now(), num: 1, index: 1, round: 0, scores: [], demo: true }, rounds: full.map(publicRound) };
+  $('playLabel').textContent = 'Warm-up · doesn’t count';
+  show('play');
+  warm = { scores: [], rounds: st.rounds }; $('play').classList.add('warming');
+  window.PhysleGame.play(st, {
+    submit: async (i, pred) => {
+      const pts = scorePoints(full[i], pred); warm.scores.push(pts); track('ftue_round', { round: i + 1, pts });
+      return { pts, round: JSON.parse(JSON.stringify(full[i])), total: warm.scores.reduce((a, b) => a + b, 0), finished: i === full.length - 1, coins: null };
+    },
+    error: (m) => toast(m),
+    done: warmDone,
+  });
+  clearInterval(coachTimer); coachTimer = setInterval(coachTick, 120); coachTick();
+}
+// El «entrenador»: un bocadillo y un dedo que señalan qué hacer en cada momento.
+function coachTick() {
+  const c = $('coach'), go = $('go');
+  if (!warm || $('play').hidden) { c.hidden = true; $('play').classList.remove('warming'); go.classList.remove('coachpulse'); clearInterval(coachTimer); return; }
+  const i = warm.scores.length, r = warm.rounds[i], label = go.textContent;
+  const aim = label === 'Release' && $('result').hidden;
+  let msg = '', finger = null;
+  if (aim && go.disabled) {
+    if (r?.type === 'drop') { msg = 'Where will the marble land? <b>Tap the floor</b> where you think it hits.'; finger = 'scan'; }
+    else if (r?.type === 'magnet') { msg = 'Which magnet grabs the steel ball? <b>Tap a magnet.</b>'; finger = 'mags'; }
+    else msg = 'Make your guess on the scene.';
+  } else if (aim) msg = 'Locked in? <b>Hit Release</b> and watch what happens!';
+  go.classList.toggle('coachpulse', (aim && !go.disabled) || (!$('result').hidden && !go.disabled));
+  if (!msg) { c.hidden = true; return; }
+  if (c.hidden || c.dataset.msg !== msg) {
+    c.hidden = false; c.dataset.msg = msg; $('coachMsg').innerHTML = msg;
+    const f = $('coachFinger'); f.className = 'cfinger' + (finger ? ' ' + finger : ''); f.hidden = !finger;
+    if (finger === 'mags' && r.mags) r.mags.slice(0, 2).forEach((m, k) => { f.style.setProperty('--x' + (k + 1), (m.x / 4) + '%'); f.style.setProperty('--y' + (k + 1), (m.y / 6) + '%'); });
+    const J = window.Juice; if (J && !J.reduce) c.querySelector('.cbubble').animate([{ opacity: 0, scale: '.94' }, { opacity: 1, scale: '1' }], { duration: 280, easing: 'cubic-bezier(.3,1.5,.5,1)' });
+  }
+}
+function warmDone() {
+  $('play').classList.remove('warming');
+  clearInterval(coachTimer); $('coach').hidden = true; $('go').classList.remove('coachpulse');
+  store.set('ftue', 'done');
+  const sc = warm.scores, tot = sc.reduce((a, b) => a + b, 0); warm = null;
+  track('ftue_done', { score: tot });
+  $('weTitle').textContent = tot >= 160 ? 'You’re a natural!' : tot >= 90 ? 'Not bad for a first try!' : 'Physics is sneaky, right?';
+  $('weSub').textContent = tot >= 160 ? 'Your physics instinct is strong. Let’s see how you do on today’s real experiments.' : 'That’s the fun: it looks easy until you see what really happens. The real ones are just as surprising.';
+  const box = $('weScores'); box.innerHTML = '';
+  sc.forEach((p, k) => { const d = document.createElement('div'); d.className = 'wes ' + band(p); d.innerHTML = '<small></small><b>+0</b>'; d.firstChild.textContent = ['Landing', 'Magnets'][k] || 'Round ' + (k + 1); box.appendChild(d); });
+  const ul = $('weExps'); ul.innerHTML = '';
+  for (const g of today?.day?.games?.A || []) if (ICONS[g]) { const li = document.createElement('li'); li.innerHTML = '<button class="exp" type="button" data-how="' + g + '">' + ICONS[g] + '</button>'; ul.appendChild(li); }
+  $('weGo').textContent = vsActive() ? 'Accept ' + vsName() + '’s challenge' : 'Play today’s 5 experiments';
+  show('warmEnd');
+  const J = window.Juice; if (!J || J.reduce) { box.querySelectorAll('b').forEach((b, k) => { b.textContent = '+' + sc[k]; }); return; }
+  box.querySelectorAll('.wes').forEach((el, k) => {
+    el.animate([{ transform: 'scale(.4) rotate(-8deg)', opacity: 0 }, { transform: 'scale(1.1) rotate(2deg)', opacity: 1, offset: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 420, delay: 250 + k * 260, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' });
+    setTimeout(() => { J.roll(el.querySelector('b'), sc[k], { ms: 500, prefix: '+' }); J.sfx.tick(); }, 300 + k * 260);
+  });
+  setTimeout(() => { const b = $('weTitle').getBoundingClientRect(); J.sfx.fanfare(); J.confetti(b.left + b.width / 2, b.top + 20, { n: 110, power: 1 }); }, 300);
+  ul.querySelectorAll('li').forEach((li, k) => li.animate([{ transform: 'translateY(12px) scale(.7)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 420, delay: 900 + k * 90, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' }));
+  $('weGo').animate([{ transform: 'scale(.9)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 400, delay: 1400, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' });
+}
+$('weGo').addEventListener('click', () => { track('ftue_play'); if (today) renderHome(); startAttempt(); });
+
 /* ---------- arranque ---------- */
 (async () => {
+  if (FIRST) openWelcome();                 // sin esperar a la red: nada de parpadeos
   try { await initAuth(); } catch (e) { console.error(e); }
   await refresh();
   if (!DEMO) await loadChallenge();
+  // Si en realidad ya jugaba (con cuenta, desde otro dispositivo), no hace falta bienvenida.
+  if (FIRST && (today?.attempts?.length || today?.streak?.n) && !$('welcome').hidden) { leaveWelcome('returning'); show('home'); renderHome(); }
+  if (!$('home').hidden) setTimeout(showUnlocks, 900);
   if (DEMO) { show('demoHome'); labBuild(); }
 })();

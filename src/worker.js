@@ -5,7 +5,7 @@
 // - Limita los intentos por día, guarda cuentas y calcula los rankings.
 import { publicRound, validPrediction, scorePoints } from '../public/scoring.js';
 import { COUNTRIES } from '../public/countries.js';
-import { WELCOME_COINS, coinsFor, findItem, priceOf } from '../public/shop.js';
+import { WELCOME_COINS, coinsFor, findItem, priceOf, STREAK_SKINS } from '../public/shop.js';
 import { botsFor } from './bots.js';
 
 const MAX_ATTEMPTS = 2;          // en el futuro: +1 viendo un vídeo
@@ -227,7 +227,20 @@ async function streakOf(env, uid, date) {
   }
   let n = 0, d = played.has(date) ? date : addDays(date, -1);
   while (kept(d)) { if (played.has(d)) n++; d = addDays(d, -1); }
-  return { n, today: played.has(date), freezes, max: MAX_FREEZES, price: FREEZE_PRICE, saved, on: hasFreeze };
+  // Canicas de racha (3, 10 y 30 días): se regalan al llegar; «unlocked» avisa una sola vez.
+  let unlocked = [];
+  const due = STREAK_SKINS.filter(x => n >= x.streak);
+  if (due.length) {
+    const p = await profileOf(env, uid);
+    const missing = p ? due.filter(x => !p.owned.includes('skin:' + x.id)) : [];
+    if (missing.length) {
+      const res = await env.DB.prepare('UPDATE users SET owned = ?1 WHERE uid = ?2 AND owned = ?3')
+        .bind(JSON.stringify([...p.owned, ...missing.map(x => 'skin:' + x.id)]), uid, JSON.stringify(p.owned)).run();
+      if (res.meta.changes) unlocked = missing.map(x => x.id);
+    }
+  }
+  const next = STREAK_SKINS.find(x => x.streak > n);
+  return { n, today: played.has(date), freezes, max: MAX_FREEZES, price: FREEZE_PRICE, saved, on: hasFreeze, unlocked, next: next ? { id: next.id, at: next.streak } : null };
 }
 async function buyFreeze(req, env) {
   const who = await identify(req, env, { requireUser: true });
@@ -540,6 +553,7 @@ async function shopUser(req, env) {
 async function shopBuy(req, env) {
   const { who, p, item, key } = await shopUser(req, env);
   const price = priceOf(b_kind(key), item, today(env));             // con la oferta del día
+  if (item.streak) throw new HttpError(403, 'This marble can’t be bought: reach a ' + item.streak + '-day streak to unlock it.');
   if (item.price === 0 || p.owned.includes(key)) throw new HttpError(409, 'You already own this.');
   if (p.coins < price) throw new HttpError(402, 'Not enough coins yet. Keep playing!');
   const owned = JSON.stringify([...p.owned, key]);
@@ -551,7 +565,7 @@ async function shopBuy(req, env) {
 }
 async function shopEquip(req, env) {
   const { who, p, item, key, kind } = await shopUser(req, env);
-  if (item.price > 0 && !p.owned.includes(key)) throw new HttpError(403, 'Buy it first.');
+  if ((item.price > 0 || item.streak) && !p.owned.includes(key)) throw new HttpError(403, item.streak ? 'Reach a ' + item.streak + '-day streak to unlock it.' : 'Buy it first.');
   if (kind === 'trail' && !hasTrail) throw new HttpError(503, 'Trails are almost ready. Try again in a moment.');
   const col = { skin: 'skin', trail: 'trail', color: 'name_color' }[kind];
   try { await env.DB.prepare(`UPDATE users SET ${col} = ? WHERE uid = ?`).bind(item.id, who.uid).run(); }
