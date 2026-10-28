@@ -21,7 +21,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261028a">
+<link rel="stylesheet" href="styles.css?v=20261028b">
 <script defer src="https://cloud.umami.is/script.js" data-website-id="85313345-61e7-43d0-9200-e1e60b2d9753"></script>
 </head>
 <body>
@@ -204,6 +204,11 @@
       <span class="dtxt"><small>Daily deal · −40%</small><b id="dealName"></b><span class="dpr"><s id="dealWas"></s> <span class="coin" aria-hidden="true"></span><b id="dealPrice"></b></span></span>
       <span class="dclock" id="dealClock"></span>
     </button>
+    <div class="fzcard" id="shopFreeze" hidden>
+      <span class="icecube big" id="fzCube" aria-hidden="true"></span>
+      <div class="fztxt"><b>Streak freeze</b><small>Saves your streak if you miss a day. Used automatically. Hold up to 2.</small><span class="fzslots" id="fzSlots"></span></div>
+      <button class="btn" id="fzBtn" type="button"></button>
+    </div>
     <div class="tabs" role="tablist">
       <button type="button" role="tab" id="tabSkins" aria-selected="true">Marbles</button>
       <button type="button" role="tab" id="tabTrails" aria-selected="false">Trails</button>
@@ -294,10 +299,10 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="juice.js?v=20261028a"></script>
-<script src="music.js?v=20261028a"></script>
-<script src="game.js?v=20261028a"></script>
-<script type="module" src="app.js?v=20261028a"></script>
+<script src="juice.js?v=20261028b"></script>
+<script src="music.js?v=20261028b"></script>
+<script src="game.js?v=20261028b"></script>
+<script type="module" src="app.js?v=20261028b"></script>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "17666b232ffe4c9c89b2ac10bd2f422c"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>
