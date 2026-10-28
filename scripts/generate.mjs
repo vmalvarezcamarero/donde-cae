@@ -142,5 +142,7 @@ for (let i = 0; i < days; i++) {
 
 // Índice con las fechas disponibles (lo usa la web para saber si hay reto).
 const dates = readdirSync(outDir).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map(f => f.slice(0, 10)).sort();
-writeFileSync(join(outDir, 'index.json'), JSON.stringify({ launch: config.launch, timezone: config.timezone, dates }));
+// Qué experimentos tuvo cada reto (sin respuestas): lo usa el servidor para las estadísticas por experimento.
+const games = Object.fromEntries(dates.map(d => { const day = JSON.parse(readFileSync(join(outDir, d + '.json'), 'utf8')); return [d, [day.sets.A.map(r => r.type), day.sets.B.map(r => r.type)]]; }));
+writeFileSync(join(outDir, 'index.json'), JSON.stringify({ launch: config.launch, timezone: config.timezone, dates, games }));
 console.log(`Listo: ${made} días nuevos, ${kept} ya existían. Último día disponible: ${dates.at(-1)}.`);

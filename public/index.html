@@ -27,7 +27,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261028e">
+<link rel="stylesheet" href="styles.css?v=20261028f">
 <script defer src="https://cloud.umami.is/script.js" data-website-id="85313345-61e7-43d0-9200-e1e60b2d9753"></script>
 </head>
 <body>
@@ -91,7 +91,7 @@
     <p class="note" id="homeNote"></p>
     <button class="linkbtn challenge-link" id="homeChallenge" type="button" hidden><span aria-hidden="true">⚔️</span> Challenge a friend to beat your score</button>
     <div class="bar"><button class="btn ghost" id="rankBtn" type="button" style="flex:1">Leaderboard</button><button class="btn ghost" id="shopBtn" type="button" style="flex:1">Shop</button></div>
-    <p class="metaline"><span id="next"></span><span id="streak"></span></p>
+    <p class="metaline"><span id="next"></span><span id="streak"></span><button class="linkbtn statslink" id="homeStats" type="button" hidden>📊 Your stats</button></p>
   </section>
 
   <!-- Demo de los experimentos nuevos (/?demo) -->
@@ -162,6 +162,18 @@
     </div>
   </section>
 
+  <!-- Estadísticas personales -->
+  <section id="stats" class="panel stats" hidden>
+    <div class="dayhead"><span>Your stats</span><button class="link" id="statsBack" type="button">Back</button></div>
+    <div class="sthead"><canvas id="stBall" aria-hidden="true"></canvas><div><b id="stName"></b><small id="stSince"></small></div></div>
+    <div class="sttiles" id="stTiles"></div>
+    <div class="stblock"><h3>Your physics DNA</h3><p class="note" id="stDnaNote"></p><div class="stdna" id="stDna"></div></div>
+    <div class="stblock"><h3>Your calendar</h3><div class="stcal" id="stCal"></div><div class="stlegend"><span><i class="g"></i>420+</span><span><i class="y"></i>300+</span><span><i class="r"></i>below</span><span><i class="fz"></i>freeze</span></div></div>
+    <div class="stblock" id="stBestBox"><h3>Your best game</h3><div class="stbest" id="stBest"></div></div>
+    <p class="note" id="stGuest" hidden></p>
+    <button class="btn" id="stShare" type="button">Share my stats</button>
+  </section>
+
   <!-- Attempt result -->
   <section id="end" class="end panel" hidden>
     <div>
@@ -196,6 +208,7 @@
       <button class="btn ghost" id="again" type="button" style="flex:1">Second attempt</button>
       <button class="btn ghost" id="endRank" type="button" style="flex:1">Leaderboard</button>
     </div>
+    <button class="btn ghost" id="endStats" type="button">📊 My stats</button>
     <button class="link" id="endHome" type="button">Back to home</button>
   </section>
 
@@ -308,6 +321,7 @@
   <h3 id="accountTitle">Your account</h3>
   <p id="accountInfo"></p>
   <div class="form">
+    <button class="btn" type="button" id="acctStats">📊 My stats</button>
     <button class="btn ghost" type="button" id="editProfile">Edit name and country</button>
     <button class="btn ghost" type="button" id="logout">Sign out</button>
     <button class="btn ghost danger" type="button" id="deleteAsk">Delete my account</button>
@@ -329,10 +343,10 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="juice.js?v=20261028e"></script>
-<script src="music.js?v=20261028e"></script>
-<script src="game.js?v=20261028e"></script>
-<script type="module" src="app.js?v=20261028e"></script>
+<script src="juice.js?v=20261028f"></script>
+<script src="music.js?v=20261028f"></script>
+<script src="game.js?v=20261028f"></script>
+<script type="module" src="app.js?v=20261028f"></script>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "17666b232ffe4c9c89b2ac10bd2f422c"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

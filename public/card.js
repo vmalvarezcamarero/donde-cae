@@ -68,3 +68,49 @@ export async function makeCard(res) {
   g.fillStyle = P.coral; g.font = '700 46px ' + MONO; g.fillText(res.host, 90, 1310);
   return new Promise(r => c.toBlob(r, 'image/png'));
 }
+
+// Tarjeta de estadísticas (1080×1350): nombre, 4 cifras, tus 3 mejores experimentos y las últimas 4 semanas.
+// d: { name, flag, tiles: [[label, value]×4], top: [{ name, avg, icon }], calendar: [{ date, best, frozen }×28], host }
+export async function makeStatsCard(d) {
+  if (document.fonts?.ready) await document.fonts.ready;
+  const W = 1080, H = 1350, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = P.paper; g.fillRect(0, 0, W, H);
+  for (let x = 0; x <= W; x += 30) { g.strokeStyle = x % 150 === 0 ? 'rgba(24,38,58,.12)' : 'rgba(24,38,58,.06)'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  for (let y = 0; y <= H; y += 30) { g.strokeStyle = y % 150 === 0 ? 'rgba(24,38,58,.12)' : 'rgba(24,38,58,.06)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+  // hoja
+  g.fillStyle = P.ink; rr(g, 72, 72, W - 132, H - 132, 28); g.fill();
+  g.fillStyle = P.plate; rr(g, 60, 60, W - 132, H - 132, 28); g.fill();
+  g.strokeStyle = P.ink; g.lineWidth = 5; g.stroke();
+  g.fillStyle = P.ink2; g.font = '600 30px ' + MONO; g.textBaseline = 'alphabetic'; g.fillText('MY GRAVLE STATS', 120, 160);
+  g.fillStyle = P.ink; g.font = '800 82px ' + DISPLAY; g.fillText((d.flag ? d.flag + ' ' : '') + d.name, 116, 252);
+  // cifras
+  const tw = (W - 240 - 3 * 24) / 4;
+  d.tiles.forEach(([k, v], i) => {
+    const x = 120 + i * (tw + 24), y = 300;
+    g.fillStyle = P.paper; rr(g, x, y, tw, 170, 18); g.fill(); g.strokeStyle = P.ink; g.lineWidth = 4; g.stroke();
+    g.fillStyle = i === 3 ? P.coral : P.ink; g.font = '800 74px ' + DISPLAY; g.textAlign = 'center'; g.fillText(String(v), x + tw / 2, y + 102);
+    g.fillStyle = P.ink2; g.font = '600 24px ' + MONO; g.fillText(k.toUpperCase(), x + tw / 2, y + 146); g.textAlign = 'left';
+  });
+  // mejores experimentos
+  g.fillStyle = P.ink; g.font = '800 44px ' + DISPLAY; g.fillText('My best experiments', 120, 560);
+  const icons = await Promise.all(d.top.map(t => svgImage(t.icon)));
+  d.top.forEach((t, i) => {
+    const y = 600 + i * 110;
+    if (icons[i]) g.drawImage(icons[i], 120, y, 84, 84);
+    g.fillStyle = P.ink; g.font = '700 38px ' + BODY; g.fillText(t.name, 230, y + 40);
+    g.fillStyle = 'rgba(24,38,58,.08)'; rr(g, 230, y + 56, 600, 22, 11); g.fill();
+    g.fillStyle = band(t.avg); rr(g, 230, y + 56, Math.max(22, 6 * t.avg), 22, 11); g.fill();
+    g.fillStyle = P.ink; g.font = '800 52px ' + DISPLAY; g.textAlign = 'right'; g.fillText(String(t.avg), W - 120, y + 72); g.textAlign = 'left';
+  });
+  // últimas 4 semanas
+  g.fillStyle = P.ink; g.font = '800 44px ' + DISPLAY; g.fillText('Last 4 weeks', 120, 980);
+  const cs = 98, gap = 14;
+  d.calendar.forEach((day, i) => {
+    const x = 120 + (i % 7) * (cs + gap), y = 1010 + Math.floor(i / 7) * (44 + 10);
+    g.fillStyle = day.best == null ? (day.frozen ? '#bfe9ff' : 'rgba(24,38,58,.07)') : day.best >= 420 ? P.good : day.best >= 300 ? P.warn : P.bad;
+    rr(g, x, y, cs, 44, 10); g.fill();
+  });
+  g.fillStyle = P.coral; g.font = '800 40px ' + DISPLAY; g.textAlign = 'right'; g.fillText(d.host, W - 120, 160); g.textAlign = 'left';
+  return new Promise(res => c.toBlob(res, 'image/png'));
+}
