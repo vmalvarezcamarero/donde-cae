@@ -17,6 +17,7 @@ import { W, H, FLOOR, R, hashStr, mulberry32, genBalance, genDrop, genRace, genP
 import { genLoop, genLaser, genBridge, genFloat, genGears } from './rounds2.mjs';
 import { genOrbit, genMagnets, genPour, genPulley, genSwing, genSpring } from './rounds3.mjs';
 import { genFlip, genJump } from './rounds4.mjs';
+import { genClock, genBounce } from './rounds5.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'));
@@ -42,10 +43,12 @@ const RACE_FORMATS = ['curvas', 'objetos', 'terrenos'];
 // así el segundo intento es de verdad distinto. Como mucho 2 de cada grupo en el
 // reto A, para mezclar formas de jugar.
 // 14 experimentos. "Float or sink?", Orbit, Pour y Bike jump quedan fuera de la rotación (no gustaron en la beta).
-export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'gears', 'magnet', 'flip', 'pulley', 'swing', 'spring'];
+// Desde el 29 oct 2026 entran Stopwatch (clock) y Bounce (bounce): 16 experimentos.
+export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'gears', 'magnet', 'flip', 'pulley', 'swing', 'spring', 'clock', 'bounce'];
 const GROUP = { drop: 'tap', pool: 'tap', laser: 'tap', swing: 'tap',
   balance: 'slide', loop: 'slide', bridge: 'slide', spring: 'slide',
-  race: 'pick', tower: 'pick', gears: 'pick', magnet: 'pick', flip: 'pick', pulley: 'pick' };
+  race: 'pick', tower: 'pick', gears: 'pick', magnet: 'pick', flip: 'pick', pulley: 'pick',
+  clock: 'slide', bounce: 'tap' };
 
 // Plan de la semana (de lunes a domingo): reparte los juegos para que cada uno
 // salga 3 o 4 veces en el reto A y ninguno desaparezca varios días seguidos.
@@ -89,9 +92,16 @@ export function weekPlan(monday) {
   planCache.set(monday, plan);
   return plan;
 }
+// Estreno: el día que llega un juego nuevo, sale en el reto A (se intercambia con juegos del B
+// del mismo día, así no cambia nada más del plan).
+const DEBUT = { '2026-10-29': { in: ['clock', 'bounce'], out: ['tower', 'pool'] } };
 export function gamesOf(date) {
   const monday = mondayOf(date);
-  return weekPlan(monday)[Math.round((Date.parse(date + 'T12:00:00Z') - Date.parse(monday + 'T12:00:00Z')) / DAY)];
+  const day = weekPlan(monday)[Math.round((Date.parse(date + 'T12:00:00Z') - Date.parse(monday + 'T12:00:00Z')) / DAY)];
+  const d = DEBUT[date];
+  if (!d || !d.in.every(g => day.B.includes(g)) || !d.out.every(g => day.A.includes(g))) return day;
+  const swap = (list, from, to) => list.map(g => (from.includes(g) ? to[from.indexOf(g)] : g));
+  return { A: swap(day.A, d.out, d.in), B: swap(day.B, d.in, d.out) };
 }
 
 function buildSet(date, setId, n, lvl, games) {
@@ -116,6 +126,8 @@ function buildSet(date, setId, n, lvl, games) {
     spring: () => genSpring(seed + 16, lvl),
     flip: () => genFlip(seed + 17, lvl),
     jump: () => genJump(seed + 18, lvl),
+    clock: () => genClock(seed + 19, lvl),
+    bounce: () => genBounce(seed + 20, lvl),
   };
   return games.map(g => make[g]());
 }
