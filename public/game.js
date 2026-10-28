@@ -122,7 +122,7 @@
   /* ---------- estado ---------- */
   // mark: drop → x mundo; balance → posición en unidades; pool → [x,y]; tower → índice de bloque o -1 (aguanta); race → usa order
   let day, roundIdx, phase, scores, details, mark, order, anim;
-  let hooks = null, attempt = null, serverPts = 0, sending = false, lastCoins = null, lastCrowd = null, lastRank = null;
+  let hooks = null, attempt = null, serverPts = 0, sending = false, lastCoins = null, lastCrowd = null, lastRank = null, lastVs = null;
 
   /* ---------- juice: cámara lenta, zoom, impacto (ver juice.js) ---------- */
   const JU = () => window.Juice;
@@ -426,7 +426,7 @@
     try { res = await hooks.submit(roundIdx, predictionOf(round())); }
     catch (e) { sending = false; $('go').classList.remove('busy'); $('go').textContent = 'Release'; ready(); hooks.error(e.message); return; }
     sending = false; $('go').classList.remove('busy'); $('go').textContent = 'Watch…';
-    day.rounds[roundIdx] = res.round; serverPts = res.pts; lastCoins = res.coins; lastCrowd = res.crowd || null; if (res.rank) lastRank = res.rank;   // ahora sí: la ronda completa con su resultado
+    day.rounds[roundIdx] = res.round; serverPts = res.pts; lastCoins = res.coins; lastCrowd = res.crowd || null; lastVs = res.vs || null; if (res.rank) lastRank = res.rank;   // ahora sí: la ronda completa con su resultado
     const r = round(); phase = 'playing';
     const speed = r.type === 'race' ? 0.5 : 1;
     // Torre que aguanta: no se mueve nada, así que se avisa y se acorta la espera.
@@ -579,7 +579,7 @@
     const el = $('rCrowd');
     if (!c || c.n == null) { el.hidden = true; return; }
     el.hidden = false; el.innerHTML = '';
-    if (c.n < 3) { el.innerHTML = '<p class="cfirst">You’re one of the first players on this one today.</p>'; return; }
+    if (c.n < 3) { el.hidden = true; return; }
     const rows = [['You beat', c.beat, 'you'], ['Nailed it', c.nailed, 'ok']];
     if (c.same != null) rows.push(['Same pick', c.same, 'same']);
     for (const [txt, v, cls] of rows) {
@@ -589,6 +589,17 @@
       el.appendChild(d);
     }
     const f = document.createElement('small'); f.textContent = c.n + ' other players so far'; el.appendChild(f);
+  }
+  // Reto de un amigo: lo que sacó en esta misma ronda y cómo va el marcador.
+  function renderVsRound(v, pts) {
+    const el = $('rVs'); if (!el) return;
+    if (!v) { el.hidden = true; return; }
+    el.hidden = false; el.className = 'rvs ' + (pts > v.pts ? 'win' : pts < v.pts ? 'lose' : 'tie');
+    el.innerHTML = '<span class="rvs-who"></span><b class="rvs-pts"></b><span class="rvs-verdict"></span><span class="rvs-tally"></span>';
+    el.children[0].textContent = v.name; el.children[1].textContent = v.pts;
+    el.children[2].textContent = pts > v.pts ? 'You take this round' : pts < v.pts ? v.name + ' takes it' : 'Tie';
+    el.children[3].textContent = 'You ' + v.tally[0] + ' – ' + v.tally[1] + ' ' + v.name;
+    if (JU() && !reduce) el.animate([{ transform: 'translateY(8px) scale(.96)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, delay: 380, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' });
   }
   function finishRound() {
     const r = round(); phase = 'result';
@@ -601,6 +612,7 @@
     $('go').disabled = false; $('go').textContent = roundIdx < lastN() ? 'Next round' : 'See result';
     renderPips(); try { draw(); } catch (e) { console.error('Gravle draw:', e); }
     try { renderCrowd(lastCrowd, s.pts); } catch (e) { console.error('Gravle crowd:', e); }
+    try { renderVsRound(lastVs, s.pts); } catch (e) { console.error('Gravle vs:', e); }
     try { resultFx(s); } catch (e) { console.error('Gravle juice:', e); }
     $('go').focus({ preventScroll: true });
     // En pantallas bajas el resultado y el botón pueden quedar fuera: se baja hasta ellos.
