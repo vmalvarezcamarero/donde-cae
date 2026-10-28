@@ -715,3 +715,20 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .sbrows { display: grid; gap: 4px; } .sbrow { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; font-size: 14px; }
 .sbrow .sq { width: 12px; height: 12px; border-radius: 3px; } .sq.g { background: var(--good); } .sq.y { background: var(--warn); } .sq.r { background: var(--bad); }
 .statslink { padding: 0; font: 600 12px var(--font-mono); color: var(--ink); text-decoration-color: var(--coral); }
+
+/* ---------- cronómetro semicircular (Stopwatch) ---------- */
+.dial { display: grid; justify-items: center; margin-top: -2px; }
+.dial svg { width: min(100%, 340px); height: auto; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.dial svg:focus-visible { outline: 3px solid var(--azul); outline-offset: 2px; border-radius: 12px; }
+.dtrack { fill: none; stroke: var(--paper); stroke-width: 16; stroke-linecap: round; }
+.dfill { fill: none; stroke: var(--coral); stroke-width: 16; stroke-linecap: round; opacity: .85; }
+.dtk { stroke: var(--ink-2); stroke-width: 1.5; } .dtk.big { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+.dlab { font: 700 15px var(--font-mono); fill: var(--ink); text-anchor: middle; }
+.dlive { stroke: var(--ink); stroke-width: 4; stroke-linecap: round; }
+.duser line { stroke: var(--coral); stroke-width: 5; stroke-linecap: round; } .duser circle { fill: var(--coral); stroke: var(--ink); stroke-width: 2; }
+.dhub { fill: var(--ink); }
+.dread { font: 800 38px var(--font-display); fill: var(--ink); text-anchor: middle; font-variant-numeric: tabular-nums; }
+.dread.live { fill: var(--ink); } .dread.g { fill: var(--good); } .dread.y { fill: var(--warn); } .dread.r { fill: var(--bad); }
+.dsub { font: 600 12px var(--font-mono); fill: var(--ink-2); text-anchor: middle; text-transform: uppercase; letter-spacing: .05em; }
+.dial { margin: 2px 0 -6px; } .dial svg { width: min(100%, 300px); }
+.dial svg:focus:not(:focus-visible) { outline: none; }

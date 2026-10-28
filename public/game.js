@@ -13,7 +13,7 @@
   const OBJ_NAME = { canica: 'Marble', rueda: 'Solid wheel', aro: 'Hoop', hielo: 'Ice cube' };
   const TYPE_NAME = { balance: 'Balance', drop: 'Where will it land?', race: 'Which finishes first?', pool: 'Bank shot', tower: 'Will it stand?',
     loop: 'Loop the loop', laser: 'Laser', domino: 'Dominoes', bridge: 'Bridge',
-    orbit: 'Orbit', magnet: 'Magnets', pour: 'Which glass fills first?', pulley: 'Pulleys', swing: 'Cut the rope', spring: 'Cannon shot', flip: 'Marble run', jump: 'Bike jump', float: 'Float or sink?', gears: 'Gears' };
+    orbit: 'Orbit', magnet: 'Magnets', pour: 'Which glass fills first?', pulley: 'Pulleys', swing: 'Cut the rope', spring: 'Cannon shot', flip: 'Marble run', jump: 'Bike jump', float: 'Float or sink?', gears: 'Gears', clock: 'Stopwatch', bounce: 'Bounce' };
   const num = (x, d = 1) => x.toFixed(d);
   const side = (u) => Math.abs(u) < 0.05 ? 'center' : num(Math.abs(u)) + (u < 0 ? ' left' : ' right');
 
@@ -127,8 +127,8 @@
   /* ---------- juice: cámara lenta, zoom, impacto (ver juice.js) ---------- */
   const JU = () => window.Juice;
   // Experimentos con un instante de impacto claro: llevan cámara lenta al final, hit-stop y polvo.
-  const SLOW = new Set(['drop', 'swing', 'pool', 'laser', 'orbit', 'magnet', 'jump', 'spring', 'bridge', 'loop', 'domino', 'flip', 'race', 'tower']);
-  const POWER = { drop: 1, swing: 1, jump: 1.2, tower: 1.1, orbit: 0.9, magnet: 0.8, domino: 0.8, spring: 0.9, bridge: 0.9, loop: 0.8, flip: 0.7, race: 0.6, pool: 0.5, laser: 0.4 };
+  const SLOW = new Set(['drop', 'swing', 'pool', 'laser', 'orbit', 'magnet', 'jump', 'spring', 'bridge', 'loop', 'domino', 'flip', 'race', 'tower', 'clock', 'bounce']);
+  const POWER = { clock: 0.7, bounce: 0.5, drop: 1, swing: 1, jump: 1.2, tower: 1.1, orbit: 0.9, magnet: 0.8, domino: 0.8, spring: 0.9, bridge: 0.9, loop: 0.8, flip: 0.7, race: 0.6, pool: 0.5, laser: 0.4 };
   const SLOW_WIN = 0.55, SLOW_F = 0.3, ZOOM = 0.6;
   let cam = { z: 1, x: 200, y: 300 }, camRaf = 0, slowActive = false;
   // Punto donde todo termina: hacia ahí va el zoom y de ahí sale el polvo.
@@ -141,6 +141,8 @@
     try {
       const last = (fr) => fr && fr.length ? fr[fr.length - 1] : null;
       if (r.type === 'drop') return [r.impactX, FLOOR];
+      if (r.type === 'clock') return clockFinish(r);
+      if (r.type === 'bounce') return [200, BF - r.answer - BALL_R[r.ball]];
       if (r.type === 'swing') return [r.impactX, r.impactY ?? FLOOR];
       if (r.type === 'pool') return r.stop;
       if (r.type === 'laser') return r.end;
@@ -167,6 +169,8 @@
     if (r.type === 'laser') return Math.min(dur, r.len / LASER_SPEED);
     if (r.type === 'orbit' || r.type === 'magnet' || r.type === 'swing') return Math.min(dur, r.frames.length / 60);
     if (r.type === 'flip') return Math.max(0, dur - 0.4);
+    if (r.type === 'clock') return Math.min(dur, r.answer);
+    if (r.type === 'bounce') return Math.min(dur, r.apexT);
     if (r.type === 'spring' && r.sim) return Math.min(dur, Math.max(0, r.sim.pts.length - 20) / 60);   // los 20 últimos son pausa
     return dur;
   }
@@ -259,13 +263,15 @@
     pour: () => 'The tap fills glass A. Which glass is full first?<small>Water leaves through the lowest open pipe. Pipes marked ✕ are blocked. Tap a glass.</small>',
     flip: (r) => 'Marbles 1 to ' + r.n + ' roll down one after another. Which cup does marble #' + r.n + ' end up in?<small>Each yellow gate blocks one tube, so the marble takes the open one (green arrow). Then the gate swaps sides for the next marble. Grey gates never move. Tap a cup.</small>',
     jump: (r) => 'At ' + r.kmh + ' km/h, where does the bike land?<small>The dotted line is a test jump at ' + r.test + ' km/h. Twice as fast flies four times as far. Tap a bus, or the green ramp if it clears them all.</small>',
-    pulley: () => 'Which side goes down?<small>Count the ropes holding each weight: every extra rope shares the load.</small>',
+    pulley: () => 'Which side goes down?<small>Count the ropes holding each weight: every extra rope shares the load. Tap the weight that drops, or ⚖ if it stays balanced.</small>',
     swing: (r) => 'The ball swings and the rope is cut at the scissors. Where does it land?<small>Tap the floor.' + (r.step ? ' Careful with the step.' : '') + '</small>',
     spring: (r) => r.target ? 'How far do you pull the cannon’s spring to hit the bullseye?<small>The dotted line is a test shot. Pull twice as far and the ball leaves twice as fast, which carries it much more than twice as far. Drag the ball back inside the cannon.</small>'
       : 'How far do you pull the spring to land the ball in the bucket?<small>The dotted line is a test shot. Pulling twice as far launches twice as fast, and that goes much more than twice as far. Drag the ball back.</small>',
     domino: () => 'Someone pushes the first domino. Which is the last one to fall?<small>Tap that domino. Dark dominoes weigh three times as much.</small>',
     float: (r) => 'Which of these float' + (r.salty ? ' in very salty water' : ' in water') + '?<small>Tap the ones that float; the rest will sink.' + (r.salty ? ' Salt water is denser than fresh water, so it pushes harder.' : '') + '</small>',
-    gears: () => 'The first gear turns clockwise. How does the gear with the flag turn?<small>Pick its direction and whether it spins faster or slower than the first one.</small>',
+    gears: () => 'The first gear turns clockwise. How does the gear with the flag turn?<small>Tap its direction (or the flagged gear) and whether it spins faster or slower than the first one.</small>',
+    clock: (r) => 'How long does the marble take to reach the finish?<small>Ramp 1 alone takes ' + r.split.toFixed(2) + ' s. Ice is slippery and fast; sand slows it down. Drag the stopwatch needle.</small>',
+    bounce: (r) => 'A ' + BALL_NAME[r.ball] + ' drops onto ' + FLOOR_NAME[r.floor] + '. How high does it get after the ' + NTH(r.n) + ' bounce?<small>' + (r.level < 3 ? 'The blue line is its 1st bounce.' : 'Blue test: dropped from ' + cm(r.testFrom) + ' cm, it bounced to ' + cm(r.test) + ' cm.') + ' Every bounce keeps the same share of the height. Tap the height.</small>',
   };
   function startRound() {
     cancelAnimationFrame(anim && anim.raf);
@@ -279,10 +285,10 @@
     $('prompt').innerHTML = PROMPTS[r.type](r);
     $('chips').hidden = true;
     if (r.type === 'race') buildRaceChips();
-    if (r.type === 'tower') buildTowerChips();
     if (r.type === 'float') { mark = []; buildFloatChips(); }
-    if (r.type === 'gears') buildGearChips();
-    if (r.type === 'pulley') buildPulleyChips();
+    gearSel = { dir: null, fast: null };
+    $('dial').hidden = r.type !== 'clock';
+    if (r.type === 'clock') buildDial(r.dial);
     if (r.type === 'loop') prepLoop(r);
     renderPips(); ready(); draw();
   }
@@ -356,6 +362,9 @@
     else if (r.type === 'bridge') { if (!aimBridge(r, x, y)) return; }
     else if (r.type === 'spring') { if (!aimSpring(r, x, y)) return; }
     else if (r.type === 'swing') mark = Math.max(R, Math.min(W - R, x));
+    else if (r.type === 'bounce') mark = Math.round(Math.max(10, Math.min(BF - 70, BF - y)));
+    else if (r.type === 'pulley' && isDown) { const k = pickPulley(r, x, y); if (k == null) return; mark = k; JU()?.sfx.pick(); }
+    else if (r.type === 'gears' && isDown) { if (!gearTap(r, x, y)) return; }
     else if (r.type === 'orbit' && isDown) { const k = pickPlanet(r, x, y); mark = k >= 0 ? [k] : snapWall(x, y); }
     else if (r.type === 'magnet' && isDown) { const k = pickMagnet(r, x, y); if (k < 0) return; mark = k; }
     else if (r.type === 'flip' && isDown) { const k = pickCup(r, x, y); if (k < 0) return; mark = k; }
@@ -364,6 +373,7 @@
     else if (r.type === 'domino' && isDown) { const k = pickDomino(r, x, y); if (k < 0) return; mark = k; }
     else if (r.type === 'float' && isDown) { const k = pickFloat(r, x, y); if (k < 0) return; toggleFloat(k); return; }
     else if (r.type === 'tower' && isDown) {
+      if (inBox(x, y, STANDS_BTN)) { mark = -1; JU()?.sfx.pick(); refreshTower(); return; }
       const k = r.blocks.findIndex(b => x >= b.x - 4 && x <= b.x + b.w + 4 && y >= b.y - 2 && y <= b.y + b.h + 2);
       if (k >= 1) { mark = k; refreshTower(); }
       return;
@@ -378,7 +388,7 @@
   cv.addEventListener('pointerdown', (ev) => {
     if (phase !== 'aim' || sending) return;
     const [x, y] = toWorld(ev); const t = round().type;
-    if (t === 'drop' || t === 'balance' || t === 'pool' || t === 'loop' || t === 'laser' || t === 'bridge' || t === 'spring' || t === 'swing') { dragging = true; cv.setPointerCapture(ev.pointerId); }
+    if (t === 'drop' || t === 'balance' || t === 'pool' || t === 'loop' || t === 'laser' || t === 'bridge' || t === 'spring' || t === 'swing' || t === 'bounce') { dragging = true; cv.setPointerCapture(ev.pointerId); }
     aimAt(x, y, true);
   });
   cv.addEventListener('pointermove', (ev) => { if (dragging && phase === 'aim') { const [x, y] = toWorld(ev); aimAt(x, y, false); } });
@@ -395,6 +405,8 @@
       if (r.type === 'pool') { const p = mark ?? [200, 300]; aimAt(p[0] + dx * 4 * f, p[1] + dy * 4 * f); }
       if (r.type === 'bridge') { mark = Math.max(10, Math.min(r.ya - 20, (mark ?? 100) - dy * 2 * f + dx * 2 * f)); ready(); draw(); }
       if (r.type === 'loop') { mark = Math.max(LOOPC.minH, Math.min(LOOPC.maxH, (mark ?? 150) - dy * 2 * f + dx * 2 * f)); ready(); draw(); }
+      if (r.type === 'bounce') { mark = Math.max(10, Math.min(BF - 70, (mark ?? 150) - dy * 2 * f + dx * 2 * f)); ready(); draw(); }
+      if (r.type === 'clock') setDialMark(Math.round(((mark ?? r.dial / 2) + (dx - dy) * 0.1 * f) * 10) / 10);
       if (r.type === 'tower') { const n = r.blocks.length; mark = mark == null || mark < 1 ? 1 : Math.max(1, Math.min(n - 1, mark + (dy ? -dy : dx))); refreshTower(); }
     } else if (k === 'Enter' && !$('go').disabled) { ev.preventDefault(); release(); }
   });
@@ -418,6 +430,7 @@
     if (r.type === 'spring') { if (!r.sim) r.sim = springPath(r, mark); return r.sim.pts.length / 60; }
     if (r.type === 'float') return 3.4;
     if (r.type === 'gears') return 3.2;
+    if (r.type === 'clock' || r.type === 'bounce') return r.frames.length / 60;
   }
   async function release() {
     if (phase !== 'aim' || sending) return;
@@ -567,6 +580,12 @@
       const fl = r.answer.map(i => FLOAT_NAME[r.items[i]]).join(', ');
       return { pts: 0, l1: right === r.items.length ? 'All correct!' : right + ' of ' + r.items.length + ' right', l2: 'Floats: ' + fl, d: right + '/' + r.items.length + ' right' };
     }
+    if (r.type === 'clock') { const err = Math.abs(mark - r.answer);
+      return { pts: 0, l1: err <= 0.12 ? 'Split-second perfect!' : err <= 0.4 ? 'Very close' : err <= 1 ? 'Close' : mark < r.answer ? 'Slower than you thought' : 'Faster than you thought',
+        l2: 'It took ' + r.answer.toFixed(2) + ' s · you said ' + mark.toFixed(1) + ' s', d: 'Took ' + r.answer.toFixed(2) + ' s, you said ' + mark.toFixed(1) }; }
+    if (r.type === 'bounce') { const err = Math.abs(mark - r.answer) / 2;
+      return { pts: 0, l1: err <= 3 ? 'Spot on!' : err <= 8 ? 'Very close' : err <= 20 ? 'Close' : mark > r.answer ? 'Lower than you thought' : 'Higher than you thought',
+        l2: NTH(r.n) + ' bounce: ' + cm(r.answer) + ' cm · you ' + cm(mark) + ' cm', d: NTH(r.n) + ' bounce ' + cm(r.answer) + ' cm, you ' + cm(mark) }; }
     if (r.type === 'gears') {
       const wl = r.w[r.parts.length - 1], dir = wl > 0 ? 'clockwise' : 'counter-clockwise', sp = Math.abs(wl);
       const pd = mark < 2 ? 1 : -1, pf = mark % 2 === 0, okd = pd === Math.sign(wl), oks = pf === sp > 1;
@@ -648,7 +667,7 @@
     paper();
     const r = round(); if (!r) return;
     if (phase === 'playing' && !anim) return;
-    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge, orbit: drawOrbit, magnet: drawMagnet, pour: drawPour, pulley: drawPulley, flip: drawFlip, jump: drawJump, swing: drawSwing, spring: drawSpring })[r.type](r);
+    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge, orbit: drawOrbit, magnet: drawMagnet, pour: drawPour, pulley: drawPulley, flip: drawFlip, jump: drawJump, swing: drawSwing, spring: drawSpring, clock: drawClock, bounce: drawBounce })[r.type](r);
     wdraw();
     // viñeta de cámara lenta, fija a la pantalla
     if (slowActive) {
@@ -1231,6 +1250,7 @@
       if (r.answer >= 0) { const [cx, cy] = fr ? fr[r.answer] : [0, 0]; label(cx, Math.min(cy - 34, floorY - 50), 'lands first: ' + (r.answer + 1), C.coral); }
       else label(200, r.blocks.at(-1).y - 22, 'it stands!', C.good);
     }
+    drawTowerPick();
   }
 
 
@@ -1692,9 +1712,9 @@
     // centrar y ampliar el mecanismo para que llene la escena
     let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
     r.parts.forEach(p => { bx0 = Math.min(bx0, p.x - p.r - 14); bx1 = Math.max(bx1, p.x + p.r + 14); by0 = Math.min(by0, p.y - p.r - 44); by1 = Math.max(by1, p.y + p.r + 40); });
-    const Z = Math.min(1.45, 380 / (bx1 - bx0), 520 / (by1 - by0));
-    const mx = (bx0 + bx1) / 2, my = (by0 + by1) / 2, scr = (x, y) => [W / 2 + (x - mx) * Z, H / 2 + 6 + (y - my) * Z];
-    ctx.save(); ctx.translate(W / 2, H / 2 + 6); ctx.scale(Z, Z); ctx.translate(-mx, -my);
+    const Z = Math.min(1.45, 380 / (bx1 - bx0), 470 / (by1 - by0));
+    const mx = (bx0 + bx1) / 2, my = (by0 + by1) / 2, scr = (x, y) => [W / 2 + (x - mx) * Z, H / 2 - 18 + (y - my) * Z];
+    ctx.save(); ctx.translate(W / 2, H / 2 - 18); ctx.scale(Z, Z); ctx.translate(-mx, -my);
     const order = r.parts.map((p, i) => i).sort((a, b) => (r.parts[a].front ? 1 : 0) - (r.parts[b].front ? 1 : 0) || r.parts[b].r - r.parts[a].r);
     const fillOf = (i) => i === 0 ? C.azul : i === last ? C.coral : r.parts[i].front ? C.violeta : C.mostaza;
     // primero los de atrás, luego las correas, luego los de delante
@@ -1740,7 +1760,9 @@
     if (phase === 'result') {
       const wl = r.w[last];
       label(lx, Math.min(H - 14, ly + 20), (wl > 0 ? '↻ clockwise' : '↺ counter-clockwise') + ' · ' + Math.abs(wl).toFixed(2) + '× speed', C.coral);
-    } else if (mark != null) label(lx, Math.min(H - 14, ly + 20), GEAR_LABEL[mark].replace('Counter-clockwise', 'CCW').replace('Clockwise', 'CW'), C.azul);
+    } else if (mark != null && phase !== 'aim') label(lx, Math.min(H - 14, ly + 20), GEAR_LABEL[mark].replace('Counter-clockwise', 'CCW').replace('Clockwise', 'CW'), C.azul);
+    { const [gx, gy] = scr(pl.x, pl.y); r._gz = { x: gx, y: gy, rad: pl.r * Z }; }
+    drawGearPick(r);
   }
 
 
@@ -2040,6 +2062,7 @@
     ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(pc[0], pc[1], 4, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = C.paper; ctx.fillRect(0, 556, W, H - 556); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, 556); ctx.lineTo(W, 556); ctx.stroke();
     if (phase === 'result') label(200, 520, r.answer === 0 ? 'balanced: it doesn’t move' : (r.answer < 0 ? 'left' : 'right') + ' side goes down', C.coral);
+    drawPulleyPick(r);
   }
 
   /* ---------- Swing (cut the rope) ---------- */
@@ -2424,6 +2447,276 @@
     const fi = phase === 'aim' ? 13 : frameAt(r.frames), f = r.frames ? r.frames[fi] : null;
     if (phase !== 'aim' && f) { trail(r.frames.map(q => [q[0], q[1] - 10]), fi, C.coral); drawBike(f[0], f[1], f[2], false); }
     else { const x = Math.max(14, footX - 26); drawBike(x, baseY, 0, false); }
+  }
+
+
+  /* ---------- Stopwatch: ¿cuánto tarda la canica en llegar a la meta? ---------- */
+  const CLK_MAT = { ice: 'ICE', sand: 'SAND' };
+  // Cronómetro semicircular (DOM) para elegir el tiempo y, al soltar, ver correr el tiempo de verdad.
+  const DIAL = { cx: 160, cy: 152, r: 128 };
+  let dialMax = 6, dialTick = -1;
+  const dialAng = (v) => Math.PI * (1 - Math.max(0, Math.min(1, v / dialMax)));
+  const dialPt = (v, rr) => { const a = dialAng(v); return [DIAL.cx + Math.cos(a) * rr, DIAL.cy - Math.sin(a) * rr]; };
+  function buildDial(max) {
+    dialMax = max; dialTick = -1;
+    const box = $('dial'); box.hidden = false;
+    const { cx, cy, r } = DIAL, arc = (rr, v0, v1) => { const [x0, y0] = dialPt(v0, rr), [x1, y1] = dialPt(v1, rr); return 'M' + x0 + ' ' + y0 + ' A' + rr + ' ' + rr + ' 0 0 1 ' + x1 + ' ' + y1; };
+    let svg = '<svg viewBox="0 0 320 182" role="slider" tabindex="0" aria-label="Time in seconds" aria-valuemin="0" aria-valuemax="' + max + '">';
+    svg += '<path class="dtrack" d="' + arc(r + 4, 0, max) + '"/>';
+    svg += '<path class="dfill" id="dFill" d=""/>';
+    for (let v = 0; v <= max + 1e-6; v += 0.25) {
+      const big = Math.abs(v - Math.round(v)) < 1e-6, half = !big && Math.abs(v * 2 - Math.round(v * 2)) < 1e-6;
+      const [x0, y0] = dialPt(v, r - (big ? 16 : half ? 10 : 6)), [x1, y1] = dialPt(v, r - 1);
+      svg += '<line class="' + (big ? 'dtk big' : 'dtk') + '" x1="' + x0.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + y1.toFixed(1) + '"/>';
+      if (big) { const [lx, ly] = dialPt(v, r - 30); svg += '<text class="dlab" x="' + lx.toFixed(1) + '" y="' + (ly + 4).toFixed(1) + '">' + v + '</text>'; }
+    }
+    svg += '<line class="dlive" id="dLive" x1="' + cx + '" y1="' + cy + '" x2="' + cx + '" y2="' + cy + '"/>';
+    svg += '<g id="dUser" class="duser" opacity="0"><line id="dUserL" x1="' + cx + '" y1="' + cy + '" x2="' + cx + '" y2="' + cy + '"/><circle id="dUserC" r="9" cx="' + cx + '" cy="' + cy + '"/></g>';
+    svg += '<circle class="dhub" cx="' + cx + '" cy="' + cy + '" r="10"/>';
+    svg += '<text class="dread" id="dRead" x="' + cx + '" y="' + (cy - 46) + '">?</text><text class="dsub" id="dSub" x="' + cx + '" y="' + (cy - 22) + '">drag the needle</text></svg>';
+    box.innerHTML = svg;
+    const el = box.querySelector('svg');
+    const setFrom = (ev) => {
+      if (phase !== 'aim' || sending) return;
+      const b = el.getBoundingClientRect(), x = (ev.clientX - b.left) / b.width * 320, y = (ev.clientY - b.top) / b.height * 182;
+      let a = Math.atan2(DIAL.cy - y, x - DIAL.cx); if (a < 0) a = x < DIAL.cx ? Math.PI : 0;
+      setDialMark(Math.round((1 - a / Math.PI) * dialMax * 10) / 10);
+    };
+    let drag = false;
+    el.addEventListener('pointerdown', (ev) => { drag = true; el.setPointerCapture(ev.pointerId); setFrom(ev); });
+    el.addEventListener('pointermove', (ev) => { if (drag) setFrom(ev); });
+    el.addEventListener('pointerup', () => { drag = false; }); el.addEventListener('pointercancel', () => { drag = false; });
+    el.addEventListener('keydown', (ev) => {
+      if (phase !== 'aim') return;
+      const d = { ArrowRight: 0.1, ArrowUp: 0.1, ArrowLeft: -0.1, ArrowDown: -0.1 }[ev.key];
+      if (d) { ev.preventDefault(); setDialMark(Math.round(((mark ?? dialMax / 2) + d * (ev.shiftKey ? 5 : 1)) * 10) / 10); }
+      else if (ev.key === 'Enter' && !$('go').disabled) { ev.preventDefault(); release(); }
+    });
+    paintDial(null);
+  }
+  function setDialMark(v) {
+    v = Math.max(0, Math.min(dialMax, v));
+    const prev = mark; mark = v; paintDial(null);
+    if (prev == null || Math.floor(prev * 2) !== Math.floor(v * 2)) JU()?.sfx.tick();
+    ready(); draw();
+  }
+  // live = tiempo que corre al soltar (null antes); también pinta tu aguja.
+  function paintDial(live, final) {
+    const q = (id) => document.getElementById(id); if (!q('dRead')) return;
+    const u = q('dUser');
+    if (mark != null) {
+      const [x, y] = dialPt(mark, DIAL.r - 18); u.setAttribute('opacity', '1');
+      q('dUserL').setAttribute('x2', x.toFixed(1)); q('dUserL').setAttribute('y2', y.toFixed(1)); q('dUserC').setAttribute('cx', x.toFixed(1)); q('dUserC').setAttribute('cy', y.toFixed(1));
+    }
+    const lv = q('dLive'), fill = q('dFill');
+    if (live == null) {
+      lv.setAttribute('x2', DIAL.cx); lv.setAttribute('y2', DIAL.cy); fill.setAttribute('d', '');
+      q('dRead').textContent = mark == null ? '?' : mark.toFixed(1) + ' s'; q('dSub').textContent = mark == null ? 'drag the needle' : 'your guess';
+      q('dRead').setAttribute('class', 'dread');
+      return;
+    }
+    const [x, y] = dialPt(live, DIAL.r - 6); lv.setAttribute('x2', x.toFixed(1)); lv.setAttribute('y2', y.toFixed(1));
+    const [x0, y0] = dialPt(0, DIAL.r + 4), [x1, y1] = dialPt(live, DIAL.r + 4);
+    fill.setAttribute('d', live > 0.01 ? 'M' + x0 + ' ' + y0 + ' A' + (DIAL.r + 4) + ' ' + (DIAL.r + 4) + ' 0 0 1 ' + x1.toFixed(1) + ' ' + y1.toFixed(1) : '');
+    q('dRead').textContent = live.toFixed(2) + ' s';
+    q('dSub').textContent = final ? 'you said ' + (mark ?? 0).toFixed(1) + ' s' : 'running…';
+    q('dRead').setAttribute('class', 'dread live' + (final ? ' ' + band(serverPts) : ''));
+  }
+  function clockFinish(r) { const s = r.segs[r.segs.length - 1]; return [s.xb, s.yb]; }
+  function clockLaps(r) {
+    if (r._laps) return r._laps;
+    const laps = [];
+    r.segs.forEach((s, i) => {
+      if (i === r.segs.length - 1) return;
+      let best = 0, bd = Infinity; r.frames.forEach((f, k) => { const d = Math.hypot(f[0] - s.xb, f[1] - s.yb); if (d < bd) { bd = d; best = k; } });
+      laps.push({ k: best, x: s.xb, y: s.yb });
+    });
+    return (r._laps = laps);
+  }
+  function drawClock(r) {
+    const fiLive = phase === 'aim' ? -1 : phase === 'result' ? r.frames.length - 1 : Math.min(r.frames.length - 1, Math.floor(anim.t * 60));
+    const tNow = phase === 'aim' ? 0 : phase === 'result' ? r.answer : Math.min(anim.t, r.answer);
+    // raíles y curvas
+    ctx.lineCap = 'round';
+    r.segs.forEach((s, i) => {
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(s.xa, s.ya); ctx.lineTo(s.xb, s.yb); ctx.stroke();
+      if (s.mat !== 'plain') {
+        const ax = s.xa + (s.xb - s.xa) * s.u0, ay = s.ya + (s.yb - s.ya) * s.u0, bx = s.xa + (s.xb - s.xa) * s.u1, by = s.ya + (s.yb - s.ya) * s.u1;
+        if (s.mat === 'ice') {
+          ctx.strokeStyle = '#8fd3ff'; ctx.lineWidth = 9; ctx.beginPath(); ctx.moveTo(ax, ay - 3); ctx.lineTo(bx, by - 3); ctx.stroke();
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([6, 10]); ctx.beginPath(); ctx.moveTo(ax, ay - 5); ctx.lineTo(bx, by - 5); ctx.stroke(); ctx.setLineDash([]);
+        } else {
+          ctx.strokeStyle = '#d9b26a'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(ax, ay - 4); ctx.lineTo(bx, by - 4); ctx.stroke();
+          ctx.fillStyle = '#a07a3a'; const n = Math.floor(Math.hypot(bx - ax, by - ay) / 7);
+          for (let q = 0; q < n; q++) { const u = (q + 0.5) / n; ctx.beginPath(); ctx.arc(ax + (bx - ax) * u + ((q * 37) % 5) - 2, ay + (by - ay) * u - 6 + ((q * 13) % 4), 1.2, 0, Math.PI * 2); ctx.fill(); }
+        }
+        label((ax + bx) / 2, (ay + by) / 2 + 22, CLK_MAT[s.mat], s.mat === 'ice' ? '#2f7fc1' : '#8a6422');
+      }
+      if (i < r.segs.length - 1) { const sg = s.xb > s.xa ? 1 : -1; ctx.strokeStyle = C.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(s.xb, s.yb + r.rb, r.rb, sg > 0 ? -Math.PI / 2 : Math.PI / 2, sg > 0 ? Math.PI / 2 : Math.PI * 1.5); ctx.stroke(); }
+    });
+    // salida, pista del primer tramo y meta con cubo
+    const s0 = r.segs[0], [fx, fy] = clockFinish(r), sgL = r.segs.at(-1).xb > r.segs.at(-1).xa ? 1 : -1;
+    label(s0.xa + (s0.xb > s0.xa ? 22 : -22), s0.ya - 24, 'START', C.ink);
+    const l0 = clockLaps(r)[0];
+    if (l0) { ctx.strokeStyle = C.azul; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(l0.x, l0.y + 2); ctx.lineTo(l0.x, l0.y - 30); ctx.stroke(); ctx.fillStyle = C.azul; ctx.beginPath(); ctx.moveTo(l0.x, l0.y - 30); ctx.lineTo(l0.x - (s0.xb > s0.xa ? 16 : -16), l0.y - 25); ctx.lineTo(l0.x, l0.y - 20); ctx.fill(); label(l0.x - (s0.xb > s0.xa ? 52 : -52), l0.y - 38, 'ramp 1: ' + r.split.toFixed(2) + ' s', C.azul); }
+    // bandera de meta a cuadros
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - 42); ctx.stroke();
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 2; b++) { ctx.fillStyle = (a + b) % 2 ? C.plate : C.ink; ctx.fillRect(fx + (sgL > 0 ? -1 : 1) * (a * 7) - (sgL > 0 ? 7 : 0), fy - 42 + b * 7, 7, 7); }
+    const [cupX, cupY] = r.cup; ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cupX - 18, cupY - 24); ctx.lineTo(cupX - 16, cupY + 2); ctx.lineTo(cupX + 16, cupY + 2); ctx.lineTo(cupX + 18, cupY - 24); ctx.stroke();
+    // tiempos de paso al cruzar cada curva
+    if (phase !== 'aim') clockLaps(r).forEach((l, i) => { if (fiLive >= l.k) { label(l.x + (l.x > 200 ? -26 : 26), l.y + r.rb + 4, (l.k / 60).toFixed(2) + ' s', C['ink-2']); if (phase === 'playing' && once('lap' + i)) JU()?.sfx.tock(0.8); } });
+    // la canica
+    if (fiLive < 0) drawSkin(ctx, r.frames[0][0], r.frames[0][1], R, skin, 0);
+    else { trail(r.frames, fiLive, C.coral); rubberBall(r, 'k', r.frames.length, (k) => r.frames[k], fiLive, R, r.frames[fiLive][2], null, { sound: false }); }
+    // cronómetro en grande dentro de la escena y en el dial
+    if (phase !== 'aim') {
+      if (cam.z < 1.02) {      // con el zoom de la cámara lenta se saldría de la escena
+        ctx.save(); ctx.font = '800 34px "Bricolage Grotesque", system-ui, sans-serif'; ctx.textAlign = 'right';
+        ctx.fillStyle = phase === 'result' ? C.coral : C.ink; ctx.fillText(tNow.toFixed(2) + ' s', W - 18, 56); ctx.restore();
+      }
+      paintDial(tNow, phase === 'result');
+      const sec = Math.floor(tNow); if (phase === 'playing' && sec > dialTick) { dialTick = sec; if (sec > 0) JU()?.sfx.tick(); }
+    }
+    if (phase === 'result') label(fx, fy + 48, 'finish: ' + r.answer.toFixed(2) + ' s', C.coral);
+  }
+
+  /* ---------- Bounce: ¿a qué altura llega tras el bote N? ---------- */
+  const BF = 540;
+  const BALL_LOOK = { tennis: { kind: 'tennis', base: '#d4ea3c', alt: '#ffffff' }, basket: { kind: 'basket', base: '#e8742c', alt: '#2b1407' },
+    golf: { kind: 'solid', base: '#f2f2ec' }, super: { kind: 'swirl', base: '#ff4fd8', alt: '#7fd8ff' } };
+  const BALL_R = { super: 12, tennis: 15, basket: 22, golf: 10 };
+  const BALL_NAME = { super: 'superball', tennis: 'tennis ball', basket: 'basketball', golf: 'golf ball' };
+  const FLOOR_NAME = { mat: 'a rubber mat', wood: 'a wooden floor', carpet: 'carpet', concrete: 'concrete', trampoline: 'a trampoline' };
+  const NTH = (n) => n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th');
+  function drawBounceFloor(r, dip) {
+    const F = BF;
+    ctx.fillStyle = C.paper; ctx.fillRect(0, F, W, H - F);
+    if (r.floor === 'trampoline') {
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(90, F); ctx.lineTo(110, F + 40); ctx.moveTo(310, F); ctx.lineTo(290, F + 40); ctx.stroke();
+      ctx.strokeStyle = '#151515'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(80, F); ctx.quadraticCurveTo(200, F + dip * 2, 320, F); ctx.stroke();
+      ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 1.5; for (const x of [96, 120, 280, 304]) { ctx.beginPath(); for (let k = 0; k <= 6; k++) ctx.lineTo(x + (k % 2 ? 4 : -4), F - 6 + k * 2); ctx.stroke(); }
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, F + 40); ctx.lineTo(W, F + 40); ctx.stroke();
+      return;
+    }
+    const col = { mat: '#3e9b6a', wood: C.wood, carpet: '#c0504d', concrete: '#a8b0b8' }[r.floor];
+    ctx.fillStyle = col; ctx.fillRect(60, F, 280, 16);
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1;
+    if (r.floor === 'wood') for (let x = 90; x < 340; x += 46) { ctx.beginPath(); ctx.moveTo(x, F); ctx.lineTo(x, F + 16); ctx.stroke(); }
+    if (r.floor === 'mat') for (let x = 66; x < 340; x += 9) { ctx.beginPath(); ctx.moveTo(x, F + 3); ctx.lineTo(x, F + 13); ctx.stroke(); }
+    if (r.floor === 'carpet') { ctx.strokeStyle = 'rgba(255,255,255,.35)'; for (let x = 63; x < 340; x += 4) { ctx.beginPath(); ctx.moveTo(x, F); ctx.lineTo(x + 1, F - 3); ctx.stroke(); } }
+    if (r.floor === 'concrete') { ctx.fillStyle = 'rgba(0,0,0,.22)'; for (let q = 0; q < 40; q++) { ctx.beginPath(); ctx.arc(64 + (q * 71) % 272, F + 3 + (q * 37) % 11, 1, 0, Math.PI * 2); ctx.fill(); } }
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.strokeRect(60, F, 280, 16); ctx.beginPath(); ctx.moveTo(0, F + 16); ctx.lineTo(W, F + 16); ctx.stroke();
+  }
+  function drawBounce(r) {
+    const F = BF, rb = BALL_R[r.ball], look = BALL_LOOK[r.ball], hy = (h) => F - h;      // h en px desde el suelo (base de la pelota)
+    const fi = phase === 'aim' ? -1 : phase === 'result' ? r.frames.length - 1 : Math.min(r.frames.length - 1, Math.floor(anim.t * 60));
+    // regla
+    ctx.fillStyle = C.plate; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.fillRect(14, 60, 30, F - 60); ctx.strokeRect(14, 60, 30, F - 60);
+    ctx.font = mono(9); ctx.textAlign = 'left'; ctx.fillStyle = C['ink-2'];
+    for (let cmv = 0; cmv * 2 <= F - 64; cmv += 5) { const y = F - cmv * 2, big = cmv % 50 === 0; ctx.strokeStyle = C.ink; ctx.beginPath(); ctx.moveTo(44, y); ctx.lineTo(44 - (big ? 14 : cmv % 10 === 0 ? 9 : 5), y); ctx.stroke(); if (big && cmv) ctx.fillText(String(cmv), 16, y + 3); }
+    // trampolín: se hunde con cada bote
+    let dip = 0;
+    if (r.floor === 'trampoline' && fi > 0) for (const im of impactsOf(r, 'b', r.frames.length, (k) => r.frames[k])) { const age = (fi - im.k) / 60; if (age >= 0 && age < 0.25) dip = Math.max(dip, 9 * Math.sin(age / 0.25 * Math.PI) * Math.min(1.4, im.j / 6)); }
+    drawBounceFloor(r, dip);
+    // altura de salida, pista y tu marca
+    const line = (y, col, txt, dash, x0 = 50) => { ctx.save(); if (dash) ctx.setLineDash(dash); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(W - 20, y); ctx.stroke(); ctx.restore(); if (txt) label(W - 70, y - 10, txt, col); };
+    line(hy(r.h0), C['ink-2'], 'start ' + cm(r.h0) + ' cm', [2, 5]);
+    if (r.level < 3) line(hy(r.test), C.azul, '1st bounce ' + cm(r.test) + ' cm', [6, 5]);
+    else {               // bote de prueba desde otra altura, a un lado
+      const tx = 360; ctx.fillStyle = C.azul; ctx.strokeStyle = C.azul; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(tx, hy(r.testFrom)); ctx.lineTo(tx, hy(r.test)); ctx.stroke();
+      for (const [h, t] of [[r.testFrom, 'test drop ' + cm(r.testFrom)], [r.test, 'bounced ' + cm(r.test)]]) { ctx.beginPath(); ctx.arc(tx, hy(h), 4, 0, Math.PI * 2); ctx.fill(); label(tx - 50, hy(h) - 8, t + ' cm', C.azul); }
+    }
+    if (mark != null) { line(hy(mark), phase === 'result' ? C['ink-2'] : C.coral, phase === 'aim' ? 'you: ' + cm(mark) + ' cm' : null, [8, 6]); if (phase === 'aim') { ctx.fillStyle = C.coral; ctx.beginPath(); ctx.arc(W - 20, hy(mark), 7, 0, Math.PI * 2); ctx.fill(); } }
+    // marcas de cada bote (al pasar por arriba)
+    if (fi > 0) {
+      let b = 0;
+      for (let k = 1; k < fi && k < r.frames.length - 1; k++) {
+        const a = r.frames[k - 1][1], c = r.frames[k][1], d = r.frames[k + 1][1];
+        if (c > a + 0.5 && b === 0) continue;
+        if (c < a && c <= d) { b++; const h = F - rb - c; ctx.strokeStyle = b === r.n ? C.coral : C['ink-2']; ctx.lineWidth = b === r.n ? 3 : 1.5; ctx.beginPath(); ctx.moveTo(150, c + rb); ctx.lineTo(250, c + rb); ctx.stroke();
+          ctx.fillStyle = b === r.n ? C.coral : C['ink-2']; ctx.font = mono(10, 700); ctx.textAlign = 'left'; ctx.fillText(NTH(b), 256, c + rb + 4);
+          if (phase === 'playing' && once('apex' + b)) JU()?.sfx.ping(b); }
+      }
+    }
+    // la pelota: suelta con una pinza arriba, luego bota con goma
+    if (fi < 0) {
+      const [x, y] = r.frames[0];
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, 40); ctx.lineTo(x, y - rb - 8); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - rb - 4, y - rb + 4); ctx.lineTo(x - rb + 2, y - rb - 8); ctx.lineTo(x + rb - 2, y - rb - 8); ctx.lineTo(x + rb + 4, y - rb + 4); ctx.stroke();
+      drawSkin(ctx, x, y, rb, look, 0);
+    } else {
+      const get = (k) => r.frames[k], imps = impactsOf(r, 'b', r.frames.length, get);
+      vidaTrack('b', imps, get, fi, rb, (x, y, im, pw) => { JU()?.sfx.boing(); }, { sound: false, n: 6, ring: 14, cols: [C.ink, C['ink-2']] });
+      let def = rubberAt(imps, get, r.frames.length, fi);
+      if (def && r.floor === 'trampoline') def = { ...def, sx: 1 - (1 - def.sx) * 1.4, sy: 1 + (def.sy - 1) * 1.4 };
+      const [x, y] = get(fi);
+      ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = C.ink; const sh = Math.max(0.3, 1 - (F - rb - y) / 500); ctx.beginPath(); ctx.ellipse(x, F - 1, rb * sh * 1.1, rb * 0.22 * sh, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      drawSkin(ctx, x, y + dip, rb, look, 0, def);
+      let b = 0; for (const im of imps) if (im.k <= fi) b++;
+      label(x, 76, b ? NTH(Math.min(b, r.n)) + ' bounce' : 'falling…', b >= r.n ? C.coral : C['ink-2']);
+    }
+    if (phase === 'result') label(200, hy(r.answer) - 22, NTH(r.n) + ' bounce: ' + cm(r.answer) + ' cm', C.coral);
+  }
+
+  /* ---------- Botones dentro de la escena (poleas, engranajes, torre) ---------- */
+  function sceneButton(x, y, w, h, text, on, col, sub) {
+    ctx.save();
+    ctx.fillStyle = C.ink; roundRect(x - w / 2 + 3, y - h / 2 + 4, w, h, 12); ctx.fill();
+    ctx.fillStyle = on ? col : C.plate; roundRect(x - w / 2, y - h / 2, w, h, 12); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.fillStyle = on ? '#fff' : C.ink; ctx.font = '800 ' + (sub ? 15 : 17) + 'px "Bricolage Grotesque", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y + (sub ? -6 : 1));
+    if (sub) { ctx.font = mono(9, 600); ctx.fillText(sub, x, y + 11); }
+    ctx.textBaseline = 'alphabetic'; ctx.restore();
+  }
+  const inBox = (x, y, b) => Math.abs(x - b[0]) <= b[2] / 2 && Math.abs(y - b[1]) <= b[3] / 2;
+  // Poleas: se toca el peso que baja, o el botón de la balanza
+  const PUL_BAL = [200, 498, 200, 46];
+  function pulleyBox(r, sgn) { const s = sgn < 0 ? r.left : r.right, bs = 36 + s.m * 3.2; return [200 + sgn * 110, 322 + bs / 2, bs + 30, bs + 40]; }
+  function pickPulley(r, x, y) { if (inBox(x, y, PUL_BAL)) return 0; for (const sgn of [-1, 1]) if (inBox(x, y, pulleyBox(r, sgn))) return sgn; return null; }
+  function drawPulleyPick(r) {
+    if (phase !== 'aim') return;
+    for (const sgn of [-1, 1]) {
+      const [x, y, w, h] = pulleyBox(r, sgn), on = mark === sgn;
+      ctx.save(); ctx.strokeStyle = on ? C.coral : C.azul; ctx.lineWidth = on ? 3.5 : 2; if (!on) ctx.setLineDash([5, 5]);
+      roundRect(x - w / 2, y - h / 2 + 8, w, h - 16, 10); ctx.stroke(); ctx.restore();
+      if (on) { arrow(x, y + h / 2, x, y + h / 2 + 34, C.coral, 4); label(x, y + h / 2 + 50, 'goes down', C.coral); }
+      else if (mark == null) label(x, y + h / 2 + 4, 'tap', C.azul);
+    }
+    sceneButton(PUL_BAL[0], PUL_BAL[1], PUL_BAL[2], PUL_BAL[3], '⚖ Stays balanced', mark === 0, C.good);
+  }
+  // Engranajes: sentido y velocidad con botones dibujados en la escena (o tocando la rueda de la bandera)
+  const GEAR_BTN = { cw: [70, 566, 92, 46, '↻', 'clockwise'], ccw: [166, 566, 92, 46, '↺', 'counter'], fast: [262, 566, 92, 46, '🐇', 'faster'], slow: [346, 566, 72, 46, '🐢', 'slower'] };
+  let gearSel = { dir: null, fast: null };
+  function gearMark() { mark = gearSel.dir != null && gearSel.fast != null ? (gearSel.dir === 1 ? 0 : 2) + (gearSel.fast ? 0 : 1) : null; }
+  function gearTap(r, x, y) {
+    let hit = false;
+    for (const [k, b] of Object.entries(GEAR_BTN)) if (inBox(x, y, b)) { hit = true; if (k === 'cw' || k === 'ccw') gearSel.dir = k === 'cw' ? 1 : -1; else gearSel.fast = k === 'fast'; }
+    const g = r._gz; if (!hit && g && Math.hypot(x - g.x, y - g.y) < g.rad + 14) { hit = true; gearSel.dir = gearSel.dir === 1 ? -1 : 1; }
+    if (!hit) return false;
+    gearMark(); JU()?.sfx.pick(); return true;
+  }
+  function drawGearPick(r) {
+    if (phase !== 'aim') return;
+    for (const [k, b] of Object.entries(GEAR_BTN)) {
+      const on = (k === 'cw' && gearSel.dir === 1) || (k === 'ccw' && gearSel.dir === -1) || (k === 'fast' && gearSel.fast === true) || (k === 'slow' && gearSel.fast === false);
+      sceneButton(b[0], b[1], b[2], b[3], b[4], on, k === 'fast' || k === 'slow' ? C.mostaza : C.coral, b[5]);
+    }
+    const g = r._gz;
+    if (g && gearSel.dir) {             // flecha grande alrededor de la rueda de la bandera
+      const R0 = g.rad + 12, a0 = gearSel.dir === 1 ? -2.6 : -0.5, a1 = gearSel.dir === 1 ? -0.5 : -2.6;
+      ctx.strokeStyle = C.coral; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.x, g.y, R0, Math.min(a0, a1), Math.max(a0, a1)); ctx.stroke();
+      const ex = g.x + Math.cos(a1) * R0, ey = g.y + Math.sin(a1) * R0, tg = a1 + (gearSel.dir === 1 ? Math.PI / 2 : -Math.PI / 2);
+      ctx.fillStyle = C.coral; ctx.beginPath(); ctx.moveTo(ex + Math.cos(tg) * 10, ey + Math.sin(tg) * 10); ctx.lineTo(ex + Math.cos(tg + 2.2) * 9, ey + Math.sin(tg + 2.2) * 9); ctx.lineTo(ex + Math.cos(tg - 2.2) * 9, ey + Math.sin(tg - 2.2) * 9); ctx.closePath(); ctx.fill();
+    }
+    if (g && gearSel.fast != null) { ctx.font = '26px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(gearSel.fast ? '🐇' : '🐢', g.x + g.rad + 22, g.y - g.rad - 6); }
+    if (gearSel.dir == null && gearSel.fast == null) label(200, 532, 'pick a direction and a speed', C.azul);
+  }
+  // Torre: sello «It stands!» dentro de la escena
+  const STANDS_BTN = [200, 118, 210, 52];
+  function drawTowerPick() {
+    if (phase !== 'aim') return;
+    sceneButton(STANDS_BTN[0], STANDS_BTN[1], STANDS_BTN[2], STANDS_BTN[3], mark === -1 ? '✓ It stands!' : '🧱 It stands!', mark === -1, C.good, mark === -1 ? null : 'or tap the block that lands first');
   }
 
   window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME, setSkin: (look) => { skin = look || skin; draw(); }, setTrail: (look) => { trailLook = look || trailLook; },

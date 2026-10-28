@@ -25,6 +25,8 @@ export function publicRound(r) {
     case 'swing': return { type: r.type, level: r.level, px: r.px, py: r.py, L: r.L, th0: r.th0, thc: r.thc, step: r.step };
     case 'spring': return { type: r.type, level: r.level, target: r.target, lx: r.lx, ly: r.ly, ang: r.ang, k: r.k, tx: r.tx, ty: r.ty, bw: r.bw, test: r.test, testX: r.testX, platform: r.platform };
     case 'gears': return { type: r.type, level: r.level, parts: r.parts, links: r.links };
+    case 'clock': return { type: r.type, level: r.level, segs: r.segs, rb: r.rb, dial: r.dial, split: r.split, cup: r.cup, frames: [r.frames[0]] };
+    case 'bounce': return { type: r.type, level: r.level, ball: r.ball, floor: r.floor, n: r.n, h0: r.h0, testFrom: r.testFrom, test: r.test, frames: [r.frames[0]] };
   }
   throw new Error('tipo de ronda desconocido');
 }
@@ -51,6 +53,8 @@ export function validPrediction(r, p, W = 400) {
     case 'jump': return Number.isInteger(p) && p >= 0 && p <= 6;
     case 'swing': return num(p) && p >= 0 && p <= W;
     case 'spring': return num(p) && p >= 0 && p <= 80;
+    case 'clock': return num(p) && p >= 0 && p <= r.dial;
+    case 'bounce': return num(p) && p >= 0 && p <= 600;
     case 'race': {
       const n = r.tracks.length;
       return Array.isArray(p) && p.length === n && new Set(p).size === n && p.every(i => Number.isInteger(i) && i >= 0 && i < n);
@@ -123,6 +127,14 @@ export function scorePoints(r, p) {
     case 'float': {
       const right = r.items.filter((_, i) => p.includes(i) === r.answer.includes(i)).length;
       return Math.round(100 * (right / r.items.length) ** 2);
+    }
+    case 'clock': {                                              // segundos
+      const err = Math.abs(p - r.answer);
+      return err <= 0.12 ? 100 : Math.round(100 * Math.exp(-(err - 0.12) / 0.55));
+    }
+    case 'bounce': {                                             // altura en px (2 px = 1 cm)
+      const err = Math.abs(p - r.answer) / 2;
+      return err <= 3 ? 100 : Math.round(100 * Math.exp(-(err - 3) / 11));
     }
     case 'gears': {
       const dir = p < 2 ? 1 : -1, faster = p % 2 === 0;
