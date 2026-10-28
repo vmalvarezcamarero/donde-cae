@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261027j';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261027j';
-import { makeCard } from './card.js?v=20261027j';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf } from './shop.js?v=20261028a';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028a';
+import { makeCard } from './card.js?v=20261028a';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -183,6 +183,7 @@ function renderHome() {
   $('noteLogin')?.addEventListener('click', openAuth);
   $('noteProfile')?.addEventListener('click', () => openProfile(true));
   renderHomeStreak();
+  renderVs();
   if (homeEnter && !$('home').hidden) { homeEnter = false; enterHome(); }
   // La tienda aparece después de la primera partida: al entrar, lo único importante es jugar.
   const hasPlayed = Object.keys(store.get('played', {})).length > 0 || list.some(a => a.finished);
@@ -257,13 +258,17 @@ async function startAttempt() {
   try { st = await api('/api/attempt', { method: 'POST' }); } catch (e) { toast(e.message); refresh(); return; }
   $('playLabel').textContent = 'Gravle #' + st.day.n + ' · attempt ' + (st.attempt.index || st.attempt.num) + (st.ranked ? ' · counts for the leaderboard' : '');
   show('play');
+  vsTally = [0, 0];
+  if (vsActive() && st.attempt.set === 'A') track('challenge_accept', { score: vs.total });
   track('game_start', { attempt: st.attempt.index || st.attempt.num, ranked: !!st.ranked, signed_in: !!user });
   window.PhysleGame.play(st, {
     // Si falla la red se reintenta una vez sola: el servidor no puntúa dos veces la misma ronda.
     submit: async (round, prediction) => {
       const send = () => api('/api/attempt/' + st.attempt.id + '/round', { method: 'POST', body: { round, prediction } });
-      try { return await send(); }
-      catch (e) { if (!e.retry) throw e; await new Promise(r => setTimeout(r, 800)); return send(); }
+      let res;
+      try { res = await send(); }
+      catch (e) { if (!e.retry) throw e; await new Promise(r => setTimeout(r, 800)); res = await send(); }
+      return vsRound(st, round, res);
     },
     error: (msg) => toast(msg),
     done: showEnd,
@@ -407,6 +412,7 @@ async function showEnd(r) {
   else earned.hidden = true;
   if ($('endJoin')) $('endJoin').hidden = !(accountsOn && !user);
   lastEndDemo = isDemo;
+  $('vsEnd').hidden = true; $('challengeBtn').hidden = true;
   if (isDemo) {
     $('endLabel').textContent = 'Lab · ' + LEVEL[r.day.level] + ' · ' + r.scores.length + (r.scores.length === 1 ? ' experiment' : ' experiments');
     if ($('endJoin')) $('endJoin').hidden = true;
@@ -415,6 +421,8 @@ async function showEnd(r) {
     return;
   }
   await refresh();
+  renderVsEnd(r);
+  $('challengeBtn').hidden = !today.attempts.some(a => a.set === 'A' && a.finished);
   const left = today.max - today.attempts.length;
   $('again').hidden = left <= 0;
   $('again').textContent = left > 0 ? 'Second attempt' : '';
@@ -968,7 +976,7 @@ $('demoHome').addEventListener('click', (ev) => {
 async function startDemo() {
   if (!labPick.size) return;
   let data = labData[demoLevel];
-  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261027j')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028a')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
   let games = [...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
   if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
   const run = demoRun++;
@@ -991,9 +999,119 @@ async function startDemo() {
 }
 $('demoPlay').addEventListener('click', startDemo);
 
+/* ---------- retos entre amigos (?vs=código) ----------
+   Al terminar, «Challenge a friend» comparte un enlace con tu intento del reto común (A).
+   Quien lo abre juega los mismos cinco experimentos, ve ronda a ronda lo que sacaste tú
+   y al final quién gana. El reto se guarda en el navegador hasta que acaba el día. */
+let vs = null, vsTally = [0, 0];
+const VS_URL = new URLSearchParams(location.search).get('vs');
+const vsName = () => vs?.player?.nickname || 'Your friend';
+const vsActive = () => !!(vs && vs.today && !vs.mine);
+const myA = () => today?.attempts?.find(a => a.set === 'A' && a.finished) || null;
+async function loadChallenge() {
+  const saved = store.get('vs', null);
+  const code = VS_URL || (saved && saved.date === today?.day?.date ? saved.code : null);
+  if (!code) return;
+  try { vs = await api('/api/challenge/' + code); }
+  catch (e) { vs = null; store.set('vs', null); if (VS_URL) toast(e.message); return; }
+  if (vs.today && !vs.mine) store.set('vs', { code: vs.code, date: vs.date });
+  if (VS_URL) {
+    track('challenge_open', { today: vs.today, mine: vs.mine });
+    const u = new URL(location.href); u.searchParams.delete('vs'); history.replaceState(null, '', u.pathname + u.search + u.hash);
+  }
+  vs.fromUrl = !!VS_URL;
+  renderVs();
+}
+function vsRound(st, round, res) {
+  if (!vsActive() || st.attempt.set !== 'A' || res.replay || vs.scores[round] == null) return res;
+  const them = vs.scores[round];
+  if (res.pts > them) vsTally[0]++; else if (res.pts < them) vsTally[1]++;
+  return { ...res, vs: { name: vsName(), pts: them, tally: vsTally.slice() } };
+}
+function vsMarble(cv, skin, r = 15) {
+  const g = fitCanvas(cv); if (!g) return;
+  const w = cv.clientWidth, h = cv.clientHeight; g.clearRect(0, 0, w, h);
+  window.PhysleGame.drawMarble(g, w / 2, h / 2, Math.min(r, w / 2 - 2), skinOf(skin), 0.5);
+}
+function vsWho(el, pl) {
+  el.textContent = '';
+  if (pl?.country) el.append(flag(pl.country) + ' ');
+  const nm = document.createElement('b'); nm.textContent = pl?.nickname || 'Your friend'; if (pl?.color) paintName(nm, pl.color); el.appendChild(nm);
+}
+function renderVs() {
+  const card = $('vsCard'), hc = $('homeChallenge');
+  const mine = myA();
+  hc.hidden = !mine;
+  if (!vs || (!vs.today && !vs.fromUrl) || (vs.mine && !vs.fromUrl)) { card.hidden = true; return; }
+  card.hidden = false; card.className = 'vs';
+  card.innerHTML = '<canvas class="vs-ball" aria-hidden="true"></canvas><div class="vs-txt"><div class="vs-who"></div><p class="vs-msg"></p></div>';
+  vsWho(card.querySelector('.vs-who'), vs.player);
+  const msg = card.querySelector('.vs-msg'), btn = $('playBtn');
+  if (vs.mine) { card.classList.add('mine'); card.querySelector('.vs-who').textContent = 'Your challenge link'; msg.textContent = 'This is the link you shared. Send it to a friend and see who wins!'; }
+  else if (!vs.today) { msg.textContent = 'This challenge was for Gravle #' + vs.n + '. Today’s experiments are new: play them and challenge ' + vsName() + ' back!'; }
+  else if (mine) {
+    const d = mine.total - vs.total; card.classList.add(d > 0 ? 'won' : d < 0 ? 'lost' : 'tied');
+    msg.innerHTML = 'You <b></b> · ' + '<span></span> <b></b> — <em></em>';
+    const b = msg.querySelectorAll('b'); b[0].textContent = mine.total; b[1].textContent = vs.total; msg.querySelector('span').textContent = vsName();
+    msg.querySelector('em').textContent = d > 0 ? 'you win by ' + d + '!' : d < 0 ? vsName() + ' wins by ' + (-d) : 'it’s a tie!';
+  } else {
+    card.classList.add('open');
+    msg.innerHTML = 'challenges you: <b></b> on Gravle #<span></span>. Same 5 experiments. Can you beat it?';
+    msg.querySelector('b').textContent = vs.total + ' / 500'; msg.querySelector('span').textContent = vs.n;
+    if (!btn.disabled && !today.attempts.some(a => !a.finished)) btn.textContent = 'Accept the challenge';
+  }
+  requestAnimationFrame(() => vsMarble(card.querySelector('.vs-ball'), vs.mine ? today?.user?.profile?.skin : vs.player?.skin, 17));
+}
+function renderVsEnd(r) {
+  const el = $('vsEnd');
+  if (!vsActive() || r.attempt.set !== 'A') { el.hidden = true; return; }
+  const me = today.user?.profile, d = r.total - vs.total, J = window.Juice;
+  el.hidden = false; el.className = 'vsend ' + (d > 0 ? 'won' : d < 0 ? 'lost' : 'tied');
+  el.innerHTML = '<div class="vse-head"></div><div class="vse-sides"><div class="vse-side you"><canvas aria-hidden="true"></canvas><span class="vse-name">You</span><b class="vse-total"></b></div>'
+    + '<span class="vse-vs">VS</span><div class="vse-side them"><canvas aria-hidden="true"></canvas><span class="vse-name"></span><b class="vse-total"></b></div></div><div class="vse-rounds"></div>';
+  el.querySelector('.vse-head').textContent = d > 0 ? 'You beat ' + vsName() + '!' : d < 0 ? vsName() + ' wins this one' : 'Dead heat!';
+  vsWho(el.querySelector('.them .vse-name'), vs.player);
+  el.querySelector('.you .vse-total').textContent = r.total; el.querySelector('.them .vse-total').textContent = vs.total;
+  const rounds = el.querySelector('.vse-rounds');
+  r.scores.forEach((s, i) => {
+    const t = vs.scores[i] ?? 0, row = document.createElement('div');
+    row.className = 'vse-row ' + (s > t ? 'w' : s < t ? 'l' : 't');
+    row.innerHTML = '<b class="a"></b><span class="bar a"><i></i></span><span class="nm"></span><span class="bar b"><i></i></span><b class="b"></b>';
+    row.querySelector('b.a').textContent = s; row.querySelector('b.b').textContent = t;
+    row.querySelector('.nm').textContent = window.PhysleGame.TYPE_NAME[r.types[i]];
+    row.querySelector('.bar.a i').style.setProperty('--w', s + '%'); row.querySelector('.bar.b i').style.setProperty('--w', t + '%');
+    row.style.setProperty('--d', (1.9 + i * 0.12) + 's');
+    rounds.appendChild(row);
+  });
+  requestAnimationFrame(() => { vsMarble(el.querySelector('.you canvas'), me?.skin, 18); vsMarble(el.querySelector('.them canvas'), vs.player?.skin, 18); });
+  track('challenge_result', { win: d > 0, diff: d });
+  if (J && !J.reduce) {
+    el.animate([{ transform: 'translateY(16px) scale(.97)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 420, delay: 1500, easing: 'cubic-bezier(.3,1.5,.5,1)', fill: 'backwards' });
+    setTimeout(() => {
+      if ($('end').hidden) return;
+      const b = el.getBoundingClientRect();
+      if (d > 0) { J.sfx.fanfare(); J.confetti(b.left + b.width / 2, b.top + 30, { n: 110, power: 1 }); J.slam(el, 'YOU WIN!', 'g'); }
+      else if (d === 0) J.sfx.ok();
+      else J.sfx.bad();
+    }, 1900);
+  }
+}
+async function shareChallenge() {
+  const a = myA(); if (!a) { toast('Finish today’s shared challenge first.'); return; }
+  const url = 'https://' + SITE + '/?vs=' + a.code;
+  const text = 'I scored ' + a.total + '/500 on Gravle #' + today.day.n + ' 🧪 Same 5 physics experiments. Can you beat me?';
+  track('challenge_share', { score: a.total, native: !!navigator.share });
+  if (navigator.share) { try { await navigator.share({ title: 'Gravle challenge', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(text + '\n' + url); toast('Challenge link copied! Send it to a friend.'); }
+  catch (e) { prompt('Copy your challenge link:', url); }
+}
+$('challengeBtn').addEventListener('click', shareChallenge);
+$('homeChallenge').addEventListener('click', shareChallenge);
+
 /* ---------- arranque ---------- */
 (async () => {
   try { await initAuth(); } catch (e) { console.error(e); }
   await refresh();
+  if (!DEMO) await loadChallenge();
   if (DEMO) { show('demoHome'); labBuild(); }
 })();

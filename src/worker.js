@@ -6,6 +6,7 @@
 import { publicRound, validPrediction, scorePoints } from '../public/scoring.js';
 import { COUNTRIES } from '../public/countries.js';
 import { WELCOME_COINS, coinsFor, findItem, priceOf } from '../public/shop.js';
+import { botsFor } from './bots.js';
 
 const MAX_ATTEMPTS = 2;          // en el futuro: +1 viendo un vídeo
 const SETS = ['A', 'B', 'B'];    // reto que toca en cada intento
@@ -53,6 +54,9 @@ function weekRange(date) {               // lunes a domingo
   return [mon.toISOString().slice(0, 10), new Date(mon.getTime() + 6 * 864e5).toISOString().slice(0, 10)];
 }
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+const minuteNow = (env) => Math.floor((86400 - secondsToReset(env)) / 60);
+const dayDiff = (a, b) => Math.round((Date.parse(a + 'T12:00:00Z') - Date.parse(b + 'T12:00:00Z')) / 864e5);
+const addDays = (d, n) => new Date(Date.parse(d + 'T12:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 
 /* ---------------- retos ---------------- */
 const dayCache = new Map();
@@ -117,6 +121,8 @@ async function route(req, env, url) {
   let m = path.match(/^\/api\/attempt\/(\d+)\/round$/);
   if (m && method === 'POST') return playRound(req, env, Number(m[1]));
   if (path === '/api/leaderboard' && method === 'GET') return leaderboard(req, env, url);
+  m = path.match(/^\/api\/challenge\/([0-9a-z]{1,8})$/);
+  if (m && method === 'GET') return getChallenge(req, env, m[1]);
   if (path === '/api/shop/buy' && method === 'POST') return shopBuy(req, env);
   if (path === '/api/shop/equip' && method === 'POST') return shopEquip(req, env);
   if (path === '/api/me') {
@@ -182,7 +188,7 @@ async function getToday(req, env) {
   const list = await attemptsToday(env, who, date);
   return json({
     day: dayMeta(day), max: MAX_ATTEMPTS, resetIn: secondsToReset(env),
-    attempts: list.map(a => ({ id: a.id, num: a.num, set: a.set_id, round: a.round, scores: a.scores, total: a.total, finished: !!a.finished, mine: a.player === who.player })),
+    attempts: list.map(a => ({ id: a.id, code: challengeCode(a.id), num: a.num, set: a.set_id, round: a.round, scores: a.scores, total: a.total, finished: !!a.finished, mine: a.player === who.player })),
     user: who.uid ? { uid: who.uid, profile: await profileOf(env, who.uid) } : null,
   });
 }
@@ -277,6 +283,30 @@ async function playRound(req, env, id) {
   return json({ pts, round: r, total, finished: !!finished, coins, crowd, rank });
 }
 
+/* ---------------- retos entre amigos ---------------- */
+// El enlace lleva el número de intento disfrazado (multiplicación invertible módulo 2^32),
+// para que no se pueda ir recorriendo intentos con números seguidos.
+const CK = 0x5bd1e995, CM = 2654435761;
+const CMI = (() => { let x = CM; for (let i = 0; i < 5; i++) x = Math.imul(x, 2 - Math.imul(CM, x)); return x >>> 0; })();
+const challengeCode = (id) => ((Math.imul(id, CM) ^ CK) >>> 0).toString(36);
+const challengeId = (code) => Math.imul((parseInt(code, 36) ^ CK) >>> 0, CMI) >>> 0;
+// El reto siempre es el intento del reto común (A) de ese jugador y día: es el mismo para
+// todos, así que quien lo acepta juega exactamente los mismos cinco experimentos.
+async function getChallenge(req, env, code) {
+  const who = await identify(req, env).catch(() => ({}));
+  let a = await env.DB.prepare('SELECT * FROM attempts WHERE id = ?').bind(challengeId(code)).first();
+  if (a && a.set_id !== 'A') a = await env.DB.prepare("SELECT * FROM attempts WHERE player = ? AND date = ? AND set_id = 'A' AND finished = 1").bind(a.player, a.date).first();
+  if (!a || !a.finished) throw new HttpError(404, 'This challenge link doesn’t work anymore.');
+  const day = await loadDay(env, a.date);
+  const u = a.uid ? await env.DB.prepare('SELECT nickname, country, skin, name_color FROM users WHERE uid = ?').bind(a.uid).first() : null;
+  return json({
+    code: challengeCode(a.id), date: a.date, n: day.n, today: a.date === today(env),
+    total: a.total, scores: JSON.parse(a.scores), types: day.sets.A.map(r => r.type),
+    player: u ? { nickname: u.nickname, country: u.country, skin: u.skin, color: u.name_color } : null,
+    mine: !!who.player && (a.player === who.player || a.device === who.device),
+  });
+}
+
 /* ---------------- lo que hizo la gente ---------------- */
 // Clave de la opción elegida en los experimentos de elegir (null en los de posición libre).
 function choiceKey(type, p) {
@@ -312,8 +342,10 @@ async function rankStats(env, who, a, id, total) {
     `SELECT COUNT(*) AS n, SUM(best < ?2) AS below, SUM(best = ?2) AS ties
      FROM (SELECT player, MAX(total) AS best FROM attempts WHERE date = ?1 AND finished = 1 GROUP BY player) WHERE player != ?3`
   ).bind(a.date, total, a.player).first();
-  const n = all.n || 0;
-  const out = { players: n + 1, top: n >= MIN_CROWD ? Math.max(1, Math.round(100 * (n - (all.below || 0) - (all.ties || 0) / 2) / (n + 1))) : null };
+  const bots = await botsOn(env, a.date, a.date).then(b => b.filter(x => x.date === a.date));
+  const n = (all.n || 0) + bots.length;
+  const below = (all.below || 0) + bots.filter(b => b.score < total).length, ties = (all.ties || 0) + bots.filter(b => b.score === total).length;
+  const out = { players: n + 1, top: n >= MIN_CROWD ? Math.max(1, Math.round(100 * (n - below - ties / 2) / (n + 1))) : null };
   if (!a.uid || !(await profileOf(env, a.uid))) return out;
   // Tu mejor marca de hoy antes de este intento y ahora.
   const prev = await env.DB.prepare('SELECT MAX(total) AS best FROM attempts WHERE date = ? AND uid = ? AND finished = 1 AND id != ?').bind(a.date, a.uid, id).first();
@@ -322,9 +354,10 @@ async function rankStats(env, who, a, id, total) {
   const r = await env.DB.prepare(
     `SELECT COUNT(*) AS n, SUM(best > ?4) AS above, SUM(best < ?4 AND (?5 IS NULL OR best >= ?5)) AS passed FROM (${ranked})`
   ).bind(a.date, a.date, a.uid, best, total > (old ?? -1) ? old : best).first();
-  out.pos = (r.above || 0) + 1;
-  out.ranked = (r.n || 0) + 1;
-  out.passed = total > (old ?? -1) ? (r.passed || 0) : 0;
+  const improved = total > (old ?? -1), from = improved ? old : best;
+  out.pos = (r.above || 0) + bots.filter(b => b.score > best).length + 1;
+  out.ranked = (r.n || 0) + bots.length + 1;
+  out.passed = improved ? (r.passed || 0) + bots.filter(b => b.score < best && (from == null || b.score >= from)).length : 0;
   out.improved = old != null && total > old;
   return out;
 }
@@ -336,6 +369,23 @@ const BEST_SQL = `
   FROM attempts a WHERE a.finished = 1 AND a.uid IS NOT NULL AND a.date BETWEEN ?1 AND ?2
   GROUP BY a.uid, a.date`;
 
+// Bots de relleno (src/bots.js) de cada día del periodo, sin pasar de hoy. Cada día rellenan
+// hasta un objetivo de jugadores; para hoy solo salen los que «ya han jugado» a esta hora.
+async function botsOn(env, f, t) {
+  if (env.BOTS === '0') return [];
+  const now = today(env), last = t < now ? t : now;
+  if (f > last) return [];
+  const { results } = await env.DB.prepare(
+    `SELECT b.date, COUNT(*) AS n FROM (${BEST_SQL}) b JOIN users u ON u.uid = b.uid GROUP BY b.date`).bind(f, last).all();
+  const real = Object.fromEntries(results.map(r => [r.date, r.n]));
+  const midnight = Date.now() - (86400 - secondsToReset(env)) * 1000, out = [];
+  for (let d = f; d <= last; d = addDays(d, 1)) {
+    const base = midnight + dayDiff(d, now) * 864e5;
+    for (const b of botsFor(d, real[d] || 0, d === now ? minuteNow(env) : null)) out.push({ ...b, date: d, t: base + b.minute * 60000 });
+  }
+  return out;
+}
+
 async function leaderboard(req, env, url) {
   const who = await identify(req, env).catch(() => ({ uid: null }));
   const scope = url.searchParams.get('scope') || 'day';
@@ -345,13 +395,24 @@ async function leaderboard(req, env, url) {
   const period = scope === 'countries' ? (url.searchParams.get('period') === 'week' ? 'week' : 'day') : scope;
   const [f, t] = period === 'day' ? [date, date] : [from, to];
 
+  // Bots sumados por jugador en el periodo (en el semanal, todos sus días).
+  const perBot = new Map();
+  for (const b of await botsOn(env, f, t)) {
+    const x = perBot.get(b.uid);
+    if (x) { x.score += b.score; x.days++; x.t = Math.min(x.t, b.t); }
+    else perBot.set(b.uid, { uid: b.uid, nickname: b.nickname, country: b.country, name_color: b.name_color, skin: b.skin, score: b.score, days: 1, t: b.t });
+  }
   const totals = `SELECT b.uid, SUM(b.best) AS score, COUNT(*) AS days, MIN(b.t) AS t FROM (${BEST_SQL}) b GROUP BY b.uid`;
   if (scope === 'countries') {
     const { results } = await env.DB.prepare(
-      `SELECT u.country, ROUND(AVG(x.score)) AS score, COUNT(*) AS players
-       FROM (${totals}) x JOIN users u ON u.uid = x.uid GROUP BY u.country ORDER BY score DESC, players DESC LIMIT 100`
+      `SELECT u.country, SUM(x.score) AS sum, COUNT(*) AS players
+       FROM (${totals}) x JOIN users u ON u.uid = x.uid GROUP BY u.country`
     ).bind(f, t).all();
-    return json({ scope, period, from: f, to: t, rows: results });
+    const by = new Map(results.map(r => [r.country, { country: r.country, sum: r.sum, players: r.players }]));
+    for (const b of perBot.values()) { const c = by.get(b.country) || { country: b.country, sum: 0, players: 0 }; c.sum += b.score; c.players++; by.set(b.country, c); }
+    const rows = [...by.values()].map(c => ({ country: c.country, score: Math.round(c.sum / c.players), players: c.players }))
+      .sort((x, y) => y.score - x.score || y.players - x.players).slice(0, 100);
+    return json({ scope, period, from: f, to: t, rows });
   }
   if (country && !COUNTRY_SET.has(country)) throw new HttpError(400, 'Invalid country.');
   const filter = country ? 'WHERE u.country = ?3' : '';
@@ -359,12 +420,20 @@ async function leaderboard(req, env, url) {
                   RANK() OVER (ORDER BY x.score DESC) AS pos, x.t
                   FROM (${totals}) x JOIN users u ON u.uid = x.uid ${filter}`;
   const args = country ? [f, t, country] : [f, t];
-  const { results } = await env.DB.prepare(`${ranked} ORDER BY pos, t LIMIT 100`).bind(...args).all();
-  let me = null;
-  if (who.uid) me = await env.DB.prepare(`SELECT * FROM (${ranked}) WHERE uid = ?${args.length + 1}`).bind(...args, who.uid).first();
+  const { results } = await env.DB.prepare(`${ranked} ORDER BY pos, t LIMIT 1000`).bind(...args).all();
   const count = await env.DB.prepare(`SELECT COUNT(*) AS n FROM (${ranked})`).bind(...args).first();
+  // Mezcla con los bots (sin repetir el apodo de alguien real) y vuelve a numerar.
+  const taken = new Set(results.map(r => r.nickname.toLowerCase()));
+  const bots = [...perBot.values()].filter(b => (!country || b.country === country) && !taken.has(b.nickname.toLowerCase()));
+  const all = results.concat(bots).sort((x, y) => y.score - x.score || x.t - y.t);
+  all.forEach((r, i) => { r.pos = i && r.score === all[i - 1].score ? all[i - 1].pos : i + 1; });
+  let me = who.uid ? all.find(r => r.uid === who.uid) : null;
+  if (who.uid && !me) {                                // más allá de los 1000 primeros: posición aproximada
+    me = await env.DB.prepare(`SELECT * FROM (${ranked}) WHERE uid = ?${args.length + 1}`).bind(...args, who.uid).first();
+    if (me) me.pos += bots.filter(b => b.score > me.score).length;
+  }
   const strip = (r) => r && ({ pos: r.pos, nickname: r.nickname, country: r.country, color: r.name_color, skin: r.skin, score: r.score, days: r.days, me: r.uid === who.uid });
-  return json({ scope, from: f, to: t, country: country || null, players: count.n, rows: results.map(strip), me: strip(me) });
+  return json({ scope, from: f, to: t, country: country || null, players: count.n + bots.length, rows: all.slice(0, 100).map(strip), me: strip(me) });
 }
 
 /* ---------------- cuenta ---------------- */
