@@ -9,11 +9,14 @@ import { W, H, FLOOR, R, hashStr, genBalance, genDrop, genRace, genPool, genTowe
 import { genLoop, genLaser, genBridge, genFloat, genGears } from './rounds2.mjs';
 import { genOrbit, genMagnets, genPour, genPulley, genSwing, genSpring } from './rounds3.mjs';
 import { genFlip, genJump } from './rounds4.mjs';
+import { genClock, genBounce } from './rounds5.mjs';
 
 const args = process.argv.slice(2);
 const VARIANTS = Number(args[args.indexOf('--variants') + 1]) || 3;
 const RACE_FORMATS = ['curvas', 'objetos', 'terrenos'];
 const make = {
+  clock: (s, l) => genClock(s, l),
+  bounce: (s, l) => genBounce(s, l),
   balance: (s, l) => genBalance(s, l),
   drop: (s, l) => genDrop(s, l),
   race: (s, l, v) => genRace(s, l === 3 ? 4 : 3, RACE_FORMATS[v % 3]),
