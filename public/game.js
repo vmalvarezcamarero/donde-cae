@@ -281,7 +281,7 @@
     const r = round();
     $('tag').textContent = 'Round ' + (roundIdx + 1) + ' · ' + TYPE_NAME[r.type];
     $('slowmo').hidden = true; $('result').hidden = true; $('prompt').hidden = false;
-    $('go').textContent = 'Release'; $('go').disabled = true;
+    $('go').textContent = 'Go!'; $('go').disabled = true;
     $('prompt').innerHTML = PROMPTS[r.type](r);
     $('chips').hidden = true;
     if (r.type === 'race') buildRaceChips();
@@ -291,6 +291,16 @@
     if (r.type === 'clock') buildDial(r.dial);
     if (r.type === 'loop') prepLoop(r);
     renderPips(); ready(); draw();
+    requestAnimationFrame(fitView);
+  }
+  // Que se vea la escena entera y, si cabe, también el botón (o la esfera del cronómetro):
+  // si la ronda anterior dejó la página bajada se vuelve arriba; si el botón queda justo por debajo, se sube un poco.
+  // La app también la llama al mostrar la pantalla de juego (porque entonces vuelve arriba del todo).
+  function fitView() {
+    if (phase !== 'aim' || $('play').hidden || !$('play').offsetHeight || !day) return;
+    const r = round(), top = $('play').getBoundingClientRect().top, low = $(r.type === 'clock' ? 'dial' : 'go').getBoundingClientRect().bottom - innerHeight + 20;
+    const dy = top < -4 ? top - 8 : low > 0 ? Math.min(low, top - 8) : 0;
+    if (Math.abs(dy) > 4) scrollTo({ top: Math.max(0, scrollY + dy), behavior: reduce ? 'auto' : 'smooth' });
   }
   function renderPips() {
     const p = $('pips'); p.innerHTML = ''; p.classList.toggle('many', day.rounds.length > 6);
@@ -305,7 +315,25 @@
   function ready() {
     const r = round();
     $('go').disabled = r.type === 'race' ? order.length !== r.tracks.length : r.type === 'float' ? false : mark == null;
+    syncGo();
   }
+  // Botón «Go!» flotante: en móviles el botón de abajo suele quedar fuera de la pantalla, así que
+  // cuando ya puedes soltar (o pasar de ronda) y no se ve, aparece uno fijo abajo, sin tener que deslizar.
+  // En el cronómetro no hace falta: el «Go!» va en el centro de la esfera.
+  let goSeen = true;
+  if ('IntersectionObserver' in window) new IntersectionObserver((es) => { goSeen = es[es.length - 1].isIntersecting; syncGo(); }, { threshold: 0.85 }).observe($('go'));
+  function syncGo() {
+    const g = $('go'), f = $('goFloat'); if (!f) return;
+    const r = day && day.rounds && round(), aimIng = phase === 'aim';
+    g.classList.toggle('hot', aimIng && !g.disabled);
+    const on = !g.disabled && !goSeen && (aimIng || phase === 'result') && !(aimIng && r && r.type === 'clock');
+    if (on) f.innerHTML = aimIng ? 'Go! <span aria-hidden="true">▶</span>' : g.textContent + ' <span aria-hidden="true">→</span>';
+    g.classList.toggle('floated', on);        // no se ven dos botones a la vez
+    if (on === !f.hidden) return;
+    f.hidden = !on;
+    if (on && !reduce) f.animate([{ transform: 'translate(-50%, 140%) scale(.7)' }, { transform: 'translate(-50%, -8%) scale(1.06)', offset: 0.65 }, { transform: 'translate(-50%, 0) scale(1)' }], { duration: 380, easing: 'cubic-bezier(.3,1.4,.5,1)' });
+  }
+  $('goFloat')?.addEventListener('click', () => { JU()?.sfx.tap?.(); $('go').click(); });
 
   /* ---------- chips ---------- */
   function buildRaceChips() {
@@ -434,10 +462,10 @@
   }
   async function release() {
     if (phase !== 'aim' || sending) return;
-    sending = true; $('go').disabled = true; $('go').classList.add('busy'); $('go').textContent = 'Checking';
+    sending = true; $('go').disabled = true; $('go').classList.add('busy'); $('go').textContent = 'Checking'; syncGo(); paintDial(null);
     let res;
     try { res = await hooks.submit(roundIdx, predictionOf(round())); }
-    catch (e) { sending = false; $('go').classList.remove('busy'); $('go').textContent = 'Release'; ready(); hooks.error(e.message); return; }
+    catch (e) { sending = false; $('go').classList.remove('busy'); $('go').textContent = 'Go!'; ready(); paintDial(null); hooks.error(e.message); return; }
     sending = false; $('go').classList.remove('busy'); $('go').textContent = 'Watch…';
     day.rounds[roundIdx] = res.round; serverPts = res.pts; lastCoins = res.coins; lastCrowd = res.crowd || null; lastVs = res.vs || null; if (res.rank) lastRank = res.rank;   // ahora sí: la ronda completa con su resultado
     const r = round(); phase = 'playing';
@@ -635,18 +663,18 @@
     try { resultFx(s); } catch (e) { console.error('Gravle juice:', e); }
     $('go').focus({ preventScroll: true });
     // En pantallas bajas el resultado y el botón pueden quedar fuera: se baja hasta ellos.
-    const gb = $('go').getBoundingClientRect();
-    if (gb.bottom > innerHeight - 8 || $('result').getBoundingClientRect().top < 0)
-      $('go').scrollIntoView({ block: 'end', behavior: reduce ? 'auto' : 'smooth' });
+    const rb = $('result').getBoundingClientRect(), fl = $('goFloat') ? 96 : 8;
+    if (rb.bottom > innerHeight - fl || rb.top < 0) scrollTo({ top: Math.max(0, scrollY + rb.bottom - innerHeight + fl), behavior: reduce ? 'auto' : 'smooth' });
+    syncGo();
   }
   function next() {
     if (roundIdx < lastN()) {
-      phase = 'wipe';
+      phase = 'wipe'; syncGo();
       const n = roundIdx + 2, go = () => { roundIdx++; startRound(); };
       if (JU()) JU().wipe(stageEl(), 'Round ' + n + ' / ' + day.rounds.length, TYPE_NAME[day.rounds[roundIdx + 1].type] || '', go); else go();
       return;
     }
-    $('play').hidden = true;
+    $('play').hidden = true; phase = 'done'; syncGo();
     hooks.done({ attempt, day, scores, details, total: scores.reduce((a, b) => a + b, 0), types: day.rounds.map(r => r.type), coins: lastCoins, rank: lastRank });
   }
 
@@ -2473,7 +2501,8 @@
     svg += '<line class="dlive" id="dLive" x1="' + cx + '" y1="' + cy + '" x2="' + cx + '" y2="' + cy + '"/>';
     svg += '<g id="dUser" class="duser" opacity="0"><line id="dUserL" x1="' + cx + '" y1="' + cy + '" x2="' + cx + '" y2="' + cy + '"/><circle id="dUserC" r="9" cx="' + cx + '" cy="' + cy + '"/></g>';
     svg += '<circle class="dhub" cx="' + cx + '" cy="' + cy + '" r="10"/>';
-    svg += '<text class="dread" id="dRead" x="' + cx + '" y="' + (cy - 46) + '">?</text><text class="dsub" id="dSub" x="' + cx + '" y="' + (cy - 22) + '">drag the needle</text></svg>';
+    svg += '<g id="dGo" class="dgo" visibility="hidden"><circle class="dgoring" cx="' + cx + '" cy="' + cy + '" r="24"/><circle class="dgoc" cx="' + cx + '" cy="' + cy + '" r="24"/><text class="dgot" x="' + cx + '" y="' + (cy + 7) + '">GO</text></g>';
+    svg += '<text class="dread" id="dRead" x="' + cx + '" y="' + (cy - 54) + '">?</text><text class="dsub" id="dSub" x="' + cx + '" y="' + (cy - 34) + '">drag the needle</text></svg>';
     box.innerHTML = svg;
     const el = box.querySelector('svg');
     const setFrom = (ev) => {
@@ -2483,7 +2512,12 @@
       setDialMark(Math.round((1 - a / Math.PI) * dialMax * 10) / 10);
     };
     let drag = false;
-    el.addEventListener('pointerdown', (ev) => { drag = true; el.setPointerCapture(ev.pointerId); setFrom(ev); });
+    el.addEventListener('pointerdown', (ev) => {
+      // el botón GO del centro de la esfera suelta la canica
+      const b = el.getBoundingClientRect(), x = (ev.clientX - b.left) / b.width * 320, y = (ev.clientY - b.top) / b.height * 182;
+      if (phase === 'aim' && !sending && mark != null && Math.hypot(x - DIAL.cx, y - DIAL.cy) < 30) { ev.preventDefault(); JU()?.sfx.tap?.(); release(); return; }
+      drag = true; el.setPointerCapture(ev.pointerId); setFrom(ev);
+    });
     el.addEventListener('pointermove', (ev) => { if (drag) setFrom(ev); });
     el.addEventListener('pointerup', () => { drag = false; }); el.addEventListener('pointercancel', () => { drag = false; });
     el.addEventListener('keydown', (ev) => {
@@ -2497,6 +2531,8 @@
   function setDialMark(v) {
     v = Math.max(0, Math.min(dialMax, v));
     const prev = mark; mark = v; paintDial(null);
+    // pantallas bajas: al tocar la esfera por primera vez se sube lo justo para ver su botón GO
+    if (prev == null) { const b = $('dial').getBoundingClientRect(); if (b.bottom > innerHeight) scrollBy({ top: b.bottom - innerHeight + 10, behavior: reduce ? 'auto' : 'smooth' }); }
     if (prev == null || Math.floor(prev * 2) !== Math.floor(v * 2)) JU()?.sfx.tick();
     ready(); draw();
   }
@@ -2504,6 +2540,7 @@
   function paintDial(live, final) {
     const q = (id) => document.getElementById(id); if (!q('dRead')) return;
     const u = q('dUser');
+    q('dGo')?.setAttribute('visibility', live == null && phase === 'aim' && !sending && mark != null ? 'visible' : 'hidden');
     if (mark != null) {
       const [x, y] = dialPt(mark, DIAL.r - 18); u.setAttribute('opacity', '1');
       q('dUserL').setAttribute('x2', x.toFixed(1)); q('dUserL').setAttribute('y2', y.toFixed(1)); q('dUserC').setAttribute('cx', x.toFixed(1)); q('dUserC').setAttribute('cy', y.toFixed(1));
@@ -2719,7 +2756,7 @@
     sceneButton(STANDS_BTN[0], STANDS_BTN[1], STANDS_BTN[2], STANDS_BTN[3], mark === -1 ? '✓ It stands!' : '🧱 It stands!', mark === -1, C.good, mark === -1 ? null : 'or tap the block that lands first');
   }
 
-  window.PhysleGame = { play, redraw: () => draw(), TYPE_NAME, setSkin: (look) => { skin = look || skin; draw(); }, setTrail: (look) => { trailLook = look || trailLook; },
+  window.PhysleGame = { play, fitView: () => fitView(), redraw: () => draw(), TYPE_NAME, setSkin: (look) => { skin = look || skin; draw(); }, setTrail: (look) => { trailLook = look || trailLook; },
     drawMarble: (g, x, y, r, look, ang, def) => { readColors(); drawSkin(g, x, y, r, look, ang, def); }, preview };
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw());
 })();

@@ -732,3 +732,23 @@ dialog p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); }
 .dsub { font: 600 12px var(--font-mono); fill: var(--ink-2); text-anchor: middle; text-transform: uppercase; letter-spacing: .05em; }
 .dial { margin: 2px 0 -6px; } .dial svg { width: min(100%, 300px); }
 .dial svg:focus:not(:focus-visible) { outline: none; }
+
+/* Botón Go: llamativo cuando ya puedes soltar, y flotante si el de abajo no se ve */
+#go.floated { visibility: hidden; }
+#go.hot { background: var(--coral); border-color: var(--coral); color: #fff; box-shadow: 4px 4px 0 #18263a; animation: gohot 1.6s ease-in-out infinite; }
+@keyframes gohot { 0%, 100% { transform: none; } 50% { transform: scale(1.025); } }
+.gofloat { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 0); z-index: 40;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-width: 176px; height: 60px; padding: 0 32px;
+  font: 800 25px/1 var(--font-display); letter-spacing: -0.01em; color: #fff; background: var(--coral);
+  border: 2.5px solid #18263a; border-radius: 999px; box-shadow: 4px 4px 0 #18263a; cursor: pointer; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
+.gofloat[hidden] { display: none; }
+.gofloat::before { content: ""; position: absolute; inset: -3px; border-radius: inherit; box-shadow: 0 0 0 0 color-mix(in srgb, var(--coral) 60%, transparent); animation: goring 1.4s ease-out infinite; pointer-events: none; }
+.gofloat span { font-size: 0.8em; }
+.gofloat:active { transform: translate(-50%, 0) translate(3px, 3px); box-shadow: 1px 1px 0 #18263a; }
+@keyframes goring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--coral) 55%, transparent); } 100% { box-shadow: 0 0 0 16px transparent; } }
+/* GO en el centro del cronómetro */
+.dgoc { fill: var(--coral); stroke: #18263a; stroke-width: 2.5; cursor: pointer; }
+.dgot { font: 800 17px var(--font-display); fill: #fff; text-anchor: middle; pointer-events: none; letter-spacing: .02em; }
+.dgoring { fill: var(--coral); opacity: .5; transform-box: fill-box; transform-origin: center; animation: dgoring 1.4s ease-out infinite; pointer-events: none; }
+@keyframes dgoring { from { transform: scale(1); opacity: .5; } to { transform: scale(1.7); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #go.hot, .gofloat::before, .dgoring { animation: none; } }
