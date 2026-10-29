@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261028g';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261028g';
-import { makeCard, makeStatsCard } from './card.js?v=20261028g';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261029a';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261029a';
+import { makeCard, makeStatsCard } from './card.js?v=20261029a';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -39,6 +39,7 @@ function show(id) {
   const prev = curPage; curPage = id;
   for (const s of ['welcome', 'warmEnd', 'home', 'demoHome', 'play', 'end', 'rank', 'shop', 'stats']) $(s).hidden = s !== id;
   window.scrollTo({ top: 0 });
+  if (id === 'play') { requestAnimationFrame(() => window.PhysleGame?.fitView?.()); setTimeout(() => window.PhysleGame?.fitView?.(), 300); }   // y que se vea el botón Go si cabe
   if (id === 'home') homeEnter = true;
   const J = window.Juice;
   if (!J || J.reduce || prev === id) return;
@@ -663,12 +664,12 @@ function rankRow(pos, cc, name, sub, score, isMe, color) {
 
 /* ---------- cómo se juega cada experimento ---------- */
 const HOW = {
-  balance: { title: 'Balance', steps: ['Drag the blue weight onto the beam.', 'Weights pull harder the further they are from the middle: weight × distance must match on both sides.', 'Tap Release and watch the beam.'], pts: 'The closer to perfectly level, the more points.' },
-  drop: { title: 'Where will it land?', steps: ['Look at the ramps and pegs. Purple springs bounce hard, yellow sponges don’t bounce.', 'Tap the floor where you think the marble will land.', 'Tap Release and watch it fall.'], pts: 'The closer your mark, the more points.' },
-  race: { title: 'Which finishes first?', steps: ['Tap the tracks (or objects) in the order you think they’ll finish.', 'Tip: dropping early builds speed, sand slows marbles down, and ice slides with no friction.', 'Tap Release and watch the race in slow motion.'], pts: 'Picking the winner is worth the most; the full order gets you 100.' },
-  pool: { title: 'Bank shot', steps: ['The arrow shows the direction and the bar shows the power.', 'The ball bounces off the cushions and the cloth slows it down.', 'Tap where you think it stops, then tap Release.'], pts: 'The closer to where it stops, the more points.' },
-  loop: { title: 'Loop the loop', steps: ['Drag the marble up or down the ramp to choose its starting height.', 'It must keep enough speed to stay on the track upside down at the top of the loop. Carpet slows it down.', 'Find the lowest height that still makes it, then tap Release.'], pts: 'The closer to the minimum height, the more points. Too low and it falls; too high wastes points too.' },
-  laser: { title: 'Laser', steps: ['The laser fires along the dotted line.', 'Every mirror reflects it like a pool ball off a cushion: the angle in equals the angle out. Dark blocks absorb it.', 'Tap the wall where you think the beam ends, then tap Release.'], pts: 'The closer to where it hits the wall, the more points.' },
+  balance: { title: 'Balance', steps: ['Drag the blue weight onto the beam.', 'Weights pull harder the further they are from the middle: weight × distance must match on both sides.', 'Tap Go and watch the beam.'], pts: 'The closer to perfectly level, the more points.' },
+  drop: { title: 'Where will it land?', steps: ['Look at the ramps and pegs. Purple springs bounce hard, yellow sponges don’t bounce.', 'Tap the floor where you think the marble will land.', 'Tap Go and watch it fall.'], pts: 'The closer your mark, the more points.' },
+  race: { title: 'Which finishes first?', steps: ['Tap the tracks (or objects) in the order you think they’ll finish.', 'Tip: dropping early builds speed, sand slows marbles down, and ice slides with no friction.', 'Tap Go and watch the race in slow motion.'], pts: 'Picking the winner is worth the most; the full order gets you 100.' },
+  pool: { title: 'Bank shot', steps: ['The arrow shows the direction and the bar shows the power.', 'The ball bounces off the cushions and the cloth slows it down.', 'Tap where you think it stops, then tap Go.'], pts: 'The closer to where it stops, the more points.' },
+  loop: { title: 'Loop the loop', steps: ['Drag the marble up or down the ramp to choose its starting height.', 'It must keep enough speed to stay on the track upside down at the top of the loop. Carpet slows it down.', 'Find the lowest height that still makes it, then tap Go.'], pts: 'The closer to the minimum height, the more points. Too low and it falls; too high wastes points too.' },
+  laser: { title: 'Laser', steps: ['The laser fires along the dotted line.', 'Every mirror reflects it like a pool ball off a cushion: the angle in equals the angle out. Dark blocks absorb it.', 'Tap the wall where you think the beam ends, then tap Go.'], pts: 'The closer to where it hits the wall, the more points.' },
   orbit: { title: 'Orbit', steps: ['A comet flies in along the yellow arrow.', 'Every planet pulls it: bigger planets pull harder, and the pull is much stronger up close.', 'Tap the planet you think it crashes into, or the edge where it flies out.'], pts: 'Right planet: 100. If it escapes, the closer your mark to where it leaves, the more points.' },
   magnet: { title: 'Magnets', steps: ['A steel ball sits still on the table.', 'Every magnet pulls it: ×3 magnets are stronger, but the pull drops fast with distance (strength ÷ distance²).', 'Tap the magnet you think grabs it.'], pts: 'Right magnet: 100.' },
   pour: { title: 'Which glass fills first?', steps: ['The tap pours into glass A.', 'Water rises until it reaches the lowest open pipe, then everything flows down that pipe. Two pipes at the same height share the water. Pipes with ✕ are blocked.', 'Tap the glass you think is full first.'], pts: 'Right glass: 100.' },
@@ -678,12 +679,12 @@ const HOW = {
   swing: { title: 'Cut the rope', steps: ['The ball swings from where it starts.', 'At the scissors the rope is cut and the ball flies off in the direction it was moving.', 'Tap the floor where you think it lands.'], pts: 'The closer your mark, the more points.' },
   spring: { title: 'Cannon shot', steps: ['Drag the ball back inside the cannon to pull its spring.', 'The dotted line is a test shot with a known pull. Pull twice as far and the ball leaves twice as fast, which carries it much more than twice as far.', 'Find the pull that lands the ball in the middle of the target.'], pts: 'Bullseye: 100. Each ring shows the points: 75, 50 and 25 as you move away from the centre.' },
   bridge: { title: 'Bridge', steps: ['Drag up to grow the plank standing on the edge.', 'When you release, it tips over onto the other side and the marble rolls to the end of it. If the far side is lower, the plank needs to reach diagonally.', 'If the tip lands on the far platform the marble makes it. The red mark is the perfect spot.'], pts: 'Landing on the red mark: 100. Anywhere on the platform: 50 or more. Falling: up to 30 if it was close.' },
-  domino: { title: 'Dominoes', steps: ['The first domino gets a push.', 'A falling domino only knocks the next one if it can reach it, and a light domino struggles to topple a heavy one (dark = 3× heavier).', 'Tap the last domino you think will fall, then tap Release.'], pts: 'Exactly right: 100. One off: 45. Two off: 15.' },
-  float: { title: 'Float or sink?', steps: ['Look at each object and the water: fresh or very salty.', 'Things lighter than water for their size float; denser ones sink. Salty water is denser, so it holds more up.', 'Tap the ones that float, then tap Release to drop them all in.'], pts: 'Points for every object you get right; all of them gets 100.' },
-  clock: { title: 'Stopwatch', steps: ['A marble rolls down the circuit from START to the chequered flag.', 'You know how long ramp 1 takes. After that it keeps its speed, so later ramps are quicker. Ice lets it slide faster; sand slows it down.', 'Drag the stopwatch needle to your time, then tap Release.'], pts: 'Within 0.1 s: 100 points. The further off, the fewer points.' },
-  bounce: { title: 'Bounce', steps: ['A ball drops onto a floor and bounces again and again.', 'Each bounce keeps the same share of the height: if the 1st bounce reaches half the drop, the 2nd reaches half of that.', 'Tap the height of the bounce they ask for, then tap Release.'], pts: 'Within 3 cm: 100 points. The further off, the fewer points.' },
-  gears: { title: 'Gears', steps: ['The blue gear turns clockwise. Meshing gears turn the opposite way; gears on the same axle turn together.', 'A belt keeps the direction, a crossed belt flips it. Small gears spin faster than big ones.', 'Pick how the flagged gear turns, then tap Release.'], pts: 'Direction and speed right: 100. One of the two: 40.' },
-  tower: { title: 'Will it stand?', steps: ['Check how each block rests on the one below. Dark blocks weigh 3×.', 'Tap the block that will hit the ground first, or choose “It stands”.', 'Tap Release and watch.'], pts: 'Right answer: 100 points. Right that it falls but wrong block: 25.' },
+  domino: { title: 'Dominoes', steps: ['The first domino gets a push.', 'A falling domino only knocks the next one if it can reach it, and a light domino struggles to topple a heavy one (dark = 3× heavier).', 'Tap the last domino you think will fall, then tap Go.'], pts: 'Exactly right: 100. One off: 45. Two off: 15.' },
+  float: { title: 'Float or sink?', steps: ['Look at each object and the water: fresh or very salty.', 'Things lighter than water for their size float; denser ones sink. Salty water is denser, so it holds more up.', 'Tap the ones that float, then tap Go to drop them all in.'], pts: 'Points for every object you get right; all of them gets 100.' },
+  clock: { title: 'Stopwatch', steps: ['A marble rolls down the circuit from START to the chequered flag.', 'You know how long ramp 1 takes. After that it keeps its speed, so later ramps are quicker. Ice lets it slide faster; sand slows it down.', 'Drag the stopwatch needle to your time, then tap Go.'], pts: 'Within 0.1 s: 100 points. The further off, the fewer points.' },
+  bounce: { title: 'Bounce', steps: ['A ball drops onto a floor and bounces again and again.', 'Each bounce keeps the same share of the height: if the 1st bounce reaches half the drop, the 2nd reaches half of that.', 'Tap the height of the bounce they ask for, then tap Go.'], pts: 'Within 3 cm: 100 points. The further off, the fewer points.' },
+  gears: { title: 'Gears', steps: ['The blue gear turns clockwise. Meshing gears turn the opposite way; gears on the same axle turn together.', 'A belt keeps the direction, a crossed belt flips it. Small gears spin faster than big ones.', 'Pick how the flagged gear turns, then tap Go.'], pts: 'Direction and speed right: 100. One of the two: 40.' },
+  tower: { title: 'Will it stand?', steps: ['Check how each block rests on the one below. Dark blocks weigh 3×.', 'Tap the block that will hit the ground first, or choose “It stands”.', 'Tap Go and watch.'], pts: 'Right answer: 100 points. Right that it falls but wrong block: 25.' },
 };
 // Iconos de los 10 experimentos (vienen dibujados en index.html) y guía al tocarlos.
 const ICONS = {};
@@ -1068,7 +1069,7 @@ $('demoHome').addEventListener('click', (ev) => {
 async function startDemo() {
   if (!labPick.size) return;
   let data = labData[demoLevel];
-  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261028g')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261029a')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
   let games = [...LAB_NEW, ...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
   if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
   const run = demoRun++;
@@ -1278,7 +1279,7 @@ $('warmGo').addEventListener('click', startWarmup);
 async function startWarmup() {
   track('ftue_start');
   let data;
-  try { data = await (await fetch('warmup.json?v=20261028g')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
+  try { data = await (await fetch('warmup.json?v=20261029a')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
   leaveWelcome('started');
   const full = data.rounds.map(r => JSON.parse(JSON.stringify(r)));
   const st = { day: { n: 0, date: today?.day?.date || '', level: 1, W: data.W, H: data.H, FLOOR: data.FLOOR, R: data.R },
@@ -1301,13 +1302,13 @@ function coachTick() {
   const c = $('coach'), go = $('go');
   if (!warm || $('play').hidden) { c.hidden = true; $('play').classList.remove('warming'); go.classList.remove('coachpulse'); clearInterval(coachTimer); return; }
   const i = warm.scores.length, r = warm.rounds[i], label = go.textContent;
-  const aim = label === 'Release' && $('result').hidden;
+  const aim = label === 'Go!' && $('result').hidden;
   let msg = '', finger = null;
   if (aim && go.disabled) {
     if (r?.type === 'drop') { msg = 'Where will the marble land? <b>Tap the floor</b> where you think it hits.'; finger = 'scan'; }
     else if (r?.type === 'magnet') { msg = 'Which magnet grabs the steel ball? <b>Tap a magnet.</b>'; finger = 'mags'; }
     else msg = 'Make your guess on the scene.';
-  } else if (aim) msg = 'Locked in? <b>Hit Release</b> and watch what happens!';
+  } else if (aim) msg = 'Locked in? <b>Hit Go!</b> and watch what happens!';
   go.classList.toggle('coachpulse', (aim && !go.disabled) || (!$('result').hidden && !go.disabled));
   if (!msg) { c.hidden = true; return; }
   if (c.hidden || c.dataset.msg !== msg) {
