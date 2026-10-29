@@ -26,6 +26,7 @@ export function publicRound(r) {
     case 'spring': return { type: r.type, level: r.level, target: r.target, lx: r.lx, ly: r.ly, ang: r.ang, k: r.k, tx: r.tx, ty: r.ty, bw: r.bw, test: r.test, testX: r.testX, platform: r.platform };
     case 'gears': return { type: r.type, level: r.level, parts: r.parts, links: r.links };
     case 'clock': return { type: r.type, level: r.level, segs: r.segs, rb: r.rb, dial: r.dial, split: r.split, cup: r.cup, frames: [r.frames[0]] };
+    case 'cut': return { type: r.type, level: r.level, item: r.item, parts: r.parts, mats: r.mats, grams: r.grams, x0: r.x0, x1: r.x1 };
     case 'bounce': return { type: r.type, level: r.level, ball: r.ball, floor: r.floor, n: r.n, h0: r.h0, testFrom: r.testFrom, test: r.test, frames: [r.frames[0]] };
   }
   throw new Error('tipo de ronda desconocido');
@@ -55,6 +56,7 @@ export function validPrediction(r, p, W = 400) {
     case 'spring': return num(p) && p >= 0 && p <= 80;
     case 'clock': return num(p) && p >= 0 && p <= r.dial;
     case 'bounce': return num(p) && p >= 0 && p <= 600;
+    case 'cut': return num(p) && p >= r.x0 && p <= r.x1;
     case 'race': {
       const n = r.tracks.length;
       return Array.isArray(p) && p.length === n && new Set(p).size === n && p.every(i => Number.isInteger(i) && i >= 0 && i < n);
@@ -136,6 +138,10 @@ export function scorePoints(r, p) {
       const err = Math.abs(p - r.answer) / 2;
       return err <= 3 ? 100 : Math.round(100 * Math.exp(-(err - 3) / 11));
     }
+    case 'cut': {                                                // posición del corte (px): cuenta lo que pesa de más una mitad
+      const d = cutImbalance(r, p);
+      return d <= 0.04 ? 100 : Math.round(100 * Math.exp(-(d - 0.04) / 0.18));
+    }
     case 'gears': {
       const dir = p < 2 ? 1 : -1, faster = p % 2 === 0;
       const ok = (dir === r.answer.dir ? 1 : 0) + (faster === r.answer.faster ? 1 : 0);
@@ -171,3 +177,12 @@ export const cannonPts = (cm) => cm <= 4 ? 100 : Math.round(100 * Math.exp(-(cm 
 export const CANNON_RINGS = [100, 75, 50, 25].map(p => 2 * (p === 100 ? 4 : 4 + 20 * Math.log(100 / p)));
 // Gears: las cuatro respuestas posibles, en orden.
 export const GEAR_CHOICES = [[1, true], [1, false], [-1, true], [-1, false]];
+
+// Half & Half: qué parte de la masa queda a la izquierda de un corte en x (r.cum = masa acumulada por píxel).
+export function cutShare(r, x) {
+  const i = x - r.x0; if (i <= 0) return 0; if (i >= r.cum.length) return 1;
+  const k = Math.floor(i), prev = k > 0 ? r.cum[k - 1] : 0;
+  return prev + (r.cum[k] - prev) * (i - k);
+}
+// diferencia entre las dos mitades, en fracción del total (0 = iguales)
+export const cutImbalance = (r, x) => Math.abs(2 * cutShare(r, x) - 1);

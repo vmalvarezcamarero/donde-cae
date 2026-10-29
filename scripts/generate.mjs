@@ -18,6 +18,7 @@ import { genLoop, genLaser, genBridge, genFloat, genGears } from './rounds2.mjs'
 import { genOrbit, genMagnets, genPour, genPulley, genSwing, genSpring } from './rounds3.mjs';
 import { genFlip, genJump } from './rounds4.mjs';
 import { genClock, genBounce } from './rounds5.mjs';
+import { genCut } from './rounds6.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'));
@@ -43,12 +44,13 @@ const RACE_FORMATS = ['curvas', 'objetos', 'terrenos'];
 // así el segundo intento es de verdad distinto. Como mucho 2 de cada grupo en el
 // reto A, para mezclar formas de jugar.
 // 14 experimentos. "Float or sink?", Orbit, Pour y Bike jump quedan fuera de la rotación (no gustaron en la beta).
-// Desde el 29 oct 2026 entran Stopwatch (clock) y Bounce (bounce): 16 experimentos.
-export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'gears', 'magnet', 'flip', 'pulley', 'swing', 'spring', 'clock', 'bounce'];
+// Desde el 29 oct 2026 entran Stopwatch (clock) y Bounce (bounce). Desde el 31 oct, Half & Half (cut)
+// sustituye a Marble run (flip), que no gustó. 16 experimentos.
+export const GAMES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'gears', 'magnet', 'cut', 'pulley', 'swing', 'spring', 'clock', 'bounce'];
 const GROUP = { drop: 'tap', pool: 'tap', laser: 'tap', swing: 'tap',
   balance: 'slide', loop: 'slide', bridge: 'slide', spring: 'slide',
-  race: 'pick', tower: 'pick', gears: 'pick', magnet: 'pick', flip: 'pick', pulley: 'pick',
-  clock: 'slide', bounce: 'tap' };
+  race: 'pick', tower: 'pick', gears: 'pick', magnet: 'pick', pulley: 'pick',
+  clock: 'slide', bounce: 'tap', cut: 'slide' };
 
 // Plan de la semana (de lunes a domingo): reparte los juegos para que cada uno
 // salga 3 o 4 veces en el reto A y ninguno desaparezca varios días seguidos.
@@ -128,6 +130,7 @@ function buildSet(date, setId, n, lvl, games) {
     jump: () => genJump(seed + 18, lvl),
     clock: () => genClock(seed + 19, lvl),
     bounce: () => genBounce(seed + 20, lvl),
+    cut: () => genCut(seed + 21, lvl),
   };
   return games.map(g => make[g]());
 }

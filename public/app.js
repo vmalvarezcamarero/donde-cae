@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261029a';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261029a';
-import { makeCard, makeStatsCard } from './card.js?v=20261029a';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261029b';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261029b';
+import { makeCard, makeStatsCard } from './card.js?v=20261029b';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -682,6 +682,7 @@ const HOW = {
   domino: { title: 'Dominoes', steps: ['The first domino gets a push.', 'A falling domino only knocks the next one if it can reach it, and a light domino struggles to topple a heavy one (dark = 3× heavier).', 'Tap the last domino you think will fall, then tap Go.'], pts: 'Exactly right: 100. One off: 45. Two off: 15.' },
   float: { title: 'Float or sink?', steps: ['Look at each object and the water: fresh or very salty.', 'Things lighter than water for their size float; denser ones sink. Salty water is denser, so it holds more up.', 'Tap the ones that float, then tap Go to drop them all in.'], pts: 'Points for every object you get right; all of them gets 100.' },
   clock: { title: 'Stopwatch', steps: ['A marble rolls down the circuit from START to the chequered flag.', 'You know how long ramp 1 takes. After that it keeps its speed, so later ramps are quicker. Ice lets it slide faster; sand slows it down.', 'Drag the stopwatch needle to your time, then tap Go.'], pts: 'Within 0.1 s: 100 points. The further off, the fewer points.' },
+  cut: { title: 'Half & Half', steps: ['Drag the knife along the object to choose where to cut it.', 'You want both pieces to weigh exactly the same. That is not the middle: thick parts weigh much more than thin ones (they are round), and some materials are much heavier than others for the same size.', 'Tap Go: the knife cuts and each piece lands on a pan of the balance.'], pts: 'Within 4% of an even split: 100 points. The bigger the difference in weight, the fewer points.' },
   bounce: { title: 'Bounce', steps: ['A ball drops onto a floor and bounces again and again.', 'Each bounce keeps the same share of the height: if the 1st bounce reaches half the drop, the 2nd reaches half of that.', 'Tap the height of the bounce they ask for, then tap Go.'], pts: 'Within 3 cm: 100 points. The further off, the fewer points.' },
   gears: { title: 'Gears', steps: ['The blue gear turns clockwise. Meshing gears turn the opposite way; gears on the same axle turn together.', 'A belt keeps the direction, a crossed belt flips it. Small gears spin faster than big ones.', 'Pick how the flagged gear turns, then tap Go.'], pts: 'Direction and speed right: 100. One of the two: 40.' },
   tower: { title: 'Will it stand?', steps: ['Check how each block rests on the one below. Dark blocks weigh 3×.', 'Tap the block that will hit the ground first, or choose “It stands”.', 'Tap Go and watch.'], pts: 'Right answer: 100 points. Right that it falls but wrong block: 25.' },
@@ -1013,9 +1014,9 @@ setInterval(() => { if ($('shop').hidden || $('shopDeal').hidden || !resetAt) re
 
 /* ---------- laboratorio (/?lab, antes /?demo): todos los experimentos, sin límite ---------- */
 const QS = new URLSearchParams(location.search), DEMO = QS.has('lab') || QS.has('demo');
-const LAB_DAILY = ['drop', 'pool', 'laser', 'swing', 'balance', 'loop', 'bridge', 'spring', 'race', 'tower', 'gears', 'magnet', 'flip', 'pulley'];
-const LAB_OLD = ['float', 'orbit', 'pour', 'jump'];
-const LAB_NEW = ['clock', 'bounce'];
+const LAB_DAILY = ['clock', 'bounce', 'drop', 'pool', 'laser', 'swing', 'balance', 'loop', 'bridge', 'spring', 'race', 'tower', 'gears', 'magnet', 'pulley'];
+const LAB_OLD = ['flip', 'float', 'orbit', 'pour', 'jump'];
+const LAB_NEW = ['cut'];
 const labData = {}, labPick = new Set([...LAB_NEW, ...LAB_DAILY]);
 let demoLevel = 2, demoRun = 0, labShuffle = false, labSkin = null, labTrail = null;
 function labPaint() {
@@ -1069,7 +1070,7 @@ $('demoHome').addEventListener('click', (ev) => {
 async function startDemo() {
   if (!labPick.size) return;
   let data = labData[demoLevel];
-  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261029a')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261029b')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
   let games = [...LAB_NEW, ...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
   if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
   const run = demoRun++;
@@ -1279,7 +1280,7 @@ $('warmGo').addEventListener('click', startWarmup);
 async function startWarmup() {
   track('ftue_start');
   let data;
-  try { data = await (await fetch('warmup.json?v=20261029a')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
+  try { data = await (await fetch('warmup.json?v=20261029b')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
   leaveWelcome('started');
   const full = data.rounds.map(r => JSON.parse(JSON.stringify(r)));
   const st = { day: { n: 0, date: today?.day?.date || '', level: 1, W: data.W, H: data.H, FLOOR: data.FLOOR, R: data.R },

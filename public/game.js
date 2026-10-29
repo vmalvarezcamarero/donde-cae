@@ -13,7 +13,7 @@
   const OBJ_NAME = { canica: 'Marble', rueda: 'Solid wheel', aro: 'Hoop', hielo: 'Ice cube' };
   const TYPE_NAME = { balance: 'Balance', drop: 'Where will it land?', race: 'Which finishes first?', pool: 'Bank shot', tower: 'Will it stand?',
     loop: 'Loop the loop', laser: 'Laser', domino: 'Dominoes', bridge: 'Bridge',
-    orbit: 'Orbit', magnet: 'Magnets', pour: 'Which glass fills first?', pulley: 'Pulleys', swing: 'Cut the rope', spring: 'Cannon shot', flip: 'Marble run', jump: 'Bike jump', float: 'Float or sink?', gears: 'Gears', clock: 'Stopwatch', bounce: 'Bounce' };
+    orbit: 'Orbit', magnet: 'Magnets', pour: 'Which glass fills first?', pulley: 'Pulleys', swing: 'Cut the rope', spring: 'Cannon shot', flip: 'Marble run', jump: 'Bike jump', float: 'Float or sink?', gears: 'Gears', clock: 'Stopwatch', bounce: 'Bounce', cut: 'Half & Half' };
   const num = (x, d = 1) => x.toFixed(d);
   const side = (u) => Math.abs(u) < 0.05 ? 'center' : num(Math.abs(u)) + (u < 0 ? ' left' : ' right');
 
@@ -143,6 +143,7 @@
       if (r.type === 'drop') return [r.impactX, FLOOR];
       if (r.type === 'clock') return clockFinish(r);
       if (r.type === 'bounce') return [200, BF - r.answer - BALL_R[r.ball]];
+      if (r.type === 'cut') return [CUTG.piv[0], CUTG.piv[1] + 40];
       if (r.type === 'swing') return [r.impactX, r.impactY ?? FLOOR];
       if (r.type === 'pool') return r.stop;
       if (r.type === 'laser') return r.end;
@@ -272,6 +273,9 @@
     gears: () => 'The first gear turns clockwise. How does the gear with the flag turn?<small>Tap its direction (or the flagged gear) and whether it spins faster or slower than the first one.</small>',
     clock: (r) => 'How long does the marble take to reach the finish?<small>Ramp 1 alone takes ' + r.split.toFixed(2) + ' s. Ice is slippery and fast; sand slows it down. Drag the stopwatch needle.</small>',
     bounce: (r) => 'A ' + BALL_NAME[r.ball] + ' drops onto ' + FLOOR_NAME[r.floor] + '. How high does it get after the ' + NTH(r.n) + ' bounce?<small>' + (r.level < 3 ? 'The blue line is its 1st bounce.' : 'Blue test: dropped from ' + cm(r.testFrom) + ' cm, it bounced to ' + cm(r.test) + ' cm.') + ' Every bounce keeps the same share of the height. Tap the height.</small>',
+    cut: (r) => 'Where do you cut the ' + (CUT_ITEM[r.item] || 'object') + ' so both pieces weigh exactly the same?<small>' + (r.mats.length > 1
+      ? 'Weight per cm³: ' + r.mats.slice().sort((a, b) => CUT_RHO[b] - CUT_RHO[a]).map(m => CUT_MAT[m] + ' ' + CUT_RHO[m] + ' g').join(' · ') + '. '
+      : '') + 'It’s round, so a part twice as thick weighs about 4× as much. Drag the knife.</small>',
   };
   function startRound() {
     cancelAnimationFrame(anim && anim.raf);
@@ -391,6 +395,7 @@
     else if (r.type === 'spring') { if (!aimSpring(r, x, y)) return; }
     else if (r.type === 'swing') mark = Math.max(R, Math.min(W - R, x));
     else if (r.type === 'bounce') mark = Math.round(Math.max(10, Math.min(BF - 70, BF - y)));
+    else if (r.type === 'cut') mark = Math.round(Math.max(r.x0 + 3, Math.min(r.x1 - 3, x)) * 2) / 2;
     else if (r.type === 'pulley' && isDown) { const k = pickPulley(r, x, y); if (k == null) return; mark = k; JU()?.sfx.pick(); }
     else if (r.type === 'gears' && isDown) { if (!gearTap(r, x, y)) return; }
     else if (r.type === 'orbit' && isDown) { const k = pickPlanet(r, x, y); mark = k >= 0 ? [k] : snapWall(x, y); }
@@ -416,7 +421,7 @@
   cv.addEventListener('pointerdown', (ev) => {
     if (phase !== 'aim' || sending) return;
     const [x, y] = toWorld(ev); const t = round().type;
-    if (t === 'drop' || t === 'balance' || t === 'pool' || t === 'loop' || t === 'laser' || t === 'bridge' || t === 'spring' || t === 'swing' || t === 'bounce') { dragging = true; cv.setPointerCapture(ev.pointerId); }
+    if (t === 'drop' || t === 'balance' || t === 'pool' || t === 'loop' || t === 'laser' || t === 'bridge' || t === 'spring' || t === 'swing' || t === 'bounce' || t === 'cut') { dragging = true; cv.setPointerCapture(ev.pointerId); }
     aimAt(x, y, true);
   });
   cv.addEventListener('pointermove', (ev) => { if (dragging && phase === 'aim') { const [x, y] = toWorld(ev); aimAt(x, y, false); } });
@@ -434,6 +439,7 @@
       if (r.type === 'bridge') { mark = Math.max(10, Math.min(r.ya - 20, (mark ?? 100) - dy * 2 * f + dx * 2 * f)); ready(); draw(); }
       if (r.type === 'loop') { mark = Math.max(LOOPC.minH, Math.min(LOOPC.maxH, (mark ?? 150) - dy * 2 * f + dx * 2 * f)); ready(); draw(); }
       if (r.type === 'bounce') { mark = Math.max(10, Math.min(BF - 70, (mark ?? 150) - dy * 2 * f + dx * 2 * f)); ready(); draw(); }
+      if (r.type === 'cut') { mark = Math.max(r.x0 + 3, Math.min(r.x1 - 3, (mark ?? (r.x0 + r.x1) / 2) + (dx - dy) * f)); ready(); draw(); }
       if (r.type === 'clock') setDialMark(Math.round(((mark ?? r.dial / 2) + (dx - dy) * 0.1 * f) * 10) / 10);
       if (r.type === 'tower') { const n = r.blocks.length; mark = mark == null || mark < 1 ? 1 : Math.max(1, Math.min(n - 1, mark + (dy ? -dy : dx))); refreshTower(); }
     } else if (k === 'Enter' && !$('go').disabled) { ev.preventDefault(); release(); }
@@ -459,6 +465,7 @@
     if (r.type === 'float') return 3.4;
     if (r.type === 'gears') return 3.2;
     if (r.type === 'clock' || r.type === 'bounce') return r.frames.length / 60;
+    if (r.type === 'cut') return 3.5;
   }
   async function release() {
     if (phase !== 'aim' || sending) return;
@@ -611,6 +618,9 @@
     if (r.type === 'clock') { const err = Math.abs(mark - r.answer);
       return { pts: 0, l1: err <= 0.12 ? 'Split-second perfect!' : err <= 0.4 ? 'Very close' : err <= 1 ? 'Close' : mark < r.answer ? 'Slower than you thought' : 'Faster than you thought',
         l2: 'It took ' + r.answer.toFixed(2) + ' s · you said ' + mark.toFixed(1) + ' s', d: 'Took ' + r.answer.toFixed(2) + ' s, you said ' + mark.toFixed(1) }; }
+    if (r.type === 'cut') { const tot = r.grams || 100, gl = Math.round(tot * cutShareAt(r, mark)), gr = tot - gl, d = Math.abs(gl - gr) / tot;
+      return { pts: 0, l1: d <= 0.04 ? 'Perfectly even!' : d <= 0.1 ? 'Very close' : d <= 0.2 ? 'Close' : gl > gr ? 'The left piece is heavier' : 'The right piece is heavier',
+        l2: 'Left ' + gl + ' g · right ' + gr + ' g', d: gl + ' g / ' + gr + ' g' }; }
     if (r.type === 'bounce') { const err = Math.abs(mark - r.answer) / 2;
       return { pts: 0, l1: err <= 3 ? 'Spot on!' : err <= 8 ? 'Very close' : err <= 20 ? 'Close' : mark > r.answer ? 'Lower than you thought' : 'Higher than you thought',
         l2: NTH(r.n) + ' bounce: ' + cm(r.answer) + ' cm · you ' + cm(mark) + ' cm', d: NTH(r.n) + ' bounce ' + cm(r.answer) + ' cm, you ' + cm(mark) }; }
@@ -695,7 +705,7 @@
     paper();
     const r = round(); if (!r) return;
     if (phase === 'playing' && !anim) return;
-    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge, orbit: drawOrbit, magnet: drawMagnet, pour: drawPour, pulley: drawPulley, flip: drawFlip, jump: drawJump, swing: drawSwing, spring: drawSpring, clock: drawClock, bounce: drawBounce })[r.type](r);
+    ({ drop: drawDrop, race: drawRace, balance: drawBalance, pool: drawPool, tower: drawTower, loop: drawLoop, laser: drawLaser, domino: drawDomino, float: drawFloat, gears: drawGears, bridge: drawBridge, orbit: drawOrbit, magnet: drawMagnet, pour: drawPour, pulley: drawPulley, flip: drawFlip, jump: drawJump, swing: drawSwing, spring: drawSpring, clock: drawClock, bounce: drawBounce, cut: drawCut })[r.type](r);
     wdraw();
     // viñeta de cámara lenta, fija a la pantalla
     if (slowActive) {
@@ -2694,6 +2704,200 @@
       label(x, 76, b ? NTH(Math.min(b, r.n)) + ' bounce' : 'falling…', b >= r.n ? C.coral : C['ink-2']);
     }
     if (phase === 'result') label(200, hy(r.answer) - 22, NTH(r.n) + ' bounce: ' + cm(r.answer) + ' cm', C.coral);
+  }
+
+  /* ---------- Half & Half: corta un objeto en dos mitades que pesen lo mismo ---------- */
+  const CUTG = { y: 196, bx0: 22, bx1: 378, by0: 112, by1: 282, piv: [200, 404], arm: 128, hang: 64, panW: 118 };
+  const CUT_ITEM = { banana: 'banana', carrot: 'carrot', bat: 'baseball bat', pin: 'bowling pin', screwdriver: 'screwdriver', broom: 'broom', lollipop: 'lollipop', kebab: 'kebab skewer', golf: 'golf club' };
+  const CUT_MAT = { fruit: 'banana', carrot: 'carrot', wood: 'wood', pinwood: 'maple', steel: 'steel', rubber: 'rubber', candy: 'hard candy', paper: 'paper stick', meat: 'meat', pepper: 'pepper', onion: 'onion', tomato: 'tomato', plastic: 'plastic', graphite: 'graphite', bristle: 'bristles' };
+  const CUT_RHO = { fruit: 0.95, carrot: 1.0, wood: 0.7, pinwood: 0.7, steel: 7.8, rubber: 1.2, candy: 1.5, paper: 0.45, meat: 1.05, pepper: 0.45, onion: 0.9, tomato: 0.95, plastic: 1.2, graphite: 1.6, bristle: 0.1 };
+  const CUT_COL = { fruit: '#f4d23c', carrot: '#ef8a22', wood: '#c9925a', pinwood: '#f3eee4', steel: '#b4bec8', rubber: '#2c3038', candy: '#ff5a8a', paper: '#f4efe4', meat: '#8d4a2f', pepper: '#3e9d4a', onion: '#efe3ef', tomato: '#e0412f', plastic: '#e2583a', graphite: '#3a3f47', bristle: '#dcb45c' };
+  // reparto de la masa a la izquierda de x (con la tabla acumulada que llega tras soltar)
+  function cutShareAt(r, x) { const i = x - r.x0; if (!r.cum || i <= 0) return 0; if (i >= r.cum.length) return 1; const k = Math.floor(i), p = k > 0 ? r.cum[k - 1] : 0; return p + (r.cum[k] - p) * (i - k); }
+  function cutYRange(r) {
+    if (r._yr) return r._yr;
+    let lo = Infinity, hi = -Infinity;
+    for (const p of r.parts) {
+      if (p.k === 'tube') for (const q of p.pts) { lo = Math.min(lo, q[1] - q[2]); hi = Math.max(hi, q[1] + q[2]); }
+      else if (p.k === 'block') { lo = Math.min(lo, p.y0); hi = Math.max(hi, p.y1); }
+      else { lo = Math.min(lo, p.cy - p.R); hi = Math.max(hi, p.cy + p.R); }
+    }
+    return (r._yr = [lo, hi]);
+  }
+  // contorno de un tubo (a lo largo de su eje, con su radio en cada punto)
+  function tubePath(pts, grow = 0) {
+    const L = [], Rr = [];
+    pts.forEach((q, i) => {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l, rr = q[2] + grow;
+      L.push([q[0] + nx * rr, q[1] + ny * rr]); Rr.push([q[0] - nx * rr, q[1] - ny * rr]);
+    });
+    ctx.beginPath(); L.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    const e = pts[pts.length - 1], s = pts[0];
+    const ae = Math.atan2(e[1] - pts[pts.length - 2][1], e[0] - pts[pts.length - 2][0]); ctx.arc(e[0], e[1], e[2] + grow, ae + Math.PI / 2, ae - Math.PI / 2, true);
+    for (let i = Rr.length - 1; i >= 0; i--) ctx.lineTo(Rr[i][0], Rr[i][1]);
+    const as = Math.atan2(pts[1][1] - s[1], pts[1][0] - s[0]); ctx.arc(s[0], s[1], s[2] + grow, as - Math.PI / 2, as - Math.PI * 1.5, true);
+    ctx.closePath();
+  }
+  // a lo largo del eje: punto y normal en la fracción u
+  function tubeAt(pts, u) { const f = u * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(f)), t = f - i, a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return { x: a[0] + dx * t, y: a[1] + dy * t, r: a[2] + (b[2] - a[2]) * t, nx: -dy / l, ny: dx / l }; }
+  function drawCutObj(r) {
+    const ink = C.ink;
+    for (const p of r.parts) {
+      const col = p.col || CUT_COL[p.m];
+      ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = ink; ctx.lineWidth = 2;
+      if (p.k === 'tube') {
+        if (p.deco === 'carrot') {                                   // hojas en el extremo gordo
+          const big = p.pts[0][2] > p.pts[p.pts.length - 1][2] ? p.pts[0] : p.pts[p.pts.length - 1], dir = big === p.pts[0] ? -1 : 1;
+          ctx.strokeStyle = '#3f9a3a'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+          const bx = big[0] + dir * big[2] * 0.7; for (const a of [-0.6, -0.25, 0.1, 0.45]) { ctx.beginPath(); ctx.moveTo(bx, big[1]); ctx.quadraticCurveTo(bx + dir * 24, big[1] + a * 26, bx + dir * 44, big[1] + a * 58); ctx.stroke(); }
+          ctx.strokeStyle = ink; ctx.lineWidth = 2;
+        }
+        tubePath(p.pts); ctx.fillStyle = col; ctx.fill(); ctx.stroke();
+        ctx.save(); tubePath(p.pts); ctx.clip();
+        // brillo
+        ctx.globalAlpha = 0.28; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath();
+        for (let k = 0; k <= 20; k++) { const q = tubeAt(p.pts, 0.04 + k * 0.046), up = q.ny <= 0 ? 1 : -1; const x = q.x + up * q.nx * q.r * 0.45, y = q.y + up * q.ny * q.r * 0.45; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+        ctx.stroke(); ctx.globalAlpha = 1;
+        if (p.deco === 'banana') { ctx.fillStyle = '#5b3a1a'; for (const q of [p.pts[0], p.pts[p.pts.length - 1]]) { ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(4, q[2] + 1), 0, Math.PI * 2); ctx.fill(); }
+          ctx.strokeStyle = 'rgba(150,110,20,.45)'; ctx.lineWidth = 1.5; ctx.beginPath(); for (let k = 2; k <= 58; k++) { const q = tubeAt(p.pts, k / 60); const x = q.x + q.nx * q.r * 0.25, y = q.y + q.ny * q.r * 0.25; k > 2 ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); }
+        if (p.deco === 'carrot') { ctx.strokeStyle = 'rgba(120,50,0,.4)'; ctx.lineWidth = 1.4; for (let k = 1; k < 9; k++) { const q = tubeAt(p.pts, k / 9); ctx.beginPath(); ctx.moveTo(q.x - 3, q.y - q.r * 0.6); ctx.quadraticCurveTo(q.x + 2, q.y, q.x - 3, q.y + q.r * 0.5); ctx.stroke(); } }
+        if (p.deco === 'bat' || p.deco === 'handle' || p.deco === 'skewer') { ctx.strokeStyle = 'rgba(90,50,10,.28)'; ctx.lineWidth = 1.2; for (const o of [-0.35, 0.3]) { ctx.beginPath(); for (let k = 0; k <= 30; k++) { const q = tubeAt(p.pts, k / 30); const x = q.x + q.nx * q.r * o, y = q.y + q.ny * q.r * o; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); } }
+        if (p.deco === 'pin') { ctx.strokeStyle = '#d62828'; ctx.lineWidth = 3.5; for (const u of [0.6, 0.66]) { const q = tubeAt(p.pts, p.pts[0][2] > p.pts[p.pts.length - 1][2] ? u : 1 - u); ctx.beginPath(); ctx.moveTo(q.x, q.y - q.r - 2); ctx.lineTo(q.x, q.y + q.r + 2); ctx.stroke(); } }
+        if (p.deco === 'grip') { ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1.5; for (let k = 1; k < 12; k++) { const q = tubeAt(p.pts, k / 12); ctx.beginPath(); ctx.moveTo(q.x, q.y - q.r); ctx.lineTo(q.x, q.y + q.r); ctx.stroke(); } }
+        if (p.deco === 'sdhandle') { ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 2; for (const o of [-0.5, 0, 0.5]) { ctx.beginPath(); for (let k = 2; k <= 28; k++) { const q = tubeAt(p.pts, k / 30); const x = q.x + q.nx * q.r * o, y = q.y + q.ny * q.r * o; k > 2 ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); } }
+        if (p.deco === 'shaft' && p.m === 'steel') { ctx.fillStyle = '#7d8893'; const e = p.pts[0][2] < p.pts[p.pts.length - 1][2] ? p.pts[0] : p.pts[p.pts.length - 1]; ctx.fillRect(e[0] - 4, e[1] - 1, 8, 2); }
+        ctx.restore();
+      } else if (p.k === 'block') {
+        const w = p.x1 - p.x0, h = p.y1 - p.y0;
+        if (p.deco === 'bristles') {
+          ctx.fillStyle = col; roundRect(p.x0, p.y0, w, h, 6); ctx.fill();
+          ctx.strokeStyle = 'rgba(110,80,20,.55)'; ctx.lineWidth = 1.2; const d = p.dir || 1;
+          for (let y = p.y0 + 4; y < p.y1 - 2; y += 4.5) { ctx.beginPath(); ctx.moveTo(d > 0 ? p.x0 : p.x1, y); ctx.lineTo(d > 0 ? p.x1 - 2 : p.x0 + 2, y + (y - (p.y0 + p.y1) / 2) * 0.12); ctx.stroke(); }
+          ctx.strokeStyle = ink; ctx.lineWidth = 2; roundRect(p.x0, p.y0, w, h, 6); ctx.stroke();
+        } else if (p.deco === 'tomato') {
+        } else {
+          const rr = p.deco === 'meat' ? 6 : p.deco === 'pepper' ? 9 : p.deco === 'onion' ? 7 : 3;
+          ctx.fillStyle = col; roundRect(p.x0, p.y0, w, h, rr); ctx.fill(); ctx.stroke();
+          if (p.m === 'steel') { const g = ctx.createLinearGradient(p.x0, p.y0, p.x1, p.y1); g.addColorStop(0, 'rgba(255,255,255,.55)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.18)'); ctx.fillStyle = g; roundRect(p.x0, p.y0, w, h, rr); ctx.fill();
+            if (p.deco === 'clubhead') { ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1; for (let y = p.y0 + h * 0.45; y < p.y1 - 3; y += 4) { ctx.beginPath(); ctx.moveTo(p.x0 + 4, y); ctx.lineTo(p.x1 - 4, y); ctx.stroke(); } } }
+          if (p.deco === 'meat') { ctx.strokeStyle = 'rgba(30,10,0,.55)'; ctx.lineWidth = 2.5; for (const f of [0.3, 0.65]) { ctx.beginPath(); ctx.moveTo(p.x0 + w * 0.15, p.y0 + h * f); ctx.lineTo(p.x1 - w * 0.15, p.y0 + h * (f + 0.12)); ctx.stroke(); } }
+          if (p.deco === 'pepper') { ctx.fillStyle = 'rgba(255,255,255,.25)'; roundRect(p.x0 + 4, p.y0 + 4, w * 0.3, h - 8, 4); ctx.fill(); }
+          if (p.deco === 'onion') { ctx.strokeStyle = 'rgba(150,90,150,.5)'; ctx.lineWidth = 1.3; for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(p.x0 + w * k / 4, p.y0 + 3); ctx.lineTo(p.x0 + w * k / 4, p.y1 - 3); ctx.stroke(); } }
+          if (p.deco === 'ferrule') { ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(p.x0 + 2, p.y0 + 3, 3, h - 6); }
+        }
+      } else if (p.k === 'ball') {
+        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p.cx, p.cy, p.R, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(p.cx - p.R * 0.35, p.cy - p.R * 0.35, p.R * 0.28, 0, Math.PI * 2); ctx.fill();
+        if (p.deco === 'tomato') { ctx.strokeStyle = '#2f7a2a'; ctx.lineWidth = 2.5; for (let k = 0; k < 5; k++) { const a = k * 1.256 - 1.57; ctx.beginPath(); ctx.moveTo(p.cx, p.cy - p.R + 2); ctx.lineTo(p.cx + Math.cos(a) * 6, p.cy - p.R + 2 + Math.sin(a) * 4 + 3); ctx.stroke(); } }
+      } else if (p.k === 'disc') {
+        ctx.fillStyle = '#fff4f7'; ctx.beginPath(); ctx.arc(p.cx, p.cy, p.R, 0, Math.PI * 2); ctx.fill();
+        ctx.save(); ctx.beginPath(); ctx.arc(p.cx, p.cy, p.R, 0, Math.PI * 2); ctx.clip();
+        const cols = ['#ff5a8a', '#ffd166', '#5ec2ff'];
+        for (let k = 0; k < 3; k++) { ctx.strokeStyle = cols[k]; ctx.lineWidth = p.R * 0.16; ctx.beginPath(); for (let a = 0; a < Math.PI * 6; a += 0.12) { const rr = (a / (Math.PI * 6)) * p.R; const x = p.cx + Math.cos(a + k * 2.09) * rr, y = p.cy + Math.sin(a + k * 2.09) * rr; a ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); }
+        ctx.restore(); ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.cx, p.cy, p.R, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(p.cx - p.R * 0.4, p.cy - p.R * 0.45, p.R * 0.25, p.R * 0.12, -0.6, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+  // una mitad del objeto (clip a un lado del corte) dibujada con su base en (x, y), girada y a escala
+  function drawCutHalf(r, c, left, x, y, s, rot) {
+    const [lo, hi] = cutYRange(r), a = left ? r.x0 : c, b = left ? c : r.x1;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s); ctx.translate(-(a + b) / 2, -hi);
+    ctx.beginPath(); ctx.rect(a - 2, lo - 80, b - a + 2, hi - lo + 160); ctx.clip();
+    drawCutObj(r);
+    // cara del corte
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(c, lo); ctx.lineTo(c, hi); ctx.stroke();
+    ctx.restore();
+  }
+  const cutFit = (r, c, left) => { const [lo, hi] = cutYRange(r), w = left ? c - r.x0 : r.x1 - c; return Math.min(0.62, (CUTG.panW - 12) / Math.max(10, w), 70 / Math.max(10, hi - lo)); };
+  function cutCleaver(x, yb, alpha = 1) {             // cuchillo de cocina con el filo en (x, yb)
+    ctx.save(); ctx.globalAlpha = alpha; ctx.lineJoin = 'round';
+    ctx.fillStyle = '#d7dde3'; ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - 6, yb - 92); ctx.lineTo(x + 6, yb - 92); ctx.lineTo(x + 6, yb - 6); ctx.quadraticCurveTo(x + 2, yb + 2, x - 6, yb); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(x - 4, yb - 88, 2.5, 80);
+    ctx.fillStyle = '#2c3038'; roundRect(x - 7.5, yb - 140, 15, 50, 4); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#d7dde3'; for (const yy of [yb - 128, yb - 110]) { ctx.beginPath(); ctx.arc(x, yy, 2.2, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawCut(r) {
+    const G = CUTG, t = phase === 'playing' ? anim.t : phase === 'result' ? 99 : -1, c = mark ?? (r.x0 + r.x1) / 2;
+    const T_CUT = 0.8, T_SPLIT = 1.15, T_FLY = 1.95, total = r.grams || 100;
+    // tabla de cortar
+    ctx.save(); ctx.fillStyle = 'rgba(0,0,0,.08)'; roundRect(G.bx0 + 4, G.by0 + 6, G.bx1 - G.bx0, G.by1 - G.by0, 14); ctx.fill();
+    ctx.fillStyle = '#e8c48e'; roundRect(G.bx0, G.by0, G.bx1 - G.bx0, G.by1 - G.by0, 14); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = 'rgba(140,90,30,.22)'; ctx.lineWidth = 1.5; for (let y = G.by0 + 16; y < G.by1 - 8; y += 15) { ctx.beginPath(); ctx.moveTo(G.bx0 + 10, y); ctx.bezierCurveTo(140, y + 4, 260, y - 4, G.bx1 - 10, y + 2); ctx.stroke(); }
+    ctx.fillStyle = C.paper; ctx.beginPath(); ctx.ellipse(G.bx1 - 22, G.by0 + 20, 10, 6, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    ctx.font = mono(10, 700); ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(70,45,10,.75)'; ctx.fillText((CUT_ITEM[r.item] || r.item).toUpperCase() + ' · ' + total + ' g', G.bx0 + 12, G.by1 - 10);
+    // balanza de dos platillos
+    const L = cutShareAt(r, c), gl = Math.round(total * L), gr = total - gl, diff = r.cum ? (gr - gl) / total : 0;
+    const thF = Math.max(-0.3, Math.min(0.3, diff * 2.4)), tau = t - T_FLY;
+    const th = t < T_FLY ? 0 : thF * (1 - Math.exp(-3.2 * tau) * Math.cos(8.5 * tau));
+    const [px, py] = G.piv, ex = Math.cos(th) * G.arm, ey = Math.sin(th) * G.arm;
+    const hl = [px - ex, py - ey], hr = [px + ex, py + ey];
+    ctx.save(); ctx.strokeStyle = C.ink; ctx.fillStyle = C.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, 532); ctx.stroke();
+    roundRect(px - 52, 530, 104, 12, 5); ctx.fill();
+    ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(hl[0], hl[1]); ctx.lineTo(hr[0], hr[1]); ctx.stroke();
+    ctx.fillStyle = C.mostaza; ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2; ctx.stroke();
+    // aguja
+    ctx.strokeStyle = C.coral; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.sin(th) * 40, py - Math.cos(th) * 40); ctx.stroke();
+    ctx.restore();
+    const pans = [hl, hr].map(([hx, hy]) => {
+      const y = hy + G.hang;
+      ctx.save(); ctx.strokeStyle = C['ink-2']; ctx.lineWidth = 1.5;
+      for (const dx of [-G.panW / 2 + 6, 0, G.panW / 2 - 6]) { ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + dx, y); ctx.stroke(); }
+      ctx.fillStyle = C.plate; ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(hx - G.panW / 2, y); ctx.quadraticCurveTo(hx, y + 26, hx + G.panW / 2, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore(); return [hx, y];
+    });
+    // el objeto: entero (antes de cortar) o en dos mitades que acaban en los platillos
+    if (t < T_CUT) drawCutObj(r);
+    else {
+      const k1 = Math.min(1, (t - T_CUT) / (T_SPLIT - T_CUT)), k2 = Math.max(0, Math.min(1, (t - T_SPLIT) / (T_FLY - T_SPLIT))), e2 = ease(k2), [lo, hi] = cutYRange(r);
+      for (const left of [true, false]) {
+        const a = left ? r.x0 : c, b = left ? c : r.x1, sgn = left ? -1 : 1, s1 = cutFit(r, c, left), [tx, ty] = pans[left ? 0 : 1];
+        const x0 = (a + b) / 2 + sgn * 14 * ease(k1), y0 = hi, rot0 = sgn * 0.06 * ease(k1);
+        const x = x0 + (tx - x0) * e2, y = y0 + (ty + 4 - y0) * e2 - Math.sin(k2 * Math.PI) * 70, s = 1 + (s1 - 1) * e2, rot = rot0 * (1 - e2);
+        drawCutHalf(r, c, left, x, y, s, rot);
+      }
+      if (phase === 'playing' && t >= T_FLY && once('cutland')) { JU()?.sfx.thud(0.8); JU()?.sfx.tock(1.2); for (const [x, y] of pans) burst(x, y, 0, -1, { n: 6, sp: 90, size: 1.6, ringSize: 22 }); }
+    }
+    // pesos en cada platillo
+    const showW = t >= T_FLY, kW = Math.max(0, Math.min(1, (t - T_FLY) / 0.6));
+    pans.forEach(([x, y], i) => {
+      const g = i ? gr : gl, txt = showW ? Math.round(g * ease(kW)) + ' g' : '? g';
+      const win = showW && kW >= 1 && Math.abs(gl - gr) / total <= 0.04;
+      ctx.font = mono(14, 700); const w = ctx.measureText(txt).width + 18;
+      ctx.fillStyle = win ? C.good : C.ink; roundRect(x - w / 2, y + 22, w, 24, 6); ctx.fill();
+      ctx.fillStyle = C.plate; ctx.textAlign = 'center'; ctx.fillText(txt, x, y + 39);
+    });
+    if (showW && kW >= 1 && Math.abs(gl - gr) / total <= 0.04 && phase === 'playing' && once('cuteq')) JU()?.sfx.ding();
+    // el cuchillo: bajando, cortando y subiendo; antes de soltar, el que arrastras
+    if (t < 0) {
+      ctx.save(); ctx.setLineDash([7, 6]); ctx.strokeStyle = C.coral; ctx.lineWidth = 2.5; const [lo, hi] = cutYRange(r);
+      ctx.beginPath(); ctx.moveTo(c, lo - 14); ctx.lineTo(c, hi + 14); ctx.stroke(); ctx.restore();
+      if (mark != null) cutCleaver(c, lo - 16, 0.95);
+      else label(200, G.by0 - 14, 'drag the knife along the ' + (CUT_ITEM[r.item] || 'object'), C['ink-2']);
+      if (mark != null) { ctx.fillStyle = C.coral; ctx.beginPath(); ctx.moveTo(c - 7, hi + 14); ctx.lineTo(c + 7, hi + 14); ctx.lineTo(c, hi + 4); ctx.closePath(); ctx.fill(); }
+    } else if (t < T_SPLIT + 0.4) {
+      const [lo, hi] = cutYRange(r), k = Math.min(1, t / T_CUT), yb = t < T_CUT ? (lo - 120) + (hi + 4 - (lo - 120)) * k * k : hi + 4 - Math.min(1, (t - T_CUT) / 0.4) * 160;
+      cutCleaver(c, yb, t < T_CUT ? 1 : Math.max(0, 1 - (t - T_CUT) / 0.5));
+      if (phase === 'playing' && t >= T_CUT && once('chop')) {
+        const J = JU(); if (J) { J.sfx.impact(0.55); J.sfx.snip(); J.buzz(30); J.shake(stageEl(), 4, 200); }
+        burst(c, (lo + hi) / 2, -1, -0.4, { n: 8, sp: 140, size: 1.8, cols: [C.ink, C['ink-2']] }); burst(c, (lo + hi) / 2, 1, -0.4, { n: 8, sp: 140, size: 1.8, ring: false });
+        wspawn({ kind: 'flash', x: c, y: (lo + hi) / 2, size: 60, col: 'rgba(255,255,255,.9)', life: 0.25 });
+      }
+    }
+    // resultado: el objeto en fantasma con el corte justo y el tuyo
+    if (phase === 'result' && r.answer != null) {
+      ctx.save(); ctx.globalAlpha = 0.22; drawCutObj(r); ctx.restore();
+      const [lo, hi] = cutYRange(r);
+      const vline = (x, col, dash, txt, up) => { ctx.save(); ctx.setLineDash(dash); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, lo - 10); ctx.lineTo(x, hi + 10); ctx.stroke(); ctx.restore(); label(x, up ? lo - 16 : hi + 26, txt, col); };
+      const close = Math.abs(c - r.answer) < 30;
+      vline(r.answer, C.good, [], 'equal weight', true);
+      if (Math.abs(c - r.answer) >= 2) vline(c, C.coral, [7, 5], 'your cut', !close ? true : false);
+    }
   }
 
   /* ---------- Botones dentro de la escena (poleas, engranajes, torre) ---------- */

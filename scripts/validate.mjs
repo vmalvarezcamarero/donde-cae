@@ -8,7 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'));
 const dir = join(root, 'public', 'days');
 const files = readdirSync(dir).filter(f => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
-const TYPES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'float', 'gears', 'orbit', 'magnet', 'pour', 'pulley', 'swing', 'spring', 'flip', 'jump', 'clock', 'bounce'];
+const TYPES = ['balance', 'drop', 'race', 'pool', 'tower', 'loop', 'laser', 'bridge', 'float', 'gears', 'orbit', 'magnet', 'pour', 'pulley', 'swing', 'spring', 'flip', 'jump', 'clock', 'bounce', 'cut'];
 const errors = [];
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 
@@ -45,6 +45,7 @@ for (const f of files) {
     }
     if (r.type === 'pool' && !(r.frames?.length > 10 && r.stop?.every(isNum))) bad('carambola sin trayectoria');
     if (r.type === 'clock' && !(isNum(r.answer) && r.answer > 0 && r.answer < r.dial && isNum(r.split) && r.frames?.length > 60 && r.segs?.length >= 2)) bad('cronómetro sin tiempo válido');
+    if (r.type === 'cut' && !(isNum(r.answer) && r.answer > r.x0 && r.answer < r.x1 && r.parts?.length >= 1 && r.cum?.length === r.x1 - r.x0 + 1 && Math.abs(r.cum.at(-1) - 1) < 0.001)) bad('corte sin mitad válida');
     if (r.type === 'bounce' && !(isNum(r.answer) && r.answer > 0 && r.answer < r.h0 && r.n >= 2 && r.frames?.length > 30)) bad('bote sin altura válida');
     if (r.type === 'tower') {
       if (!(r.blocks?.length >= 5)) bad('torre con menos de 5 bloques');
