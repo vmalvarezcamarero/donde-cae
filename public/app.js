@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261029b';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261029b';
-import { makeCard, makeStatsCard } from './card.js?v=20261029b';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261030a';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261030a';
+import { makeCard, makeStatsCard } from './card.js?v=20261030a';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -156,15 +156,17 @@ function renderHome() {
   $('homeTitle').textContent = !list.length ? 'Today’s challenge' : best != null ? 'Your best today: ' + best : 'You have an attempt in progress';
   const tries = $('tries'); tries.innerHTML = '';
   // Los intentos se muestran en el orden en que se jugaron; el reto A es el común.
+  // Antes de jugar no se enseñan (en la portada, lo único importante es el botón de jugar).
   const usedA = list.some(x => x.set === 'A');
-  for (let i = 1; i <= Math.max(today.max, list.length); i++) {
+  tries.hidden = !list.length;
+  if (list.length) for (let i = 1; i <= Math.max(today.max, list.length); i++) {
     const a = list[i - 1], row = document.createElement('div');
-    row.className = 'try' + (a && a.finished && a.total === best ? ' best' : '');
+    row.className = 'try' + (a && a.finished && a.total === best ? ' best' : '') + (!a ? ' free' : '');
     const shared = a ? a.set === 'A' : (!usedA && i === list.length + 1);
     const label = 'Attempt ' + i + ' · ' + (shared ? 'shared' : 'new games');
     const state = !a ? 'Available' : a.finished ? squares(a.scores) : 'In progress (' + a.round + '/5)';
-    row.innerHTML = '<span class="k"></span><span></span><b></b>';
-    row.children[0].textContent = label; row.children[1].textContent = state; row.children[2].textContent = a && a.finished ? a.total : '—';
+    row.innerHTML = '<span class="k"></span><b></b><span class="st"></span>';
+    row.children[0].textContent = label; row.children[1].textContent = a && a.finished ? a.total : a ? '…' : '—'; row.children[2].textContent = state;
     tries.appendChild(row);
   }
   const open = list.find(a => !a.finished), btn = $('playBtn');
@@ -172,13 +174,14 @@ function renderHome() {
   const nextSet = open ? open.set : !usedA ? 'A' : 'B';
   renderExps(d.games?.[nextSet] || d.games?.A);
   btn.disabled = false;
-  if (open) btn.textContent = 'Continue attempt ' + (list.indexOf(open) + 1);
-  else if (list.length >= today.max) { btn.textContent = 'No attempts left until tomorrow'; btn.disabled = true; }
-  else btn.textContent = list.length ? 'Play your second attempt' : 'Play';
+  if (open) setPlay('Continue attempt ' + (list.indexOf(open) + 1), 'Round ' + Math.min(5, open.round + 1) + ' of 5');
+  else if (list.length >= today.max) { setPlay('All done for today', 'New experiments tomorrow'); btn.disabled = true; }
+  else if (list.length) setPlay('Play attempt 2', '5 different experiments · your best one counts');
+  else setPlay('Play', '5 puzzles · 2 minutes');
   const note = $('homeNote');
   const p = today.user?.profile;
   if (!accountsOn) note.textContent = 'Leaderboards are coming very soon.';
-  else if (!user) note.textContent = 'Without an account you can play, but your scores won’t count on the leaderboard.';
+  else if (!user) note.textContent = '';
   else if (!p) note.innerHTML = 'Finish your profile to appear on the leaderboard. <button class="link" type="button" id="noteProfile">Do it now</button>';
   else note.innerHTML = 'Playing as <b></b> ' + flag(p.country) + '. Your best attempt of the day counts.';
   if (p && note.querySelector('b')) note.querySelector('b').textContent = p.nickname;
@@ -188,11 +191,24 @@ function renderHome() {
   savedFx();
   renderVs();
   if (homeEnter && !$('home').hidden) { homeEnter = false; enterHome(); }
-  // La tienda aparece después de la primera partida: al entrar, lo único importante es jugar.
-  const hasPlayed = Object.keys(store.get('played', {})).length > 0 || list.some(a => a.finished) || !!today.streak?.n || !!today.user?.profile?.owned?.length;
-  $('shopBtn').hidden = !hasPlayed;
-  $('homeStats').hidden = !hasPlayed;
+  // Baldosas: clasificación y tienda siempre; con cuenta, tus estadísticas; sin ella, cómo se juega.
+  $('homeStats').hidden = !p; $('homeHow').hidden = !!p;
+  $('shopSub').textContent = p ? p.coins.toLocaleString('en') + ' coins to spend' : 'Marbles & trails';
+  const sn = streakCount();
+  $('statsSub').textContent = sn ? sn + '-day streak 🔥' : 'Your progress';
 }
+// Sin cuenta, al acabar: un podio grande con el puesto en el que estarías y el botón de Google.
+function paintPodJoin(r) {
+  const w = r.rank?.would, head = $('pjHead'), sub = $('pjSub'), ball = $('endJoin').querySelector('.pj-ball');
+  const good = w && (w.pos <= 3 || w.pos <= w.of / 2);
+  head.textContent = !w ? (r.total >= 300 ? 'Great run!' : 'Join the leaderboard') : w.pos <= 3 ? 'You’d be #' + w.pos + ' today! 🏆' : good ? 'You’d be #' + w.pos + ' of ' + w.of + ' today' : 'Join today’s leaderboard';
+  sub.textContent = (w && !good && w.of > 2 ? (w.of - 1) + ' players are already competing. ' : '') + 'Sign up now and your ' + r.total + ' points count for today. It’s free and takes 10 seconds.';
+  const [x, y] = w?.pos === 2 ? [55, 72] : w?.pos === 3 ? [165, 80] : [110, 56];
+  ball.setAttribute('cx', x); ball.setAttribute('cy', y); ball.nextElementSibling.setAttribute('cx', x - 4); ball.nextElementSibling.setAttribute('cy', y - 4);
+  track('podjoin_view', { pos: w?.pos || 0 });
+}
+// El botón grande de jugar: texto y una línea debajo.
+function setPlay(text, sub) { $('playTxt').textContent = text; if (sub != null) $('playSub').textContent = sub; }
 // Cuenta atrás hasta el próximo Gravle: se mueve cada segundo en la portada y en
 // la pantalla final (allí con dígitos que giran al cambiar).
 const hms = (s) => [Math.floor(s / 3600), Math.floor(s % 3600 / 60), s % 60].map(v => String(v).padStart(2, '0'));
@@ -448,6 +464,7 @@ async function showEnd(r) {
   if (r.coins) { earned.hidden = false; earned.innerHTML = '<span class="coin" aria-hidden="true"></span><span></span>'; earned.lastChild.textContent = '+' + r.coins.earned + ' coins · you now have ' + r.coins.balance; }
   else earned.hidden = true;
   if ($('endJoin')) $('endJoin').hidden = !(accountsOn && !user);
+  if (accountsOn && !user && !r.attempt.demo) paintPodJoin(r);
   lastEndDemo = isDemo;
   $('vsEnd').hidden = true; $('challengeBtn').hidden = true; renderRemind(isDemo);
   if (isDemo) {
@@ -1070,7 +1087,7 @@ $('demoHome').addEventListener('click', (ev) => {
 async function startDemo() {
   if (!labPick.size) return;
   let data = labData[demoLevel];
-  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261029b')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261030a')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
   let games = [...LAB_NEW, ...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
   if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
   const run = demoRun++;
@@ -1152,7 +1169,7 @@ function renderVs() {
     card.classList.add('open');
     msg.innerHTML = 'challenges you: <b></b> on Gravle #<span></span>. Same 5 experiments. Can you beat it?';
     msg.querySelector('b').textContent = vs.total + ' / 500'; msg.querySelector('span').textContent = vs.n;
-    if (!btn.disabled && !today.attempts.some(a => !a.finished)) btn.textContent = 'Accept the challenge';
+    if (!btn.disabled && !today.attempts.some(a => !a.finished)) setPlay('Accept the challenge', 'Same 5 experiments as ' + vsName());
   }
   requestAnimationFrame(() => vsMarble(card.querySelector('.vs-ball'), vs.mine ? today?.user?.profile?.skin : vs.player?.skin, 17));
 }
@@ -1280,7 +1297,7 @@ $('warmGo').addEventListener('click', startWarmup);
 async function startWarmup() {
   track('ftue_start');
   let data;
-  try { data = await (await fetch('warmup.json?v=20261029b')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
+  try { data = await (await fetch('warmup.json?v=20261030a')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
   leaveWelcome('started');
   const full = data.rounds.map(r => JSON.parse(JSON.stringify(r)));
   const st = { day: { n: 0, date: today?.day?.date || '', level: 1, W: data.W, H: data.H, FLOOR: data.FLOOR, R: data.R },
@@ -1481,6 +1498,7 @@ function renderStats(d) {
 }
 $('statsBack').addEventListener('click', () => { if (statsBack === 'end') show('end'); else { show('home'); if (today) renderHome(); } });
 $('homeStats').addEventListener('click', () => openStats('home'));
+$('homeHow').addEventListener('click', () => { track('howto_tile'); startWarmup(); });
 $('endStats').addEventListener('click', () => openStats('end'));
 $('acctStats').addEventListener('click', () => { $('accountDlg').close(); openStats(curPage === 'end' ? 'end' : 'home'); });
 $('stShare').addEventListener('click', async () => {
