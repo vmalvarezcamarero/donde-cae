@@ -27,7 +27,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261029b">
+<link rel="stylesheet" href="styles.css?v=20261030a">
 <script defer src="https://cloud.umami.is/script.js" data-website-id="85313345-61e7-43d0-9200-e1e60b2d9753"></script>
 </head>
 <body>
@@ -73,12 +73,6 @@
     <div class="dayhead"><span id="dayLabel">Loading today’s challenge…</span><span id="levelLabel" class="badge" hidden></span></div>
     <h2 id="homeTitle">Today’s challenge</h2>
     <div class="vs" id="vsCard" hidden></div>
-    <div class="join" id="joinCard" hidden>
-      <div class="joinhead"><b>Join the leaderboard — it’s free</b><span class="gift"><span class="coin" aria-hidden="true"></span>+50</span></div>
-      <ul class="perks"><li>Daily, weekly and country rankings</li><li>50 welcome coins + coins every game for skins and name colors</li><li>Your scores on any device</li></ul>
-      <button class="gbtn main" type="button" data-google>Sign up with Google</button>
-      <p class="joinalt"><button class="link" type="button" data-signup>Sign up with email</button><span aria-hidden="true">·</span><button class="link" type="button" data-signin>I have an account</button></p>
-    </div>
     <ul class="exps" id="homeExps" aria-label="Today’s five experiments. Tap one to see how to play">
       <li><button class="exp" type="button" data-how="balance"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M6 24 H34" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/><path d="M20 25 L14 34 H26 Z" fill="var(--ink)"/><rect x="8" y="15" width="8" height="8" rx="1.5" fill="var(--ink)"/><rect x="25" y="13" width="10" height="10" rx="1.5" fill="var(--azul)"/></svg>Balance</button></li>
       <li><button class="exp" type="button" data-how="drop"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M8 18 L26 23" stroke="var(--ink)" stroke-width="3.5" stroke-linecap="round"/><path d="M5 35 H35" stroke="var(--ink)" stroke-width="2"/><path d="M14 8 Q30 10 30 31" stroke="var(--coral)" stroke-width="1.5" stroke-dasharray="2 3" fill="none"/><circle cx="14" cy="9" r="4.5" fill="var(--coral)"/></svg>Landing</button></li>
@@ -86,12 +80,23 @@
       <li><button class="exp" type="button" data-how="pool"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="5" y="7" width="30" height="27" rx="3" fill="var(--felt)" stroke="var(--ink)" stroke-width="3"/><path d="M12 28 L28 13 L32 20" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="2 2.5" fill="none"/><circle cx="12" cy="28" r="3.5" fill="var(--coral)"/></svg>Bank shot</button></li>
       <li><button class="exp" type="button" data-how="tower"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="12" y="27" width="16" height="7" rx="1.5" fill="var(--wood)" stroke="var(--ink)" stroke-width="1.6"/><rect x="15" y="20" width="18" height="7" rx="1.5" fill="var(--wood)" stroke="var(--ink)" stroke-width="1.6"/><rect x="20" y="10" width="16" height="7" rx="1.5" fill="var(--ink-2)" stroke="var(--ink)" stroke-width="1.6" transform="rotate(14 28 13)"/><path d="M4 35 H36" stroke="var(--ink)" stroke-width="2"/></svg>Tower</button></li>
     </ul>
+    <button class="playbig" id="playBtn" type="button" disabled><span class="pb-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z"/></svg></span><span class="pb-txt"><b id="playTxt">Play</b><small id="playSub">5 puzzles · 2 minutes</small></span></button>
     <div class="tries" id="tries"></div>
-    <button class="btn" id="playBtn" type="button" disabled>Play</button>
-    <p class="note" id="homeNote"></p>
+    <div class="tiles" id="homeTiles">
+      <button class="tile t-rank" id="rankBtn" type="button"><span class="tic" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M16 9h16v9a8 8 0 0 1-16 0z" fill="var(--mostaza)" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/><path d="M16 12h-5a5 5 0 0 0 6 7M32 12h5a5 5 0 0 1-6 7" fill="none" stroke="var(--ink)" stroke-width="2.2"/><path d="M24 26v5" stroke="var(--ink)" stroke-width="2.4"/><rect x="5" y="34" width="12" height="9" rx="1.5" fill="var(--plate)" stroke="var(--ink)" stroke-width="2"/><rect x="18" y="31" width="12" height="12" rx="1.5" fill="var(--coral)" stroke="var(--ink)" stroke-width="2"/><rect x="31" y="36" width="12" height="7" rx="1.5" fill="var(--plate)" stroke="var(--ink)" stroke-width="2"/></svg></span><b>Leaderboard</b><small id="rankSub">Today’s top</small></button>
+      <button class="tile t-shop" id="shopBtn" type="button"><span class="tic" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M9 17h30l-2.5 25h-25z" fill="var(--azul)" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/><path d="M17 20v-6a7 7 0 0 1 14 0v6" fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-linecap="round"/><circle cx="24" cy="31" r="6.5" fill="var(--coral)" stroke="var(--ink)" stroke-width="2"/><circle cx="22" cy="29" r="2" fill="#fff" opacity=".7"/></svg></span><b>Shop</b><small id="shopSub">Marbles &amp; trails</small></button>
+      <button class="tile t-stats" id="homeStats" type="button" hidden><span class="tic" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M6 42h36" stroke="var(--ink)" stroke-width="2.4" stroke-linecap="round"/><rect x="9" y="26" width="8" height="15" rx="1.5" fill="var(--good)" stroke="var(--ink)" stroke-width="2"/><rect x="20" y="16" width="8" height="25" rx="1.5" fill="var(--mostaza)" stroke="var(--ink)" stroke-width="2"/><rect x="31" y="8" width="8" height="33" rx="1.5" fill="var(--coral)" stroke="var(--ink)" stroke-width="2"/></svg></span><b>My stats</b><small id="statsSub">Your progress</small></button>
+      <button class="tile t-how" id="homeHow" type="button" hidden><span class="tic" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="17" fill="var(--plate)" stroke="var(--ink)" stroke-width="2.2"/><path d="M18.5 19a5.5 5.5 0 1 1 8 4.9c-1.6.8-2.5 2-2.5 3.6v1.5" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="35" r="2.2" fill="var(--coral)"/></svg></span><b>How to play</b><small>1-minute practice</small></button>
+    </div>
     <button class="linkbtn challenge-link" id="homeChallenge" type="button" hidden><span aria-hidden="true">⚔️</span> Challenge a friend to beat your score</button>
-    <div class="bar"><button class="btn ghost" id="rankBtn" type="button" style="flex:1">Leaderboard</button><button class="btn ghost" id="shopBtn" type="button" style="flex:1">Shop</button></div>
-    <p class="metaline"><span id="next"></span><span id="streak"></span><button class="linkbtn statslink" id="homeStats" type="button" hidden>📊 Your stats</button></p>
+    <p class="metaline"><span id="next"></span><span id="streak"></span></p>
+    <p class="note" id="homeNote"></p>
+    <div class="join" id="joinCard" hidden>
+      <div class="joinhead"><b>Join the leaderboard — it’s free</b><span class="gift"><span class="coin" aria-hidden="true"></span>+50</span></div>
+      <ul class="perks"><li>Daily, weekly and country rankings</li><li>50 welcome coins + coins every game for skins and name colors</li><li>Your scores on any device</li></ul>
+      <button class="gbtn main" type="button" data-google>Sign up with Google</button>
+      <p class="joinalt"><button class="link" type="button" data-signup>Sign up with email</button><span aria-hidden="true">·</span><button class="link" type="button" data-signin>I have an account</button></p>
+    </div>
   </section>
 
   <!-- Demo de los experimentos nuevos (/?demo) -->
@@ -190,6 +195,22 @@
       <div class="rankline" id="rankLine" hidden></div>
       <p class="note" id="endNote" style="margin-top:6px"></p>
     </div>
+    <div class="podjoin" id="endJoin" hidden>
+      <svg class="pj-pod" viewBox="0 0 220 120" aria-hidden="true">
+        <g class="pj-rays" stroke="var(--mostaza)" stroke-width="3" stroke-linecap="round" opacity=".7"><path d="M110 8v10M84 14l5 8M136 14l-5 8M66 30l8 5M154 30l-8 5"/></g>
+        <path class="pj-crown" d="M96 30l5 9 9-12 9 12 5-9-3 15h-22z" fill="var(--mostaza)" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/>
+        <circle class="pj-ball" cx="110" cy="56" r="11" fill="var(--coral)" stroke="var(--ink)" stroke-width="2.2"/><circle cx="106" cy="52" r="3.4" fill="#fff" opacity=".6"/>
+        <rect x="82" y="68" width="56" height="48" rx="3" fill="var(--coral)" stroke="var(--ink)" stroke-width="2.5"/><text x="110" y="100" text-anchor="middle" font-size="26" font-weight="800" fill="#fff" font-family="Bricolage Grotesque, system-ui">1</text>
+        <rect x="28" y="84" width="54" height="32" rx="3" fill="var(--plate)" stroke="var(--ink)" stroke-width="2.5"/><text x="55" y="107" text-anchor="middle" font-size="20" font-weight="800" fill="var(--ink)" font-family="Bricolage Grotesque, system-ui">2</text>
+        <rect x="138" y="92" width="54" height="24" rx="3" fill="var(--plate)" stroke="var(--ink)" stroke-width="2.5"/><text x="165" y="110" text-anchor="middle" font-size="18" font-weight="800" fill="var(--ink)" font-family="Bricolage Grotesque, system-ui">3</text>
+        <path d="M10 116h200" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <b class="pj-head" id="pjHead">Great run!</b>
+      <p class="pj-sub" id="pjSub">Join the leaderboard and compete with everyone, every day.</p>
+      <button class="gbtn main pj-g" type="button" data-google>Sign up with Google</button>
+      <p class="pj-perks"><span><span class="coin" aria-hidden="true"></span>+50 coins</span><span>🏆 Daily &amp; weekly ranks</span><span>📊 Your stats</span></p>
+      <p class="joinalt"><button class="link" type="button" data-signup>Sign up with email</button><span aria-hidden="true">·</span><button class="link" type="button" data-signin>I have an account</button></p>
+    </div>
     <div class="vsend" id="vsEnd" hidden></div>
     <div class="streakbox" id="streakBox" hidden>
       <span class="flamewrap" id="flameWrap"><span class="flame" id="flame" data-tier="1" aria-hidden="true"></span></span>
@@ -199,12 +220,6 @@
     <div class="remind" id="remindCard" hidden></div>
     <div class="rows" id="rows"></div>
     <p class="earned" id="earned" hidden></p>
-    <div class="join" id="endJoin" hidden>
-      <div class="joinhead"><b>Save this score to the leaderboard</b><span class="gift"><span class="coin" aria-hidden="true"></span>+50</span></div>
-      <p class="note">Sign up now and this attempt counts for today’s ranking, plus 50 welcome coins and the coins it earned.</p>
-      <button class="gbtn main" type="button" data-google>Sign up with Google</button>
-      <p class="joinalt"><button class="link" type="button" data-signup>Sign up with email</button><span aria-hidden="true">·</span><button class="link" type="button" data-signin>I have an account</button></p>
-    </div>
     <button class="btn challenge" id="challengeBtn" type="button" hidden><span aria-hidden="true">⚔️</span> Challenge a friend</button>
     <pre class="share" id="share"></pre>
     <div class="bar">
@@ -350,10 +365,10 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="juice.js?v=20261029b"></script>
-<script src="music.js?v=20261029b"></script>
-<script src="game.js?v=20261029b"></script>
-<script type="module" src="app.js?v=20261029b"></script>
+<script src="juice.js?v=20261030a"></script>
+<script src="music.js?v=20261030a"></script>
+<script src="game.js?v=20261030a"></script>
+<script type="module" src="app.js?v=20261030a"></script>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "17666b232ffe4c9c89b2ac10bd2f422c"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

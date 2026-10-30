@@ -506,7 +506,13 @@ async function rankStats(env, who, a, id, total) {
   const n = (all.n || 0) + bots.length;
   const below = (all.below || 0) + bots.filter(b => b.score < total).length, ties = (all.ties || 0) + bots.filter(b => b.score === total).length;
   const out = { players: n + 1, top: n >= MIN_CROWD ? Math.max(1, Math.round(100 * (n - below - ties / 2) / (n + 1))) : null };
-  if (!a.uid || !(await profileOf(env, a.uid))) return out;
+  if (!a.uid || !(await profileOf(env, a.uid))) {
+    // Sin cuenta: en qué puesto estarías hoy si te registraras (para animarte a hacerlo).
+    const g = await env.DB.prepare(`SELECT COUNT(*) AS n, SUM(best > ?3) AS above FROM (SELECT b.uid, b.best FROM (${BEST_SQL}) b JOIN users u ON u.uid = b.uid)`)
+      .bind(a.date, a.date, total).first();
+    out.would = { pos: (g?.above || 0) + bots.filter(b => b.score > total).length + 1, of: (g?.n || 0) + bots.length + 1 };
+    return out;
+  }
   // Tu mejor marca de hoy antes de este intento y ahora.
   const prev = await env.DB.prepare('SELECT MAX(total) AS best FROM attempts WHERE date = ? AND uid = ? AND finished = 1 AND id != ?').bind(a.date, a.uid, id).first();
   const old = prev && prev.best != null ? prev.best : null, best = Math.max(total, old ?? -1);
