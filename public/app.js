@@ -2,9 +2,9 @@
 // El juego en sí (dibujo y animación) está en game.js.
 import { firebaseConfig } from './firebase-config.js';
 import { COUNTRIES } from './countries.js';
-import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261030a';
-import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261030a';
-import { makeCard, makeStatsCard } from './card.js?v=20261030a';
+import { SKINS, TRAILS, NAME_COLORS, WELCOME_COINS, rarityOf, dailyDeal, priceOf, STREAK_SKINS } from './shop.js?v=20261031a';
+import { publicRound, validPrediction, scorePoints } from './scoring.js?v=20261031a';
+import { makeCard, makeStatsCard } from './card.js?v=20261031a';
 
 const $ = (id) => document.getElementById(id);
 const FB = 'https://www.gstatic.com/firebasejs/12.18.0/';
@@ -207,6 +207,8 @@ function paintPodJoin(r) {
   ball.setAttribute('cx', x); ball.setAttribute('cy', y); ball.nextElementSibling.setAttribute('cx', x - 4); ball.nextElementSibling.setAttribute('cy', y - 4);
   track('podjoin_view', { pos: w?.pos || 0 });
 }
+// Lo mismo en la pantalla final (segundo intento).
+function setAgain(text, sub) { $('againTxt').textContent = text; $('againSub').textContent = sub; }
 // El botón grande de jugar: texto y una línea debajo.
 function setPlay(text, sub) { $('playTxt').textContent = text; if (sub != null) $('playSub').textContent = sub; }
 // Cuenta atrás hasta el próximo Gravle: se mueve cada segundo en la portada y en
@@ -470,7 +472,7 @@ async function showEnd(r) {
   if (isDemo) {
     $('endLabel').textContent = 'Lab · ' + LEVEL[r.day.level] + ' · ' + r.scores.length + (r.scores.length === 1 ? ' experiment' : ' experiments');
     if ($('endJoin')) $('endJoin').hidden = true;
-    $('again').hidden = false; $('again').textContent = 'Play again (new maps)';
+    $('again').hidden = false; setAgain('Play again', 'New maps, same experiments');
     $('share').textContent = 'Gravle · lab  ' + r.total + '/' + r.scores.length * 100 + starLine(nStars) + '\n' + squares(r.scores) + '\n' + SITE + '/?lab';
     return;
   }
@@ -481,7 +483,8 @@ async function showEnd(r) {
   $('challengeBtn').hidden = !today.attempts.some(a => a.set === 'A' && a.finished);
   const left = today.max - today.attempts.length;
   $('again').hidden = left <= 0;
-  $('again').textContent = left > 0 ? 'Second attempt' : '';
+  if (left > 0) setAgain('Second attempt', '5 new experiments · best one counts');
+  const pf = today.user?.profile; $('endShopSub').textContent = pf ? pf.coins.toLocaleString('en') + ' coins to spend' : 'Marbles & trails';
   const streak = streakText();
   $('share').textContent = 'Gravle #' + r.day.n + ((r.attempt.index || r.attempt.num) > 1 ? ' (attempt ' + (r.attempt.index || r.attempt.num) + ')' : '') + '  ' + r.total + '/500' + starLine(nStars) + '\n' + squares(r.scores) + (streak ? '\n' + streak : '') + '\n' + SITE;
 }
@@ -533,6 +536,7 @@ function fillCountrySelect(sel, first) {
 fillCountrySelect(rankFilter, '🌍 All countries');
 $('rankBtn').addEventListener('click', () => openRank('day'));
 $('endRank').addEventListener('click', () => openRank('day'));
+$('endShop').addEventListener('click', () => openShop('skin'));
 $('rankBack').addEventListener('click', () => { show('home'); refresh(); });
 $('tabDay').addEventListener('click', () => openRank('day'));
 $('tabWeek').addEventListener('click', () => openRank('week'));
@@ -1087,7 +1091,7 @@ $('demoHome').addEventListener('click', (ev) => {
 async function startDemo() {
   if (!labPick.size) return;
   let data = labData[demoLevel];
-  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261030a')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
+  try { data = data || (labData[demoLevel] = await (await fetch('lab/' + demoLevel + '.json?v=20261031a')).json()); } catch (e) { toast('Couldn’t load the lab.'); return; }
   let games = [...LAB_NEW, ...LAB_DAILY, ...LAB_OLD].filter(g => labPick.has(g) && data.games[g]);
   if (labShuffle) for (let i = games.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [games[i], games[j]] = [games[j], games[i]]; }
   const run = demoRun++;
@@ -1297,7 +1301,7 @@ $('warmGo').addEventListener('click', startWarmup);
 async function startWarmup() {
   track('ftue_start');
   let data;
-  try { data = await (await fetch('warmup.json?v=20261030a')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
+  try { data = await (await fetch('warmup.json?v=20261031a')).json(); } catch (e) { leaveWelcome('skipped'); show('home'); return; }
   leaveWelcome('started');
   const full = data.rounds.map(r => JSON.parse(JSON.stringify(r)));
   const st = { day: { n: 0, date: today?.day?.date || '', level: 1, W: data.W, H: data.H, FLOOR: data.FLOOR, R: data.R },
