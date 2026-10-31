@@ -257,7 +257,7 @@
     tower: (r) => { const mats = [...new Set(r.blocks.map(b => b.mat || (b.d > 1 ? 'steel' : 'wood')))];
       return 'If the tower falls, which block hits the ground first?<small>Tap that block, or choose “It stands”. Same size, different weight: ' + mats.map(m => MAT_NAME[m] + ' ×' + MAT_W[m]).join(' · ') + '.</small>'; },
     loop: (r) => 'What’s the lowest height that gets the marble all the way round the loop?<small>Drag the marble up or down the ramp. Too low and it falls off the loop.' + (r.carpet ? ' The carpet slows it down.' : '') + '</small>',
-    laser: () => 'The laser bounces off every mirror it hits. Where does the beam end?<small>Tap the wall where you think it lands. Dark blocks absorb light.</small>',
+    laser: (r) => 'The laser bounces off every mirror it hits. Where does the beam end?<small>' + (r.v >= 2 ? 'The dotted line shows where the beam starts. Each mirror bounces it like a pool ball: angle in = angle out. ' : '') + 'Tap the wall where you think it lands. Dark blocks absorb light.</small>',
     bridge: (r) => 'How long must the plank be to bridge the gap?<small>Drag up to grow the plank. It tips over onto the other side and the marble rolls to its tip: too short or too long and it falls.' + (r.yb > r.ya ? ' The far side is lower.' : r.yb < r.ya ? ' The far side is higher: the plank will rest on its edge and the marble drops from the tip.' : '') + '</small>',
     orbit: () => 'Where does the comet end up?<small>Gravity bends its path: bigger planets pull harder. Tap the planet it crashes into, or the edge where it leaves.</small>',
     magnet: () => 'The steel ball starts still. Which magnet grabs it?<small>Stronger magnets (×3) pull more, but the pull fades fast with distance. Tap a magnet.</small>',
@@ -619,7 +619,8 @@
       return { pts: 0, l1: err <= 0.12 ? 'Split-second perfect!' : err <= 0.4 ? 'Very close' : err <= 1 ? 'Close' : mark < r.answer ? 'Slower than you thought' : 'Faster than you thought',
         l2: 'It took ' + r.answer.toFixed(2) + ' s · you said ' + mark.toFixed(1) + ' s', d: 'Took ' + r.answer.toFixed(2) + ' s, you said ' + mark.toFixed(1) }; }
     if (r.type === 'cut') { const tot = r.grams || 100, gl = Math.round(tot * cutShareAt(r, mark)), gr = tot - gl, d = Math.abs(gl - gr) / tot;
-      return { pts: 0, l1: d <= 0.04 ? 'Perfectly even!' : d <= 0.1 ? 'Very close' : d <= 0.2 ? 'Close' : gl > gr ? 'The left piece is heavier' : 'The right piece is heavier',
+      const tol = r.v >= 2 ? 0.025 : 0.04;
+      return { pts: 0, l1: d <= tol ? 'Perfectly even!' : d <= 0.08 ? 'Very close' : d <= 0.2 ? 'Close' : gl > gr ? 'The left piece is heavier' : 'The right piece is heavier',
         l2: 'Left ' + gl + ' g · right ' + gr + ' g', d: gl + ' g / ' + gr + ' g' }; }
     if (r.type === 'bounce') { const err = Math.abs(mark - r.answer) / 2;
       return { pts: 0, l1: err <= 3 ? 'Spot on!' : err <= 8 ? 'Very close' : err <= 20 ? 'Close' : mark > r.answer ? 'Lower than you thought' : 'Higher than you thought',
@@ -1476,6 +1477,18 @@
     ctx.restore();
     return tip;
   }
+  // distancia desde el emisor hasta lo primero que toca el rayo (un espejo, un bloque o la pared)
+  function laserFirstHit(r) {
+    if (r._fh != null) return r._fh;
+    const [sx, sy] = r.src, dx = Math.cos(r.ang), dy = Math.sin(r.ang); let best = Infinity;
+    for (const m of r.mirrors) {
+      const ex = m.x2 - m.x1, ey = m.y2 - m.y1, den = dx * ey - dy * ex; if (Math.abs(den) < 1e-9) continue;
+      const t = ((m.x1 - sx) * ey - (m.y1 - sy) * ex) / den, u = ((m.x1 - sx) * dy - (m.y1 - sy) * dx) / den;
+      if (t > 1 && u >= 0 && u <= 1) best = Math.min(best, t);
+    }
+    const { x0, y0, x1, y1 } = LROOM, tw = Math.min(dx > 0 ? (x1 - sx) / dx : dx < 0 ? (x0 - sx) / dx : Infinity, dy > 0 ? (y1 - sy) / dy : dy < 0 ? (y0 - sy) / dy : Infinity);
+    return (r._fh = Math.min(best, tw));
+  }
   function drawLaser(r) {
     const { x0, y0, x1, y1 } = LROOM;
     ctx.fillStyle = ROOMBG; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
@@ -1504,7 +1517,10 @@
     ctx.restore();
     if (phase === 'aim') {
       ctx.save(); ctx.setLineDash([4, 5]); ctx.strokeStyle = 'rgba(255,90,74,.8)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(sx + Math.cos(r.ang) * 12, sy + Math.sin(r.ang) * 12); ctx.lineTo(sx + Math.cos(r.ang) * 44, sy + Math.sin(r.ang) * 44); ctx.stroke(); ctx.restore();
+      // v2: guía más larga (fácil y medio) o hasta el primer espejo (difícil)
+      const reachG = r.v >= 2 ? Math.min(r.level === 3 ? Infinity : 130, laserFirstHit(r)) : 44;
+      ctx.beginPath(); ctx.moveTo(sx + Math.cos(r.ang) * 12, sy + Math.sin(r.ang) * 12); ctx.lineTo(sx + Math.cos(r.ang) * reachG, sy + Math.sin(r.ang) * reachG); ctx.stroke(); ctx.restore();
+      if (r.v >= 2 && r.level === 3 && Number.isFinite(laserFirstHit(r))) { const hx = sx + Math.cos(r.ang) * reachG, hy = sy + Math.sin(r.ang) * reachG; ctx.fillStyle = 'rgba(255,90,74,.9)'; ctx.beginPath(); ctx.arc(hx, hy, 4, 0, Math.PI * 2); ctx.fill(); }
     } else {
       const reach = phase === 'result' ? Infinity : anim.t * LASER_SPEED;
       const tip = beam(r.path, reach);
@@ -2867,12 +2883,12 @@
     const showW = t >= T_FLY, kW = Math.max(0, Math.min(1, (t - T_FLY) / 0.6));
     pans.forEach(([x, y], i) => {
       const g = i ? gr : gl, txt = showW ? Math.round(g * ease(kW)) + ' g' : '? g';
-      const win = showW && kW >= 1 && Math.abs(gl - gr) / total <= 0.04;
+      const win = showW && kW >= 1 && Math.abs(gl - gr) / total <= (r.v >= 2 ? 0.025 : 0.04);
       ctx.font = mono(14, 700); const w = ctx.measureText(txt).width + 18;
       ctx.fillStyle = win ? C.good : C.ink; roundRect(x - w / 2, y + 22, w, 24, 6); ctx.fill();
       ctx.fillStyle = C.plate; ctx.textAlign = 'center'; ctx.fillText(txt, x, y + 39);
     });
-    if (showW && kW >= 1 && Math.abs(gl - gr) / total <= 0.04 && phase === 'playing' && once('cuteq')) JU()?.sfx.ding();
+    if (showW && kW >= 1 && Math.abs(gl - gr) / total <= (r.v >= 2 ? 0.025 : 0.04) && phase === 'playing' && once('cuteq')) JU()?.sfx.ding();
     // el cuchillo: bajando, cortando y subiendo; antes de soltar, el que arrastras
     if (t < 0) {
       ctx.save(); ctx.setLineDash([7, 6]); ctx.strokeStyle = C.coral; ctx.lineWidth = 2.5; const [lo, hi] = cutYRange(r);

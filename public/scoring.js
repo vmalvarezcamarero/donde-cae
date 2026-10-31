@@ -12,7 +12,7 @@ export function publicRound(r) {
     case 'pool': return { type: r.type, level: r.level, start: r.start, v: r.v, table: r.table, br: r.br, frames: [r.frames[0]] };
     case 'tower': return { type: r.type, level: r.level, blocks: r.blocks };
     case 'loop': return { type: r.type, level: r.level, R: r.R, cx: r.cx, carpet: r.carpet, carpet2: r.carpet2 };
-    case 'laser': return { type: r.type, level: r.level, src: r.src, ang: r.ang, mirrors: r.mirrors };
+    case 'laser': return { type: r.type, v: r.v, level: r.level, src: r.src, ang: r.ang, mirrors: r.mirrors };
     case 'domino': return { type: r.type, level: r.level, dominoes: r.dominoes, platform: r.platform };
     case 'float': return { type: r.type, level: r.level, items: r.items, water: r.water, salty: r.salty };
     case 'bridge': return { type: r.type, level: r.level, xa: r.xa, ya: r.ya, xb: r.xb, xc: r.xc, yb: r.yb };
@@ -26,7 +26,7 @@ export function publicRound(r) {
     case 'spring': return { type: r.type, level: r.level, target: r.target, lx: r.lx, ly: r.ly, ang: r.ang, k: r.k, tx: r.tx, ty: r.ty, bw: r.bw, test: r.test, testX: r.testX, platform: r.platform };
     case 'gears': return { type: r.type, level: r.level, parts: r.parts, links: r.links };
     case 'clock': return { type: r.type, level: r.level, segs: r.segs, rb: r.rb, dial: r.dial, split: r.split, cup: r.cup, frames: [r.frames[0]] };
-    case 'cut': return { type: r.type, level: r.level, item: r.item, parts: r.parts, mats: r.mats, grams: r.grams, x0: r.x0, x1: r.x1 };
+    case 'cut': return { type: r.type, v: r.v, level: r.level, item: r.item, parts: r.parts, mats: r.mats, grams: r.grams, x0: r.x0, x1: r.x1 };
     case 'bounce': return { type: r.type, level: r.level, ball: r.ball, floor: r.floor, n: r.n, h0: r.h0, testFrom: r.testFrom, test: r.test, frames: [r.frames[0]] };
   }
   throw new Error('tipo de ronda desconocido');
@@ -97,7 +97,9 @@ export function scorePoints(r, p) {
     case 'laser': {
       let d = Math.abs(perimPos(p, r.room) - perimPos(r.end, r.room));
       d = Math.min(d, perimLen(r.room) - d);
-      return d <= 6 ? 100 : Math.round(100 * Math.exp(-(d - 6) / 40));
+      // v2 (desde el 1 nov 2026): un poco más de margen
+      const [tol, dec] = r.v >= 2 ? [8, 50] : [6, 40];
+      return d <= tol ? 100 : Math.round(100 * Math.exp(-(d - tol) / dec));
     }
     case 'domino': return [100, 45, 15][Math.abs(p - r.answer)] ?? 0;
     case 'orbit': {
@@ -139,8 +141,9 @@ export function scorePoints(r, p) {
       return err <= 3 ? 100 : Math.round(100 * Math.exp(-(err - 3) / 11));
     }
     case 'cut': {                                                // posición del corte (px): cuenta lo que pesa de más una mitad
-      const d = cutImbalance(r, p);
-      return d <= 0.04 ? 100 : Math.round(100 * Math.exp(-(d - 0.04) / 0.18));
+      // v2 (desde el 1 nov 2026): más estricto, daba demasiados puntos
+      const d = cutImbalance(r, p), [tol, dec] = cutTol(r);
+      return d <= tol ? 100 : Math.round(100 * Math.exp(-(d - tol) / dec));
     }
     case 'gears': {
       const dir = p < 2 ? 1 : -1, faster = p % 2 === 0;
@@ -186,3 +189,5 @@ export function cutShare(r, x) {
 }
 // diferencia entre las dos mitades, en fracción del total (0 = iguales)
 export const cutImbalance = (r, x) => Math.abs(2 * cutShare(r, x) - 1);
+// tolerancia de Half & Half (fracción del peso total) y caída de los puntos
+export const cutTol = (r) => (r.v >= 2 ? [0.025, 0.13] : [0.04, 0.18]);
