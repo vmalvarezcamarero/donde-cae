@@ -27,7 +27,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=20261030a">
+<link rel="stylesheet" href="styles.css?v=20261031a">
 <script defer src="https://cloud.umami.is/script.js" data-website-id="85313345-61e7-43d0-9200-e1e60b2d9753"></script>
 </head>
 <body>
@@ -212,6 +212,14 @@
       <p class="joinalt"><button class="link" type="button" data-signup>Sign up with email</button><span aria-hidden="true">·</span><button class="link" type="button" data-signin>I have an account</button></p>
     </div>
     <div class="vsend" id="vsEnd" hidden></div>
+    <div class="endnav" id="endNav">
+      <button class="playbig" id="again" type="button"><span class="pb-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z"/></svg></span><span class="pb-txt"><b id="againTxt">Second attempt</b><small id="againSub">5 new experiments · best one counts</small></span></button>
+      <div class="tiles">
+        <button class="tile t-rank" id="endRank" type="button"><span class="tic" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M16 9h16v9a8 8 0 0 1-16 0z" fill="var(--mostaza)" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/><path d="M16 12h-5a5 5 0 0 0 6 7M32 12h5a5 5 0 0 1-6 7" fill="none" stroke="var(--ink)" stroke-width="2.2"/><path d="M24 26v5" stroke="var(--ink)" stroke-width="2.4"/><rect x="5" y="34" width="12" height="9" rx="1.5" fill="var(--plate)" stroke="var(--ink)" stroke-width="2"/><rect x="18" y="31" width="12" height="12" rx="1.5" fill="var(--coral)" stroke="var(--ink)" stroke-width="2"/><rect x="31" y="36" width="12" height="7" rx="1.5" fill="var(--plate)" stroke="var(--ink)" stroke-width="2"/></svg></span><b>Leaderboard</b><small>Where you rank</small></button>
+        <button class="tile t-shop" id="endShop" type="button"><span class="tic" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M9 17h30l-2.5 25h-25z" fill="var(--azul)" stroke="var(--ink)" stroke-width="2.2" stroke-linejoin="round"/><path d="M17 20v-6a7 7 0 0 1 14 0v6" fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-linecap="round"/><circle cx="24" cy="31" r="6.5" fill="var(--coral)" stroke="var(--ink)" stroke-width="2"/><circle cx="22" cy="29" r="2" fill="#fff" opacity=".7"/></svg></span><b>Shop</b><small id="endShopSub">Marbles &amp; trails</small></button>
+        <button class="tile t-stats" id="endStats" type="button"><span class="tic" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M6 42h36" stroke="var(--ink)" stroke-width="2.4" stroke-linecap="round"/><rect x="9" y="26" width="8" height="15" rx="1.5" fill="var(--good)" stroke="var(--ink)" stroke-width="2"/><rect x="20" y="16" width="8" height="25" rx="1.5" fill="var(--mostaza)" stroke="var(--ink)" stroke-width="2"/><rect x="31" y="8" width="8" height="33" rx="1.5" fill="var(--coral)" stroke="var(--ink)" stroke-width="2"/></svg></span><b>My stats</b><small>Your progress</small></button>
+      </div>
+    </div>
     <div class="streakbox" id="streakBox" hidden>
       <span class="flamewrap" id="flameWrap"><span class="flame" id="flame" data-tier="1" aria-hidden="true"></span></span>
       <div class="sbtext"><div class="sbnum"><b id="streakN">0</b><span>-day streak</span></div><small id="streakSub"></small></div>
@@ -226,11 +234,6 @@
       <button class="btn" id="shareImg" type="button" style="flex:1">Share image</button>
       <button class="btn ghost" id="copy" type="button" style="flex:1">Copy result</button>
     </div>
-    <div class="bar">
-      <button class="btn ghost" id="again" type="button" style="flex:1">Second attempt</button>
-      <button class="btn ghost" id="endRank" type="button" style="flex:1">Leaderboard</button>
-    </div>
-    <button class="btn ghost" id="endStats" type="button">📊 My stats</button>
     <button class="link" id="endHome" type="button">Back to home</button>
   </section>
 
@@ -365,10 +368,10 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="juice.js?v=20261030a"></script>
-<script src="music.js?v=20261030a"></script>
-<script src="game.js?v=20261030a"></script>
-<script type="module" src="app.js?v=20261030a"></script>
+<script src="juice.js?v=20261031a"></script>
+<script src="music.js?v=20261031a"></script>
+<script src="game.js?v=20261031a"></script>
+<script type="module" src="app.js?v=20261031a"></script>
 <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "17666b232ffe4c9c89b2ac10bd2f422c"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>
