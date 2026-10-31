@@ -68,14 +68,16 @@ export function perim([x, y]) {
 export const PERIM = 2 * (ROOM.x1 - ROOM.x0) + 2 * (ROOM.y1 - ROOM.y0);
 export function genLaser(seed, level) {
   const rand = mulberry32(seed);
-  const want = level === 1 ? 2 : level === 2 ? 3 : 4;
-  const step = level === 1 ? Math.PI / 4 : Math.PI / 12;
+  // v2 (desde el 1 nov 2026, era demasiado difícil): 2/3/3 rebotes; en medio los espejos van a 45°
+  // (el emisor sigue en pasos de 15°). Más ayuda en pantalla y puntuación algo más amplia (scoring.js).
+  const want = level === 1 ? 2 : 3;
+  const step = level === 3 ? Math.PI / 12 : Math.PI / 4, estep = level === 1 ? 0 : Math.PI / 12;
   for (let a = 0; a < 20000; a++) {
     const side = Math.floor(rand() * 4);                    // emisor en una de las cuatro paredes
     const along = (a, b) => Math.round(a + rand() * (b - a));
     const src = side === 0 ? [ROOM.x0 + 2, along(140, 470)] : side === 1 ? [along(70, 330), ROOM.y1 - 2] : side === 2 ? [along(70, 330), ROOM.y0 + 2] : [ROOM.x1 - 2, along(140, 470)];
     const base = [0, -Math.PI / 2, Math.PI / 2, Math.PI][side];
-    const ang = level === 1 ? base : base + Math.round(((rand() - 0.5) * 1.4) / step) * step;
+    const ang = estep === 0 ? base : base + Math.round(((rand() - 0.5) * 1.4) / estep) * estep;
     const n = want + (level === 1 ? 1 : 1 + Math.floor(rand() * 2));
     const mirrors = [];
     for (let i = 0; i < n + 10 && mirrors.length < n; i++) {
@@ -114,7 +116,7 @@ export function genLaser(seed, level) {
     });
     if (near) continue;
     let len = 0; for (let k = 1; k < p.pts.length; k++) len += Math.hypot(p.pts[k][0] - p.pts[k - 1][0], p.pts[k][1] - p.pts[k - 1][1]);
-    return { type: 'laser', level, src, ang: r3(ang), mirrors, path: p.pts.map(([x, y]) => [r1(x), r1(y)]), end: [r1(ex), r1(ey)], len: Math.round(len) };
+    return { type: 'laser', v: 2, level, src, ang: r3(ang), mirrors, path: p.pts.map(([x, y]) => [r1(x), r1(y)]), end: [r1(ex), r1(ey)], len: Math.round(len) };
   }
   throw new Error('No laser ' + seed);
 }

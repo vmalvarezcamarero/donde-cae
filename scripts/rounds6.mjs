@@ -122,7 +122,7 @@ export function genCut(seed, level) {
     // …ni tan poco sensible que diez píxeles más allá dé casi igual (un palo fino y ligero)
     if (col[Math.min(col.length - 1, k)] / tot < 0.003) continue;
     const mats = [...new Set(parts.map(p => p.m))];
-    return { type: 'cut', level, item, parts, mats, grams: GRAMS[item], x0, x1, answer, cum };
+    return { type: 'cut', v: 2, level, item, parts, mats, grams: GRAMS[item], x0, x1, answer, cum };
   }
   throw new Error('No cut scene for seed ' + seed);
 }
